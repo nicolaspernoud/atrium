@@ -30,38 +30,34 @@ class _UsersListState extends State<UsersList> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(tr(context, "users_list"))),
-      body: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: FutureBuilder(
-            future: users,
-            builder: (BuildContext context,
-                AsyncSnapshot<List<UserModel>> snapshot) {
-              switch (snapshot.connectionState) {
-                case ConnectionState.none:
-                case ConnectionState.active:
-                case ConnectionState.waiting:
+      appBar: AppBar(title: Text(tr(context, "users"))),
+      body: FutureBuilder(
+          future: users,
+          builder:
+              (BuildContext context, AsyncSnapshot<List<UserModel>> snapshot) {
+            switch (snapshot.connectionState) {
+              case ConnectionState.none:
+              case ConnectionState.active:
+              case ConnectionState.waiting:
+                return const Center(child: CircularProgressIndicator());
+              case ConnectionState.done:
+                if (snapshot.hasError &&
+                    snapshot.error is DioError &&
+                    (snapshot.error as DioError).response?.statusCode == 401) {
+                  // If error is 401, we log and retry
+                  Future.delayed(Duration.zero, () async {
+                    await showLoginDialog(context, mounted);
+                    await _getData();
+                    setState(() {});
+                  });
                   return const Center(child: CircularProgressIndicator());
-                case ConnectionState.done:
-                  if (snapshot.hasError &&
-                      snapshot.error is DioError &&
-                      (snapshot.error as DioError).response?.statusCode ==
-                          401) {
-                    // If error is 401, we log and retry
-                    Future.delayed(Duration.zero, () async {
-                      await showLoginDialog(context, mounted);
-                      await _getData();
-                      setState(() {});
-                    });
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (snapshot.hasError) {
-                    return Center(child: Text('Error: ${snapshot.error}'));
-                  }
-                  return _buildListView(context, snapshot.data ?? []);
-              }
-            }),
-      ),
+                }
+                if (snapshot.hasError) {
+                  return Center(child: Text('Error: ${snapshot.error}'));
+                }
+                return _buildListView(context, snapshot.data ?? []);
+            }
+          }),
       floatingActionButton: FloatingActionButton(
           child: const Icon(Icons.add),
           onPressed: () async {
@@ -83,6 +79,7 @@ class _UsersListState extends State<UsersList> {
 
   Widget _buildListView(BuildContext context, List<UserModel> list) {
     return ListView.builder(
+        padding: const EdgeInsets.all(8.0),
         itemCount: list.length,
         itemBuilder: (context, index) {
           final user = list[index];

@@ -47,70 +47,74 @@ class CreateEditUserState extends State<CreateEditUser> {
                 ]
               : null,
         ),
-        body: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextFormField(
-                    initialValue: widget.user.login,
-                    decoration:
-                        InputDecoration(labelText: tr(context, "login")),
-                    validator: rejectEmpty,
-                    onChanged: (value) {
-                      widget.user.login = value;
-                    },
-                  ),
-                  TextFormField(
-                    initialValue: "",
-                    decoration: InputDecoration(
-                        labelText: tr(context, "password"),
-                        hintText: tr(
-                            context, "leave_empty_to_keep_current_password")),
-                    validator: widget.isNew ? rejectEmpty : null,
-                    onChanged: (value) {
-                      widget.user.password = value;
-                    },
-                  ),
-                  TextFormField(
-                    initialValue: widget.user.roles.join(","),
-                    decoration:
-                        InputDecoration(labelText: tr(context, "roles")),
-                    validator: rejectEmpty,
-                    onChanged: (value) {
-                      widget.user.roles = value.split(",");
-                    },
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16.0),
-                    child: ElevatedButton(
-                      onPressed: () async {
-                        // Validate returns true if the form is valid, or false otherwise.
-                        if (_formKey.currentState!.validate()) {
-                          var msg = tr(context, "user_created");
-                          try {
-                            await ApiProvider().createUser(widget.user);
-                            // Do nothing on TypeError as Create respond with a null id
-                          } catch (e) {
-                            msg = e.toString();
-                          }
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(msg)),
-                          );
-                          Navigator.pop(context);
-                        }
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Text(tr(context, "submit")),
+        body: ListView(
+          children: [
+            Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextFormField(
+                        initialValue: widget.user.login,
+                        decoration:
+                            InputDecoration(labelText: tr(context, "login")),
+                        validator: rejectEmpty,
+                        onChanged: (value) {
+                          widget.user.login = value;
+                        },
                       ),
-                    ),
+                      TextFormField(
+                        initialValue: "",
+                        decoration: InputDecoration(
+                            labelText: tr(context, "password"),
+                            hintText: tr(context,
+                                "leave_empty_to_keep_current_password")),
+                        validator: widget.isNew ? rejectEmpty : null,
+                        onChanged: (value) {
+                          widget.user.password = value;
+                        },
+                      ),
+                      TextFormField(
+                        initialValue: widget.user.roles.join(","),
+                        decoration:
+                            InputDecoration(labelText: tr(context, "roles")),
+                        validator: rejectEmpty,
+                        onChanged: (value) {
+                          widget.user.roles = value.split(",");
+                        },
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16.0),
+                        child: ElevatedButton(
+                          onPressed: () async {
+                            // Validate returns true if the form is valid, or false otherwise.
+                            if (_formKey.currentState!.validate()) {
+                              var msg = tr(context, "user_created");
+                              try {
+                                await ApiProvider().createUser(widget.user);
+                                // Do nothing on TypeError as Create respond with a null id
+                              } catch (e) {
+                                msg = e.toString();
+                              }
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(msg)),
+                              );
+                              Navigator.pop(context);
+                            }
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Text(tr(context, "submit")),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            )));
+                )),
+          ],
+        ));
   }
 }

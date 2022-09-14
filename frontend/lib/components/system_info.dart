@@ -60,35 +60,44 @@ class _SystemInfoState extends State<SystemInfo> {
                 return Container();
               }
               return Column(children: [
-                Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.computer),
-                    title: Text(tr(context, "cpu_usage")),
-                    subtitle: LinearProgressIndicator(
-                      value: snapshot.data!.cpuUsage,
-                      color: colorFromPercent(snapshot.data!.cpuUsage),
-                      backgroundColor: Colors.grey[350],
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.computer),
+                      title: Text(tr(context, "cpu_usage")),
+                      subtitle: LinearProgressIndicator(
+                        value: snapshot.data!.cpuUsage,
+                        color: colorFromPercent(snapshot.data!.cpuUsage),
+                        backgroundColor: Colors.grey[350],
+                      ),
                     ),
                   ),
                 ),
-                Card(
-                  child: ListTile(
-                    leading: const Icon(Icons.memory),
-                    title: Text(tr(context, "memory_usage")),
-                    subtitle: LinearProgressIndicator(
-                      value: snapshot.data!.memoryUsage,
-                      color: colorFromPercent(snapshot.data!.memoryUsage),
-                      backgroundColor: Colors.grey[350],
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.memory),
+                      title: Text(tr(context, "memory_usage")),
+                      subtitle: LinearProgressIndicator(
+                        value: snapshot.data!.memoryUsage,
+                        color: colorFromPercent(snapshot.data!.memoryUsage),
+                        backgroundColor: Colors.grey[350],
+                      ),
                     ),
                   ),
                 ),
-                Card(
-                  child: ListTile(
-                      leading: const Icon(Icons.timer),
-                      title: Text(tr(context, "uptime")),
-                      subtitle: Text(MyLocalizations.of(context)!
-                          .formatDuration(
-                              Duration(seconds: snapshot.data!.uptime)))),
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Card(
+                    child: ListTile(
+                        leading: const Icon(Icons.timer),
+                        title: Text(tr(context, "uptime")),
+                        subtitle: Text(MyLocalizations.of(context)!
+                            .formatDuration(
+                                Duration(seconds: snapshot.data!.uptime)))),
+                  ),
                 ),
               ]);
             }),

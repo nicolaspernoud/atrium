@@ -9,8 +9,8 @@ class AppModel implements Model {
   AppModel({
     required this.id,
     this.name = "",
-    this.icon = 62783,
-    this.color = const Color.fromARGB(0, 10, 10, 241),
+    this.icon = 63298,
+    this.color = const Color(0xffd32f2f),
     this.isProxy = true,
     this.host = "",
     this.target = "",

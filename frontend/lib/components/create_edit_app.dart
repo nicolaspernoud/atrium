@@ -52,166 +52,173 @@ class CreateEditAppState extends State<CreateEditApp> {
                 ]
               : null,
         ),
-        body: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextFormField(
-                    initialValue: widget.app.id.toString(),
-                    decoration: InputDecoration(labelText: tr(context, "id")),
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [intOnly],
-                    validator: rejectEmpty,
-                    onChanged: (value) {
-                      widget.app.id = int.parse(value);
-                    },
-                  ),
-                  TextFormField(
-                    initialValue: widget.app.name,
-                    decoration: InputDecoration(labelText: tr(context, "name")),
-                    validator: rejectEmpty,
-                    onChanged: (value) {
-                      widget.app.name = value;
-                    },
-                  ),
-                  Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: IconButton(
-                          iconSize: 40.0,
-                          onPressed: () async {
-                            await pickIcon(context, widget.app);
-                            setState(() {});
-                          },
-                          icon: Icon(
-                              IconData(widget.app.icon,
-                                  fontFamily: 'MaterialIcons'),
-                              color: widget.app.color)),
-                    ),
-                  ),
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: widget.app.isProxy,
-                        onChanged: (bool? value) async {
-                          if (value != null) {
-                            widget.app.isProxy = value;
-                            if (value == false) {
-                              widget.app.login = "";
-                              widget.app.password = "";
-                              widget.app.openpath = "";
-                            }
-                            setState((() {}));
-                          }
-                        },
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Text(tr(context, "is_proxy")),
-                      ),
-                    ],
-                  ),
-                  TextFormField(
-                    initialValue: widget.app.host,
-                    decoration: InputDecoration(labelText: tr(context, "host")),
-                    validator: rejectEmpty,
-                    onChanged: (value) {
-                      widget.app.host = value;
-                    },
-                  ),
-                  TextFormField(
-                    initialValue: widget.app.target,
-                    decoration:
-                        InputDecoration(labelText: tr(context, "target")),
-                    validator: rejectEmpty,
-                    onChanged: (value) {
-                      widget.app.target = value;
-                    },
-                  ),
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: widget.app.secured,
-                        onChanged: (bool? value) async {
-                          if (value != null) {
-                            widget.app.secured = value;
-                            setState((() {}));
-                          }
-                        },
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Text(tr(context, "secured")),
-                      ),
-                    ],
-                  ),
-                  if (widget.app.isProxy) ...[
+        body: ListView(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     TextFormField(
-                      initialValue: widget.app.login,
-                      decoration:
-                          InputDecoration(labelText: tr(context, "login")),
+                      initialValue: widget.app.id.toString(),
+                      decoration: InputDecoration(labelText: tr(context, "id")),
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [intOnly],
+                      validator: rejectEmpty,
                       onChanged: (value) {
-                        widget.app.login = value;
+                        widget.app.id = int.parse(value);
                       },
                     ),
                     TextFormField(
-                      initialValue: widget.app.password,
+                      initialValue: widget.app.name,
                       decoration:
-                          InputDecoration(labelText: tr(context, "password")),
+                          InputDecoration(labelText: tr(context, "name")),
+                      validator: rejectEmpty,
                       onChanged: (value) {
-                        widget.app.password = value;
+                        widget.app.name = value;
                       },
                     ),
-                    TextFormField(
-                      initialValue: widget.app.openpath,
-                      decoration:
-                          InputDecoration(labelText: tr(context, "openpath")),
-                      onChanged: (value) {
-                        widget.app.openpath = value;
-                      },
-                    ),
-                  ],
-                  TextFormField(
-                    initialValue: widget.app.roles.join(","),
-                    decoration:
-                        InputDecoration(labelText: tr(context, "roles")),
-                    validator: rejectEmpty,
-                    onChanged: (value) {
-                      widget.app.roles = value.split(",");
-                    },
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16.0),
-                    child: ElevatedButton(
-                      onPressed: () async {
-                        // Validate returns true if the form is valid, or false otherwise.
-                        if (_formKey.currentState!.validate()) {
-                          var msg = tr(context, "app_created");
-                          try {
-                            await ApiProvider().createApp(widget.app);
-                            // Do nothing on TypeError as Create respond with a null id
-                          } catch (e) {
-                            msg = e.toString();
-                          }
-                          if (!mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text(msg)),
-                          );
-                          Navigator.pop(context);
-                        }
-                      },
+                    Center(
                       child: Padding(
                         padding: const EdgeInsets.all(16.0),
-                        child: Text(tr(context, "submit")),
+                        child: IconButton(
+                            iconSize: 40.0,
+                            onPressed: () async {
+                              await pickIcon(context, widget.app);
+                              setState(() {});
+                            },
+                            icon: Icon(
+                                IconData(widget.app.icon,
+                                    fontFamily: 'MaterialIcons'),
+                                color: widget.app.color)),
                       ),
                     ),
-                  ),
-                ],
+                    Row(
+                      children: [
+                        Checkbox(
+                          value: widget.app.isProxy,
+                          onChanged: (bool? value) async {
+                            if (value != null) {
+                              widget.app.isProxy = value;
+                              if (value == false) {
+                                widget.app.login = "";
+                                widget.app.password = "";
+                                widget.app.openpath = "";
+                              }
+                              setState((() {}));
+                            }
+                          },
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(tr(context, "is_proxy")),
+                        ),
+                      ],
+                    ),
+                    TextFormField(
+                      initialValue: widget.app.host,
+                      decoration:
+                          InputDecoration(labelText: tr(context, "host")),
+                      validator: rejectEmpty,
+                      onChanged: (value) {
+                        widget.app.host = value;
+                      },
+                    ),
+                    TextFormField(
+                      initialValue: widget.app.target,
+                      decoration:
+                          InputDecoration(labelText: tr(context, "target")),
+                      validator: rejectEmpty,
+                      onChanged: (value) {
+                        widget.app.target = value;
+                      },
+                    ),
+                    Row(
+                      children: [
+                        Checkbox(
+                          value: widget.app.secured,
+                          onChanged: (bool? value) async {
+                            if (value != null) {
+                              widget.app.secured = value;
+                              setState((() {}));
+                            }
+                          },
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(tr(context, "secured")),
+                        ),
+                      ],
+                    ),
+                    if (widget.app.isProxy) ...[
+                      TextFormField(
+                        initialValue: widget.app.login,
+                        decoration:
+                            InputDecoration(labelText: tr(context, "login")),
+                        onChanged: (value) {
+                          widget.app.login = value;
+                        },
+                      ),
+                      TextFormField(
+                        initialValue: widget.app.password,
+                        decoration:
+                            InputDecoration(labelText: tr(context, "password")),
+                        onChanged: (value) {
+                          widget.app.password = value;
+                        },
+                      ),
+                      TextFormField(
+                        initialValue: widget.app.openpath,
+                        decoration:
+                            InputDecoration(labelText: tr(context, "openpath")),
+                        onChanged: (value) {
+                          widget.app.openpath = value;
+                        },
+                      ),
+                    ],
+                    TextFormField(
+                      initialValue: widget.app.roles.join(","),
+                      decoration:
+                          InputDecoration(labelText: tr(context, "roles")),
+                      validator: rejectEmpty,
+                      onChanged: (value) {
+                        widget.app.roles = value.split(",");
+                      },
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16.0),
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          // Validate returns true if the form is valid, or false otherwise.
+                          if (_formKey.currentState!.validate()) {
+                            var msg = tr(context, "app_created");
+                            try {
+                              await ApiProvider().createApp(widget.app);
+                              // Do nothing on TypeError as Create respond with a null id
+                            } catch (e) {
+                              msg = e.toString();
+                            }
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(msg)),
+                            );
+                            Navigator.pop(context);
+                          }
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Text(tr(context, "submit")),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            )));
+            ),
+          ],
+        ));
   }
 }
 

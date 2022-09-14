@@ -36,7 +36,7 @@ class _DavsListState extends State<DavsList> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(tr(context, "davs_list"))),
+      appBar: AppBar(title: Text(tr(context, "davs"))),
       body: Padding(
         padding: const EdgeInsets.all(8.0),
         child: FutureBuilder(
@@ -97,90 +97,93 @@ class _DavsListState extends State<DavsList> {
     return Wrap(
         children: list.map((dav) {
       var diskusage = ApiProvider().getDiskInfo(dav);
-      return Card(
-        child: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: ListTile(
-            leading: Icon(
-              IconData(dav.icon, fontFamily: 'MaterialIcons'),
-              color: dav.color,
-              size: 50,
-            ),
-            title: Text(dav.name),
-            subtitle: FutureBuilder<DiskInfo>(
-              future: diskusage,
-              builder:
-                  (BuildContext context, AsyncSnapshot<DiskInfo> snapshot) {
-                if (snapshot.hasData) {
-                  return Row(
-                    children: [
-                      Expanded(
-                        child: LinearProgressIndicator(
-                          value: snapshot.data?.spaceUsage,
-                          color: colorFromPercent(snapshot.data?.spaceUsage),
-                          backgroundColor: Colors.grey[350],
+      return Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Card(
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: ListTile(
+              leading: Icon(
+                IconData(dav.icon, fontFamily: 'MaterialIcons'),
+                color: dav.color,
+                size: 50,
+              ),
+              title: Text(dav.name),
+              subtitle: FutureBuilder<DiskInfo>(
+                future: diskusage,
+                builder:
+                    (BuildContext context, AsyncSnapshot<DiskInfo> snapshot) {
+                  if (snapshot.hasData) {
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: LinearProgressIndicator(
+                            value: snapshot.data?.spaceUsage,
+                            color: colorFromPercent(snapshot.data?.spaceUsage),
+                            backgroundColor: Colors.grey[350],
+                          ),
                         ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(left: 8.0),
-                        child: Text(snapshot.data!.usedSpaceLabel),
-                      )
-                    ],
-                  );
-                } else {
-                  return Container();
-                }
+                        Padding(
+                          padding: const EdgeInsets.only(left: 8.0),
+                          child: Text(snapshot.data!.usedSpaceLabel),
+                        )
+                      ],
+                    );
+                  } else {
+                    return Container();
+                  }
+                },
+              ),
+              onTap: () {
+                _openExplorer(context, dav);
               },
+              trailing: App().isAdmin
+                  ? PopupMenuButton(
+                      itemBuilder: (BuildContext context) => <PopupMenuEntry>[
+                            PopupMenuItem(
+                                onTap: () {
+                                  WidgetsBinding.instance
+                                      .addPostFrameCallback((_) async {
+                                    await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) => CreateEditDav(
+                                              dav: dav, isNew: false),
+                                        ));
+                                    await _getData();
+                                    setState(() {});
+                                  });
+                                },
+                                child: Row(
+                                  children: [
+                                    const Padding(
+                                      padding: EdgeInsets.all(8.0),
+                                      child: Icon(Icons.edit),
+                                    ),
+                                    Text(tr(context, "edit"))
+                                  ],
+                                )),
+                            PopupMenuItem(
+                                onTap: () {
+                                  WidgetsBinding.instance
+                                      .addPostFrameCallback((_) async {
+                                    await ApiProvider().deleteDav(dav.id);
+                                    await _getData();
+                                    setState(() {});
+                                  });
+                                },
+                                child: Row(
+                                  children: [
+                                    const Padding(
+                                      padding: EdgeInsets.all(8.0),
+                                      child: Icon(Icons.delete_forever),
+                                    ),
+                                    Text(tr(context, "delete"))
+                                  ],
+                                )),
+                          ])
+                  : null,
             ),
-            onTap: () {
-              _openExplorer(context, dav);
-            },
-            trailing: App().isAdmin
-                ? PopupMenuButton(
-                    itemBuilder: (BuildContext context) => <PopupMenuEntry>[
-                          PopupMenuItem(
-                              onTap: () {
-                                WidgetsBinding.instance
-                                    .addPostFrameCallback((_) async {
-                                  await Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => CreateEditDav(
-                                            dav: dav, isNew: false),
-                                      ));
-                                  await _getData();
-                                  setState(() {});
-                                });
-                              },
-                              child: Row(
-                                children: [
-                                  const Padding(
-                                    padding: EdgeInsets.all(8.0),
-                                    child: Icon(Icons.edit),
-                                  ),
-                                  Text(tr(context, "edit"))
-                                ],
-                              )),
-                          PopupMenuItem(
-                              onTap: () {
-                                WidgetsBinding.instance
-                                    .addPostFrameCallback((_) async {
-                                  await ApiProvider().deleteDav(dav.id);
-                                  await _getData();
-                                  setState(() {});
-                                });
-                              },
-                              child: Row(
-                                children: [
-                                  const Padding(
-                                    padding: EdgeInsets.all(8.0),
-                                    child: Icon(Icons.delete_forever),
-                                  ),
-                                  Text(tr(context, "delete"))
-                                ],
-                              )),
-                        ])
-                : null,
           ),
         ),
       );
