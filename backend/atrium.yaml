@@ -1,0 +1,85 @@
+hostname: atrium.127.0.0.1.nip.io
+debug_mode: true
+http_port: 8080
+auto_tls: false
+letsencrypt_email: foo@bar.com
+cookie_key: C95pavPJksDGl0EgoPDPelH9bxRHo30dWBJs5fUBtKF5344tcrEtccks7IRG3vhn
+log_to_file: false
+apps:
+  - id: 1
+    name: App 1
+    icon: 62783
+    color: 4292030255
+    is_proxy: true
+    host: app1
+    target: localhost:8081
+    secured: false
+    login: admin
+    password: ff54fds6f
+    openpath: ""
+    roles:
+      - ADMINS
+      - USERS
+  - id: 2
+    name: App 2
+    icon: 62783
+    color: 4292030255
+    is_proxy: true
+    host: app2
+    target: localhost:8082
+    secured: true
+    login: admin
+    password: ff54fds6f
+    openpath: /javascript_simple.html
+    roles:
+      - ADMINS
+      - USERS
+  - id: 3
+    name: App Static
+    icon: 62783
+    color: 4292030255
+    is_proxy: false
+    host: static-app
+    target: tests/data
+    secured: false
+    login: ""
+    password: ""
+    openpath: ""
+    roles:
+      - ADMINS
+      - USERS
+davs:
+  - id: 1
+    host: files1
+    directory: ./data/dir1
+    writable: true
+    name: Files 1
+    icon: 983856
+    color: 4292030255
+    secured: false
+    allow_symlinks: false
+    roles:
+      - ADMINS
+      - USERS
+  - id: 2
+    host: files2
+    directory: ./data/dir2
+    writable: true
+    name: Files 2
+    icon: 983856
+    color: 4292030255
+    secured: true
+    allow_symlinks: false
+    roles:
+      - USERS
+      - ADMINS
+    passphrase: ABCD123
+users:
+  - login: admin
+    password: $argon2id$v=19$m=4096,t=3,p=1$QWsdpHrjCaPwy3IODegzNA$dqyioLh9ndJ3V7OoKpkCaczJmGNKjuG99F5hisd3bPs
+    roles:
+      - ADMINS
+  - login: user
+    password: $argon2id$v=19$m=4096,t=3,p=1$ZH9ZFCT6YjYQpxkNt3SQgQ$g3DQawMEWlU1rnMAserFAzUg3Lg2O80s8eH+PrvmUo0
+    roles:
+      - USERS

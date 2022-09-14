@@ -1,0 +1,35 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug atrium frontend (flutter)",
+      "type": "dart",
+      "request": "launch",
+      "program": "frontend/lib/main.dart",
+      "args": ["--web-hostname", "atrium.127.0.0.1.nip.io"]
+    },
+    {
+      "type": "lldb",
+      "request": "launch",
+      "name": "Debug atrium backend (axum)",
+      "cargo": {
+        "args": [
+          "build",
+          "--bin=atrium",
+          "--package=atrium",
+          "--manifest-path",
+          "backend/Cargo.toml"
+        ],
+        "filter": {
+          "name": "atrium",
+          "kind": "bin"
+        }
+      },
+      "args": [],
+      "cwd": "${workspaceRoot}/backend"
+    }
+  ]
+}
