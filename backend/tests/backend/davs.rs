@@ -61,9 +61,7 @@ async fn put_and_get_file(
     // Act : send the file
     let resp = app
         .client
-        .put(format!(
-            "http://{dav_server}.atrium.io:{port}/{file_name}"
-        ))
+        .put(format!("http://{dav_server}.atrium.io:{port}/{file_name}"))
         .body(file_to_body(file))
         .send()
         .await?;
@@ -89,9 +87,7 @@ async fn put_and_get_file(
     // Act : retrieve the file
     let resp = app
         .client
-        .get(format!(
-            "http://{dav_server}.atrium.io:{port}/{file_name}"
-        ))
+        .get(format!("http://{dav_server}.atrium.io:{port}/{file_name}"))
         .send()
         .await?;
     assert_eq!(resp.status(), 200);
@@ -223,10 +219,7 @@ async fn try_to_hack() -> Result<()> {
         .expect("failed to write to file");
     let resp = app
         .client
-        .get(format!(
-            "http://files1.atrium.io:{}/../test.txt",
-            app.port
-        ))
+        .get(format!("http://files1.atrium.io:{}/../test.txt", app.port))
         .send()
         .await?;
     assert_eq!(resp.status(), 404);
@@ -618,12 +611,9 @@ async fn propfind_file_encrypted() -> Result<()> {
         1
     );
     // Test on dir
-    let resp = propfind(
-        &app,
-        &format!("http://files2.atrium.io:{}/dira", app.port),
-    )
-    .send()
-    .await?;
+    let resp = propfind(&app, &format!("http://files2.atrium.io:{}/dira", app.port))
+        .send()
+        .await?;
     let body = resp.text().await?;
     assert!(body.contains("<D:href>/dira/file1</D:href>"));
     assert!(body.contains("<D:getcontentlength>3</D:getcontentlength>"));
@@ -673,10 +663,7 @@ async fn mkcol_not_writable() -> Result<()> {
 async fn copy_file() -> Result<()> {
     let app = TestApp::spawn().await;
     let url = format!("http://files1.atrium.io:{}/dira/file1", app.port);
-    let new_url = format!(
-        "http://files1.atrium.io:{}/dira/file1%20(copy)",
-        app.port
-    );
+    let new_url = format!("http://files1.atrium.io:{}/dira/file1%20(copy)", app.port);
     let resp = copy(&app, &url)
         .header("Destination", &new_url)
         .send()
@@ -697,10 +684,7 @@ async fn copy_dir() -> Result<()> {
         .send()
         .await?;
     assert_eq!(resp.status(), 201);
-    let mut test_url = format!(
-        "http://files1.atrium.io:{}/newdir/subdira/file1",
-        app.port
-    );
+    let mut test_url = format!("http://files1.atrium.io:{}/newdir/subdira/file1", app.port);
     let resp = app.client.get(test_url).send().await?;
     assert_eq!(resp.status(), 200);
     test_url = format!("http://files1.atrium.io:{}/newdir/file1", app.port);
@@ -713,10 +697,7 @@ async fn copy_dir() -> Result<()> {
 async fn copy_not_writable() -> Result<()> {
     let app = TestApp::spawn().await;
     let url = format!("http://files3.atrium.io:{}/dira/file1", app.port);
-    let new_url = format!(
-        "http://files3.atrium.io:{}/dira/file1%20(copy)",
-        app.port
-    );
+    let new_url = format!("http://files3.atrium.io:{}/dira/file1%20(copy)", app.port);
     let resp = copy(&app, &url)
         .header("Destination", &new_url)
         .send()
@@ -731,10 +712,7 @@ async fn copy_not_writable() -> Result<()> {
 async fn copy_file_404() -> Result<()> {
     let app = TestApp::spawn().await;
     let url = format!("http://files1.atrium.io:{}/dira/file3", app.port);
-    let new_url = format!(
-        "http://files1.atrium.io:{}/dira/file3%20(copy)",
-        app.port
-    );
+    let new_url = format!("http://files1.atrium.io:{}/dira/file3%20(copy)", app.port);
     let resp = copy(&app, &url)
         .header("Destination", new_url)
         .send()
@@ -747,10 +725,7 @@ async fn copy_file_404() -> Result<()> {
 async fn move_file() -> Result<()> {
     let app = TestApp::spawn().await;
     let origin_url = format!("http://files1.atrium.io:{}/dira/file2", app.port);
-    let new_url = format!(
-        "http://files1.atrium.io:{}/dira/file2%20(moved)",
-        app.port
-    );
+    let new_url = format!("http://files1.atrium.io:{}/dira/file2%20(moved)", app.port);
     let resp = mv(&app, &origin_url)
         .header("Destination", &new_url)
         .send()
@@ -790,10 +765,7 @@ async fn move_dir() -> Result<()> {
         .send()
         .await?;
     assert_eq!(resp.status(), 201);
-    let mut test_url = format!(
-        "http://files1.atrium.io:{}/newdir/subdira/file1",
-        app.port
-    );
+    let mut test_url = format!("http://files1.atrium.io:{}/newdir/subdira/file1", app.port);
     let resp = app.client.get(test_url).send().await?;
     assert_eq!(resp.status(), 200);
     test_url = format!("http://files1.atrium.io:{}/newdir/file1", app.port);
@@ -809,10 +781,7 @@ async fn move_dir() -> Result<()> {
 async fn move_file_not_writable() -> Result<()> {
     let app = TestApp::spawn().await;
     let origin_url = format!("http://files3.atrium.io:{}/dira/file2", app.port);
-    let new_url = format!(
-        "http://files3.atrium.io:{}/dira/file2%20(moved)",
-        app.port
-    );
+    let new_url = format!("http://files3.atrium.io:{}/dira/file2%20(moved)", app.port);
     let resp = mv(&app, &origin_url)
         .header("Destination", &new_url)
         .send()
@@ -900,10 +869,7 @@ async fn default_not_allow_symlinks() -> Result<()> {
     assert_eq!(resp.status(), 404);
     let resp = app
         .client
-        .get(format!(
-            "http://files1.atrium.io:{}/dirc/file1",
-            app.port
-        ))
+        .get(format!("http://files1.atrium.io:{}/dirc/file1", app.port))
         .send()
         .await?;
     assert_eq!(resp.status(), 404);
@@ -932,10 +898,7 @@ async fn allow_symlinks() -> Result<()> {
     assert_eq!(resp.status(), 200);
     let resp = app
         .client
-        .get(format!(
-            "http://files3.atrium.io:{}/dirc/file1",
-            app.port
-        ))
+        .get(format!("http://files3.atrium.io:{}/dirc/file1", app.port))
         .send()
         .await?;
     assert_eq!(resp.status(), 200);
@@ -1099,4 +1062,32 @@ async fn secured_dav_basic_auth_and_token_test() {
         .await
         .expect("failed to execute request");
     assert!(response.status().is_success());
+    // Try to access app with the login and password passed as basic auth : must succeed
+    let response = client
+        .get(format!("http://secured-files.atrium.io:{}", app.port))
+        .header(
+            "Authorization",
+            format!(
+                "Basic {}",
+                base64ct::Base64::encode_string("admin:password".as_bytes())
+            ),
+        )
+        .send()
+        .await
+        .expect("failed to execute request");
+    assert!(response.status().is_success());
+    // Try to access app with the login and a WRONG password passed as basic auth : must fail
+    let response = client
+        .get(format!("http://secured-files.atrium.io:{}", app.port))
+        .header(
+            "Authorization",
+            format!(
+                "Basic {}",
+                base64ct::Base64::encode_string("admin:badpassword".as_bytes())
+            ),
+        )
+        .send()
+        .await
+        .expect("failed to execute request");
+    assert!(response.status() == StatusCode::UNAUTHORIZED);
 }

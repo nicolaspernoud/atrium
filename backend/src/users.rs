@@ -111,11 +111,6 @@ where
             }
         }
 
-        // OR Try to get user_token from basic auth headers
-        if let Some(AuthBasic((_id, Some(password)))) = AuthBasic::from_request(req).await.ok() {
-            return cookie_from_password(COOKIE_NAME, &jar, &password);
-        }
-
         // OR Try to get user_token from the query
         if let Some(password) = req.uri().query().map(|q| {
             let split = q.splitn(2, "=").collect::<Vec<_>>();
@@ -129,6 +124,34 @@ where
                 return res;
             } else {
                 return cookie_from_password(SHARE_TOKEN, &jar, &password);
+            }
+        }
+
+        // OR Try to get user_token from basic auth headers
+        if let Some(AuthBasic((login, Some(password)))) = AuthBasic::from_request(req).await.ok() {
+            match cookie_from_password(COOKIE_NAME, &jar, &password) {
+                Ok(token) => return Ok(token),
+                Err(_) => {
+                    let config: Config = Config::from_request(req)
+                        .await
+                        .expect("Could not find config");
+                    let reader: Extension<Arc<Option<Reader<Vec<u8>>>>> =
+                        Extension::from_request(req)
+                            .await
+                            .expect("Could not find reader");
+                    let addr: ConnectInfo<SocketAddr> = ConnectInfo::from_request(req)
+                        .await
+                        .expect("Could not find socket address");
+                    return match authenticate_local_user(
+                        &config,
+                        LocalAuth { login, password },
+                        (*reader).clone(),
+                        addr.0,
+                    ) {
+                        Ok(user) => Ok(user.1),
+                        Err(e) => Err((e, "no user found in basic auth")),
+                    };
+                }
             }
         }
 
@@ -225,6 +248,49 @@ pub async fn local_auth(
     Json(payload): Json<LocalAuth>,
 ) -> Result<(PrivateCookieJar, Json<AuthResponse>), StatusCode> {
     // Find the user in configuration
+    let (user, user_token) = authenticate_local_user(&config, payload, reader.clone(), addr)?;
+
+    // Serialize him/her as a cookie value
+    let encoded =
+        serde_json::to_string(&user_token).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let domain = hostname
+        .split(":")
+        .next()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?
+        .to_owned();
+
+    // Store the user into the cookie
+    let cookie = Cookie::build(COOKIE_NAME, encoded)
+        .domain(domain)
+        .path("/")
+        .same_site(axum_extra::extract::cookie::SameSite::Lax)
+        .secure(false)
+        .http_only(true)
+        .finish();
+
+    // Log the authentication success
+    info!(
+        "AUTHENTICATION SUCCESS for {} from {}",
+        user.login,
+        city_from_ip(addr, reader)
+    );
+
+    Ok((
+        jar.add(cookie),
+        Json(AuthResponse {
+            is_admin: user.roles.contains(&"ADMINS".to_owned()),
+            xsrf_token: user_token.xsrf_token,
+        }),
+    ))
+}
+
+pub fn authenticate_local_user(
+    config: &Config,
+    payload: LocalAuth,
+    reader: Arc<Option<Reader<Vec<u8>>>>,
+    addr: SocketAddr,
+) -> Result<(&User, UserToken), StatusCode> {
     let user = config
         .users
         .iter()
@@ -261,40 +327,7 @@ pub async fn local_auth(
         share: None,
         expires: (OffsetDateTime::now_utc() + Duration::days(7)).unix_timestamp(),
     };
-
-    // Serialize him/her as a cookie value
-    let encoded =
-        serde_json::to_string(&user_token).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let domain = hostname
-        .split(":")
-        .next()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?
-        .to_owned();
-
-    // Store the user into the cookie
-    let cookie = Cookie::build(COOKIE_NAME, encoded)
-        .domain(domain)
-        .path("/")
-        .same_site(axum_extra::extract::cookie::SameSite::Lax)
-        .secure(false)
-        .http_only(true)
-        .finish();
-
-    // Log the authentication success
-    info!(
-        "AUTHENTICATION SUCCESS for {} from {}",
-        user.login,
-        city_from_ip(addr, reader)
-    );
-
-    Ok((
-        jar.add(cookie),
-        Json(AuthResponse {
-            is_admin: user.roles.contains(&"ADMINS".to_owned()),
-            xsrf_token: user_token.xsrf_token,
-        }),
-    ))
+    Ok((user, user_token))
 }
 
 pub async fn get_users(config: Config, _admin: AdminToken) -> Json<Vec<User>> {
