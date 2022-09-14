@@ -54,6 +54,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_launcher_icons: "^0.10.0"
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -61,6 +62,19 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^2.0.0
+
+flutter_icons: # generate with `flutter pub run flutter_launcher_icons:main`.
+  android: "launcher_icon"
+  ios: false
+  image_path: "assets/icon/icon.png"
+  remove_alpha_ios: true
+  adaptive_icon_foreground: "assets/icon/icon.png"
+  adaptive_icon_background: "#B0BEC5"
+  web:
+    generate: true
+    image_path: "assets/icon/icon.png"
+    background_color: "#B0BEC5"
+    theme_color: "#B0BEC5"
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

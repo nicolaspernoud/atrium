@@ -37,58 +37,62 @@ class _SystemInfoState extends State<SystemInfo> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(tr(context, "system_information"))),
-      body: FutureBuilder(
-          future: sysInfo,
-          builder: (BuildContext context, AsyncSnapshot<SysInfo> snapshot) {
-            if (snapshot.hasError &&
-                snapshot.error is DioError &&
-                (snapshot.error as DioError).response?.statusCode == 401) {
-              // If error is 401, we log and retry
-              Future.delayed(Duration.zero, () async {
-                await showLoginDialog(context, mounted);
-                await _getData();
-                setState(() {});
-              });
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snapshot.hasError) {
-              return Center(child: Text('Error: ${snapshot.error}'));
-            }
-            if (!snapshot.hasData) {
-              return Container();
-            }
-            return Column(children: [
-              Card(
-                child: ListTile(
-                  leading: const Icon(Icons.computer),
-                  title: Text(tr(context, "cpu_usage")),
-                  subtitle: LinearProgressIndicator(
-                    value: snapshot.data!.cpuUsage,
-                    color: colorFromPercent(snapshot.data!.cpuUsage),
-                    backgroundColor: Colors.grey[350],
+      body: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: FutureBuilder(
+            future: sysInfo,
+            builder: (BuildContext context, AsyncSnapshot<SysInfo> snapshot) {
+              if (snapshot.hasError &&
+                  snapshot.error is DioError &&
+                  (snapshot.error as DioError).response?.statusCode == 401) {
+                // If error is 401, we log and retry
+                Future.delayed(Duration.zero, () async {
+                  await showLoginDialog(context, mounted);
+                  await _getData();
+                  setState(() {});
+                });
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              }
+              if (!snapshot.hasData) {
+                return Container();
+              }
+              return Column(children: [
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.computer),
+                    title: Text(tr(context, "cpu_usage")),
+                    subtitle: LinearProgressIndicator(
+                      value: snapshot.data!.cpuUsage,
+                      color: colorFromPercent(snapshot.data!.cpuUsage),
+                      backgroundColor: Colors.grey[350],
+                    ),
                   ),
                 ),
-              ),
-              Card(
-                child: ListTile(
-                  leading: const Icon(Icons.memory),
-                  title: Text(tr(context, "memory_usage")),
-                  subtitle: LinearProgressIndicator(
-                    value: snapshot.data!.memoryUsage,
-                    color: colorFromPercent(snapshot.data!.memoryUsage),
-                    backgroundColor: Colors.grey[350],
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.memory),
+                    title: Text(tr(context, "memory_usage")),
+                    subtitle: LinearProgressIndicator(
+                      value: snapshot.data!.memoryUsage,
+                      color: colorFromPercent(snapshot.data!.memoryUsage),
+                      backgroundColor: Colors.grey[350],
+                    ),
                   ),
                 ),
-              ),
-              Card(
-                child: ListTile(
-                    leading: const Icon(Icons.timer),
-                    title: Text(tr(context, "uptime")),
-                    subtitle: Text(MyLocalizations.of(context)!.formatDuration(
-                        Duration(seconds: snapshot.data!.uptime)))),
-              ),
-            ]);
-          }),
+                Card(
+                  child: ListTile(
+                      leading: const Icon(Icons.timer),
+                      title: Text(tr(context, "uptime")),
+                      subtitle: Text(MyLocalizations.of(context)!
+                          .formatDuration(
+                              Duration(seconds: snapshot.data!.uptime)))),
+                ),
+              ]);
+            }),
+      ),
     );
   }
 

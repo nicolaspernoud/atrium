@@ -37,33 +37,37 @@ class _AppsListState extends State<AppsList> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(tr(context, "apps_list"))),
-      body: FutureBuilder(
-          future: apps,
-          builder:
-              (BuildContext context, AsyncSnapshot<List<AppModel>> snapshot) {
-            switch (snapshot.connectionState) {
-              case ConnectionState.none:
-              case ConnectionState.active:
-              case ConnectionState.waiting:
-                return const Center(child: CircularProgressIndicator());
-              case ConnectionState.done:
-                if (snapshot.hasError &&
-                    snapshot.error is DioError &&
-                    (snapshot.error as DioError).response?.statusCode == 401) {
-                  // If error is 401, we log and retry
-                  Future.delayed(Duration.zero, () async {
-                    await showLoginDialog(context, mounted);
-                    await _getData();
-                    setState(() {});
-                  });
+      body: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: FutureBuilder(
+            future: apps,
+            builder:
+                (BuildContext context, AsyncSnapshot<List<AppModel>> snapshot) {
+              switch (snapshot.connectionState) {
+                case ConnectionState.none:
+                case ConnectionState.active:
+                case ConnectionState.waiting:
                   return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  return Center(child: Text('Error: ${snapshot.error}'));
-                }
-                return _buildListView(context, snapshot.data ?? []);
-            }
-          }),
+                case ConnectionState.done:
+                  if (snapshot.hasError &&
+                      snapshot.error is DioError &&
+                      (snapshot.error as DioError).response?.statusCode ==
+                          401) {
+                    // If error is 401, we log and retry
+                    Future.delayed(Duration.zero, () async {
+                      await showLoginDialog(context, mounted);
+                      await _getData();
+                      setState(() {});
+                    });
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (snapshot.hasError) {
+                    return Center(child: Text('Error: ${snapshot.error}'));
+                  }
+                  return _buildListView(context, snapshot.data ?? []);
+              }
+            }),
+      ),
       floatingActionButton: App().isAdmin
           ? FloatingActionButton(
               child: const Icon(Icons.add),
@@ -90,46 +94,75 @@ class _AppsListState extends State<AppsList> {
   }
 
   Widget _buildListView(BuildContext context, List<AppModel> list) {
-    return ListView.builder(
-        itemCount: list.length,
-        itemBuilder: (context, index) {
-          final app = list[index];
-          return ListTile(
-            leading: Icon(IconData(app.icon, fontFamily: 'MaterialIcons'),
-                color: app.color),
-            title: Text(app.name),
-            subtitle: const Text("subtitle"),
-            onTap: () {
-              _openAppInWebView(context, app);
-            },
-            trailing: App().isAdmin
-                ? Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                          icon: const Icon(Icons.edit),
-                          onPressed: () async {
-                            await Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      CreateEditApp(app: app, isNew: false),
-                                ));
-                            await _getData();
-                            setState(() {});
-                          }),
-                      IconButton(
-                          icon: const Icon(Icons.delete_forever),
-                          onPressed: () async {
-                            await ApiProvider().deleteApp(app.id);
-                            await _getData();
-                            setState(() {});
-                          }),
-                    ],
-                  )
-                : null,
-          );
-        });
+    return Wrap(
+        children: list
+            .map((app) => Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: ListTile(
+                      leading: Icon(
+                        IconData(app.icon, fontFamily: 'MaterialIcons'),
+                        color: app.color,
+                        size: 50,
+                      ),
+                      title: Text(app.name),
+                      onTap: () {
+                        _openAppInWebView(context, app);
+                      },
+                      trailing: App().isAdmin
+                          ? PopupMenuButton(
+                              itemBuilder: (BuildContext context) =>
+                                  <PopupMenuEntry>[
+                                    PopupMenuItem(
+                                        onTap: () {
+                                          WidgetsBinding.instance
+                                              .addPostFrameCallback((_) async {
+                                            await Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (context) =>
+                                                      CreateEditApp(
+                                                          app: app,
+                                                          isNew: false),
+                                                ));
+                                            await _getData();
+                                            setState(() {});
+                                          });
+                                        },
+                                        child: Row(
+                                          children: [
+                                            const Padding(
+                                              padding: EdgeInsets.all(8.0),
+                                              child: Icon(Icons.edit),
+                                            ),
+                                            Text(tr(context, "edit"))
+                                          ],
+                                        )),
+                                    PopupMenuItem(
+                                        onTap: () {
+                                          WidgetsBinding.instance
+                                              .addPostFrameCallback((_) async {
+                                            await ApiProvider()
+                                                .deleteApp(app.id);
+                                            await _getData();
+                                            setState(() {});
+                                          });
+                                        },
+                                        child: Row(
+                                          children: [
+                                            const Padding(
+                                              padding: EdgeInsets.all(8.0),
+                                              child: Icon(Icons.delete_forever),
+                                            ),
+                                            Text(tr(context, "delete"))
+                                          ],
+                                        )),
+                                  ])
+                          : null,
+                    ),
+                  ),
+                ))
+            .toList());
   }
 }
 

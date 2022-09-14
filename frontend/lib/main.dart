@@ -26,18 +26,20 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
-      home: HomePage(),
-      localizationsDelegates: [
-        MyLocalizationsDelegate(),
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-      ],
-      supportedLocales: [
-        Locale('en', ''),
-        Locale('fr', ''),
-      ],
-    );
+    return MaterialApp(
+        home: const HomePage(),
+        localizationsDelegates: const [
+          MyLocalizationsDelegate(),
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+        ],
+        supportedLocales: const [
+          Locale('en', ''),
+          Locale('fr', ''),
+        ],
+        theme: ThemeData(
+          primarySwatch: Colors.indigo,
+        ));
   }
 }
 
