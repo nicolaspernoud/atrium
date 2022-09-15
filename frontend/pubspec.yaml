@@ -68,8 +68,8 @@ flutter_icons: # generate with `flutter pub run flutter_launcher_icons:main`.
   ios: false
   image_path: "assets/icon/icon.png"
   remove_alpha_ios: true
-  adaptive_icon_foreground: "assets/icon/icon.png"
-  adaptive_icon_background: "#B0BEC5"
+  adaptive_icon_foreground: "assets/icon/icon_fg.png"
+  adaptive_icon_background: "#0d47a1"
   web:
     generate: true
     image_path: "assets/icon/icon.png"

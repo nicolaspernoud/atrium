@@ -36,7 +36,7 @@ class _DavsListState extends State<DavsList> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(tr(context, "davs"))),
+      appBar: AppBar(title: Text(tr(context, "files"))),
       body: Padding(
         padding: const EdgeInsets.all(8.0),
         child: FutureBuilder(
@@ -107,6 +107,12 @@ class _DavsListState extends State<DavsList> {
                 IconData(dav.icon, fontFamily: 'MaterialIcons'),
                 color: dav.color,
                 size: 50,
+                shadows: const <Shadow>[
+                  Shadow(
+                      color: Colors.black87,
+                      blurRadius: 5.0,
+                      offset: Offset(1, 1))
+                ],
               ),
               title: Text(dav.name),
               subtitle: FutureBuilder<DiskInfo>(

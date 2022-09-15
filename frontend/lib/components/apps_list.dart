@@ -106,6 +106,12 @@ class _AppsListState extends State<AppsList> {
                           IconData(app.icon, fontFamily: 'MaterialIcons'),
                           color: app.color,
                           size: 50,
+                          shadows: const <Shadow>[
+                            Shadow(
+                                color: Colors.black87,
+                                blurRadius: 5.0,
+                                offset: Offset(1, 1))
+                          ],
                         ),
                         title: Text(app.name),
                         onTap: () {
