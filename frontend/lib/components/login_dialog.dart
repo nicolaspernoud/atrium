@@ -39,7 +39,7 @@ class _LoginDialogState extends State<LoginDialog> {
       App().prefs.hostname = Uri.base.origin;
     }
     return AlertDialog(
-      title: Text(tr(context, "login")),
+      title: Text(tr(context, "login_screen")),
       content: SizedBox(
         height: 250,
         child: Form(

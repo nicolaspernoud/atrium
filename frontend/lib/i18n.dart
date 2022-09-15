@@ -18,6 +18,7 @@ class MyLocalizations {
 
   static final Map<String, Map<String, String>> _localizedValues = {
     'en': {
+      "allow_symlinks": "Allow following symlinks",
       "apps": "Applications",
       "app_created": "Application created or altered with success",
       "cancel": "Cancel",
@@ -39,6 +40,7 @@ class MyLocalizations {
       "id": "Id",
       "is_proxy": "Is a proxy",
       "is_writable": "Is writable",
+      "login_screen": "Please log in...",
       "login": "Login",
       "memory_usage": "Memory usage",
       "name": "Name",
@@ -72,11 +74,12 @@ class MyLocalizations {
       "search": "Search",
     },
     'fr': {
+      "allow_symlinks": "Autoriser les suivi des liens symboliques",
       "apps": "Applications",
       "app_created": "Application créée ou modifiée avec succès",
       "cancel": "Annuler",
       "close": "Fermer",
-      "copy": "Copy",
+      "copy": "Copier",
       "cpu_usage": "Utilisation CPU",
       "cut": "Couper",
       "dav_created": "Dav créé ou modifié avec succès",
@@ -94,6 +97,7 @@ class MyLocalizations {
       "id": "Id",
       "is_proxy": "Serveur proxy",
       "is_writable": "Accès en écriture",
+      "login_screen": "Veuillez vous authentifier...",
       "login": "Nom d'utilisateur",
       "memory_usage": "Utilisation mémoire",
       "name": "Nom",
