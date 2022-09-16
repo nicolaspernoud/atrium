@@ -1,5 +1,5 @@
-use hyper::StatusCode;
 use atrium::users::AuthResponse;
+use hyper::StatusCode;
 
 use crate::helpers::TestApp;
 
@@ -206,7 +206,8 @@ const NEW_APP: &'static str = r##"
     "login": "admin",
     "password": "app101pwd",
     "openpath": "",
-    "roles": ["ADMINS", "USERS"]
+    "roles": ["ADMINS", "USERS"],
+    "inject_security_headers": false
 }
 "##;
 
@@ -374,10 +375,7 @@ async fn apps_api_for_admin_user_test() {
     // Remove an app and assert that it is not here anymore
     let response = app
         .client
-        .delete(format!(
-            "http://atrium.io:{}/api/admin/apps/101",
-            app.port
-        ))
+        .delete(format!("http://atrium.io:{}/api/admin/apps/101", app.port))
         .header("xsrf-token", &xsrf_token)
         .send()
         .await
@@ -574,10 +572,7 @@ async fn davs_api_for_admin_user_test() {
     // Remove a dav and assert that it is not here anymore
     let response = app
         .client
-        .delete(format!(
-            "http://atrium.io:{}/api/admin/davs/201",
-            app.port
-        ))
+        .delete(format!("http://atrium.io:{}/api/admin/davs/201", app.port))
         .header("xsrf-token", &xsrf_token)
         .send()
         .await

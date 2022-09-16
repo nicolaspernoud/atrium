@@ -45,6 +45,7 @@ pub struct App {
     pub openpath: String,
     #[serde(deserialize_with = "vec_trim_remove_empties")]
     pub roles: Vec<String>,
+    pub inject_security_headers: bool,
 }
 
 #[derive(PartialEq, Debug, Clone)]

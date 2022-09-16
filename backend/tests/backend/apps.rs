@@ -1,7 +1,7 @@
+use atrium::apps::App;
 use axum::{response::Redirect, routing::get, Router};
 use hyper::header::LOCATION;
 use tracing::info;
-use atrium::apps::App;
 
 use crate::helpers::TestApp;
 use std::{fs, net::TcpListener};
@@ -85,6 +85,7 @@ async fn proxy_test() {
 
     // Assert
     assert!(response.status().is_success());
+    assert!(response.headers().contains_key("Content-Security-Policy"));
     assert!(response
         .text()
         .await
@@ -101,6 +102,24 @@ async fn proxy_test() {
 
     // Assert
     assert!(response.status().is_success());
+    assert!(!response.headers().contains_key("Content-Security-Policy"));
+    assert!(response
+        .text()
+        .await
+        .unwrap()
+        .contains("Hello world from mock server"));
+
+    // Act
+    let response = app
+        .client
+        .get(format!("http://app2.atrium.io:{}", app.port))
+        .send()
+        .await
+        .expect("failed to execute request");
+
+    // Assert
+    assert!(response.status().is_success());
+    assert!(response.headers().contains_key("Content-Security-Policy"));
     assert!(response
         .text()
         .await
@@ -147,6 +166,7 @@ async fn static_test() {
 
     // Assert
     assert!(response.status().is_success());
+    assert!(response.headers().contains_key("Content-Security-Policy"));
     assert!(response
         .text()
         .await
@@ -243,6 +263,7 @@ async fn redirect_test() {
             password: "".to_owned(),
             openpath: "".to_owned(),
             roles: vec![],
+            inject_security_headers: false,
         },
         App {
             id: 1,
@@ -257,6 +278,7 @@ async fn redirect_test() {
             password: "".to_owned(),
             openpath: "".to_owned(),
             roles: vec![],
+            inject_security_headers: true,
         },
         App {
             id: 1,
@@ -271,6 +293,7 @@ async fn redirect_test() {
             password: "".to_owned(),
             openpath: "".to_owned(),
             roles: vec![],
+            inject_security_headers: true,
         },
     ];
 
@@ -362,8 +385,7 @@ pub async fn relativeredirect_server(listener: TcpListener, app_port: u16) {
         "/",
         get(move || async move {
             Redirect::permanent(
-                format!("http://relative.redirect.relativeredirect.atrium.io:{app_port}")
-                    .as_str(),
+                format!("http://relative.redirect.relativeredirect.atrium.io:{app_port}").as_str(),
             )
         }),
     );

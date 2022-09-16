@@ -12,7 +12,6 @@ Rust/Flutter version of Vestibule.
 
 - [ ] User authentication and security (OAuth2)
 
-- [ ] Security : inject security headers (CSP, etc)
 - [ ] Security : harden cookie (HTTP Only, Lifetime, Secure if server is HTTPs, etc.)
 
 - [ ] Remove clones, panics, expects, unwraps, println!, etc.

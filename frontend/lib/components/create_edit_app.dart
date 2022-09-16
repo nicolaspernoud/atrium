@@ -187,6 +187,23 @@ class CreateEditAppState extends State<CreateEditApp> {
                         widget.app.roles = value.split(",");
                       },
                     ),
+                    Row(
+                      children: [
+                        Checkbox(
+                          value: widget.app.injectSecurityHeaders,
+                          onChanged: (bool? value) async {
+                            if (value != null) {
+                              widget.app.injectSecurityHeaders = value;
+                              setState((() {}));
+                            }
+                          },
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(tr(context, "inject_security_headers")),
+                        ),
+                      ],
+                    ),
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 16.0),
                       child: ElevatedButton(

@@ -19,6 +19,7 @@ class AppModel implements Model {
     this.password = "",
     this.openpath = "",
     this.roles = const ["ADMINS", "USERS"],
+    this.injectSecurityHeaders = true,
   });
 
   late int id;
@@ -35,6 +36,7 @@ class AppModel implements Model {
   late String password;
   late String openpath;
   late List<String> roles;
+  late bool injectSecurityHeaders;
 
   AppModel.fromJson(Map<String, dynamic> json) {
     id = json['id'];
@@ -49,6 +51,7 @@ class AppModel implements Model {
     password = json['password'];
     openpath = json['openpath'];
     roles = List.castFrom<dynamic, String>(json['roles']);
+    injectSecurityHeaders = json['inject_security_headers'];
   }
 
   Map<String, dynamic> toJson() {
@@ -65,6 +68,7 @@ class AppModel implements Model {
     data['password'] = password;
     data['openpath'] = openpath;
     data['roles'] = roles;
+    data['inject_security_headers'] = injectSecurityHeaders;
     return data;
   }
 }

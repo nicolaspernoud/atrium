@@ -93,14 +93,19 @@ impl Config {
         domains
     }
 
-    pub fn get_hostname(&self) -> HeaderValue {
-        let hostname: HeaderValue = format!(
+    pub fn get_hostname(&self) -> String {
+        format!(
             "{}{}",
             if self.auto_tls { "https://" } else { "http://" },
             self.hostname
         )
-        .parse()
-        .expect("could not parse hostname : invalid format");
+    }
+
+    pub fn get_hostname_header(&self) -> HeaderValue {
+        let hostname: HeaderValue = self
+            .get_hostname()
+            .parse()
+            .expect("could not parse hostname : invalid format");
         hostname
     }
 }
@@ -195,6 +200,14 @@ impl HostType {
             HostType::StaticApp(app) => app.secured,
         }
     }
+
+    pub fn inject_security_headers(&self) -> bool {
+        match self {
+            HostType::ReverseApp(app) => app.inner.inject_security_headers,
+            HostType::Dav(_dav) => true,
+            HostType::StaticApp(app) => app.inject_security_headers,
+        }
+    }
 }
 
 #[async_trait]
@@ -248,6 +261,7 @@ mod tests {
                     password: "ff54fds6f".to_owned(),
                     openpath: "".to_owned(),
                     roles: vec!["ADMINS".to_owned(), "USERS".to_owned()],
+                    inject_security_headers: true,
                 },
                 App {
                     id: 2,
@@ -262,6 +276,7 @@ mod tests {
                     password: "ff54fds6f".to_owned(),
                     openpath: "/javascript_simple.html".to_owned(),
                     roles: vec!["ADMINS".to_owned()],
+                    inject_security_headers: true,
                 },
             ]
         };

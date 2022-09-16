@@ -366,6 +366,7 @@ async fn get_file_404() -> Result<()> {
         .send()
         .await?;
     assert_eq!(resp.status(), 404);
+    assert!(resp.headers().contains_key("Content-Security-Policy"));
     Ok(())
 }
 

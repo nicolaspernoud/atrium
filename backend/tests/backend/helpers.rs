@@ -126,6 +126,7 @@ pub async fn create_apps_file(id: &str, main_port: &u16, mock1_port: &u16, mock2
             password: "ff54fds6f".to_owned(),
             openpath: "".to_owned(),
             roles: vec!["ADMINS".to_owned(), "USERS".to_owned()],
+            inject_security_headers: false,
         },
         App {
             id: 2,
@@ -140,6 +141,7 @@ pub async fn create_apps_file(id: &str, main_port: &u16, mock1_port: &u16, mock2
             password: "ff54fds6f".to_owned(),
             openpath: "/javascript_simple.html".to_owned(),
             roles: vec!["ADMINS".to_owned()],
+            inject_security_headers: true,
         },
         App {
             id: 3,
@@ -154,6 +156,7 @@ pub async fn create_apps_file(id: &str, main_port: &u16, mock1_port: &u16, mock2
             password: "".to_owned(),
             openpath: "".to_owned(),
             roles: vec!["ADMINS".to_owned()],
+            inject_security_headers: true,
         },
         App {
             id: 4,
@@ -168,6 +171,7 @@ pub async fn create_apps_file(id: &str, main_port: &u16, mock1_port: &u16, mock2
             password: "".to_owned(),
             openpath: "".to_owned(),
             roles: vec!["ADMINS".to_owned()],
+            inject_security_headers: true,
         },
     ];
 

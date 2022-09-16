@@ -22,7 +22,10 @@ use crate::{
         webdav_handler,
     },
     dir_server::dir_handler,
-    middlewares::{cors_middleware, debug_cors_middleware},
+    middlewares::{
+        cors_middleware, debug_cors_middleware, inject_security_headers,
+        inject_security_headers_for_apps,
+    },
     sysinfo::system_info,
     users::{
         add_user, cookie_to_body, delete_user, get_share_token, get_users, list_services,
@@ -48,7 +51,8 @@ impl Server {
             config.0.cookie_key.as_ref().unwrap().as_bytes(),
         );
 
-        let hostname = config.0.get_hostname();
+        let main_hostname = config.0.get_hostname();
+        let main_hostname_header = config.0.get_hostname_header();
 
         let user_router = Router::new()
             .route("/list_services", get(list_services))
@@ -66,7 +70,8 @@ impl Server {
             .route("/davs", get(get_davs).post(add_dav))
             .route("/davs/:dav_id", delete(delete_dav));
 
-        let website_router = Router::new()
+        let hn = main_hostname.clone();
+        let main_router = Router::new()
             .route(
                 "/reload",
                 get(|| async move {
@@ -79,16 +84,36 @@ impl Server {
             .route("/auth/local", post(local_auth))
             .nest("/api/admin", admin_router)
             .nest("/api/user", user_router)
-            .fallback(get_service(ServeDir::new("web")).handle_error(error_500));
+            .fallback(get_service(ServeDir::new("web")).handle_error(error_500))
+            .layer(middleware::from_fn(move |req, next| {
+                inject_security_headers(req, next, hn.clone(), false)
+            }));
 
-        let proxy_router = Router::new().route("/*path", any(proxy_handler));
-        let webdav_router =
+        let hn = main_hostname.clone();
+        let proxy_router =
             Router::new()
-                .route("/*path", any(webdav_handler))
+                .route("/*path", any(proxy_handler))
                 .layer(middleware::from_fn(move |req, next| {
-                    cors_middleware(req, next, hostname.clone())
+                    inject_security_headers_for_apps(req, next, hn.clone(), true)
                 }));
-        let dir_router = Router::new().route("/*path", any(dir_handler));
+
+        let hn = main_hostname.clone();
+        let webdav_router = Router::new()
+            .route("/*path", any(webdav_handler))
+            .layer(middleware::from_fn(move |req, next| {
+                cors_middleware(req, next, main_hostname_header.clone())
+            }))
+            .layer(middleware::from_fn(move |req, next| {
+                inject_security_headers(req, next, hn.clone(), false)
+            }));
+
+        let hn = main_hostname.clone();
+        let dir_router =
+            Router::new()
+                .route("/*path", any(dir_handler))
+                .layer(middleware::from_fn(move |req, next| {
+                    inject_security_headers_for_apps(req, next, hn.clone(), true)
+                }));
 
         let mut router = Router::new()
             .route(
@@ -99,7 +124,7 @@ impl Server {
                             Some(HostType::StaticApp(_)) => dir_router.oneshot(request).await,
                             Some(HostType::ReverseApp(_)) => proxy_router.oneshot(request).await,
                             Some(HostType::Dav(_)) => webdav_router.oneshot(request).await,
-                            None => website_router.oneshot(request).await,
+                            None => main_router.oneshot(request).await,
                         }
                     },
                 ),
