@@ -15,11 +15,11 @@ use hyper::{
 use hyper_reverse_proxy::ReverseProxy;
 use hyper_trust_dns::{RustlsHttpsConnector, TrustDnsResolver};
 use serde::{Deserialize, Serialize};
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 use tracing::error;
 
 use crate::{
-    configuration::{Config, ConfigFile, HostType},
+    configuration::{config_or_error, Config, ConfigFile, HostType},
     users::{check_authorization, AdminToken, UserTokenWithoutXSRFCheck},
     utils::{string_trim, vec_trim_remove_empties},
 };
@@ -199,17 +199,21 @@ pub async fn proxy_handler(
     }
 }
 
-pub async fn get_apps(config: Config, _admin: AdminToken) -> Json<Vec<App>> {
+pub async fn get_apps(
+    Extension(config_file): Extension<ConfigFile>,
+    _admin: AdminToken,
+) -> Result<Json<Vec<App>>, (StatusCode, &'static str)> {
+    let config = config_or_error(&config_file).await?;
     // Return all the apps as Json
-    Json(config.apps)
+    Ok(Json(config.apps))
 }
 
 pub async fn delete_app(
-    config_file: Extension<ConfigFile>,
-    mut config: Config,
+    Extension(config_file): Extension<ConfigFile>,
     _admin: AdminToken,
     Path(app_id): Path<(String, usize)>,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
+    let mut config = config_or_error(&config_file).await?;
     // Find the app
     if let Some(pos) = config.apps.iter().position(|a| a.id == app_id.1) {
         // It is an existing app, delete it
@@ -228,10 +232,12 @@ pub async fn delete_app(
 
 pub async fn add_app(
     config_file: Extension<ConfigFile>,
-    mut config: Config,
+    Extension(config): Extension<Arc<Config>>,
     _admin: AdminToken,
     Json(payload): Json<App>,
 ) -> Result<(StatusCode, &'static str), (StatusCode, &'static str)> {
+    // Clone the config
+    let mut config = (*config).clone();
     // Find the app
     if let Some(app) = config.apps.iter_mut().find(|a| a.id == payload.id) {
         *app = payload;

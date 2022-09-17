@@ -1,6 +1,6 @@
 use crate::{
     apps::App,
-    configuration::{Config, ConfigFile, ConfigMap, HostType},
+    configuration::{config_or_error, Config, ConfigFile, ConfigMap, HostType},
     davs::model::Dav,
     extractors::AuthBasic,
     logger::city_from_ip,
@@ -132,15 +132,13 @@ where
             match cookie_from_password(COOKIE_NAME, &jar, &password) {
                 Ok(token) => return Ok(token),
                 Err(_) => {
-                    let config: Config = Config::from_request(req)
-                        .await
-                        .expect("Could not find config");
-                    let reader: Extension<Arc<Option<Reader<Vec<u8>>>>> =
-                        Extension::from_request(req)
-                            .await
-                            .expect("Could not find reader");
-                    let addr: ConnectInfo<SocketAddr> = ConnectInfo::from_request(req)
-                        .await
+                    let config: &Arc<Config> =
+                        req.extensions().get().expect("Could not find config");
+                    let reader: &Arc<Option<Reader<Vec<u8>>>> =
+                        req.extensions().get().expect("Could not find reader");
+                    let addr: &ConnectInfo<SocketAddr> = req
+                        .extensions()
+                        .get()
                         .expect("Could not find socket address");
                     return match authenticate_local_user(
                         &config,
@@ -243,7 +241,7 @@ pub async fn local_auth(
     Extension(reader): Extension<Arc<Option<Reader<Vec<u8>>>>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     jar: PrivateCookieJar,
-    config: Config,
+    Extension(config): Extension<Arc<Config>>,
     Host(hostname): Host,
     Json(payload): Json<LocalAuth>,
 ) -> Result<(PrivateCookieJar, Json<AuthResponse>), StatusCode> {
@@ -330,16 +328,21 @@ pub fn authenticate_local_user(
     Ok((user, user_token))
 }
 
-pub async fn get_users(config: Config, _admin: AdminToken) -> Json<Vec<User>> {
-    Json(config.users)
+pub async fn get_users(
+    Extension(config_file): Extension<ConfigFile>,
+    _admin: AdminToken,
+) -> Result<Json<Vec<User>>, (StatusCode, &'static str)> {
+    let config = config_or_error(&config_file).await?;
+    // Return all the users as Json
+    Ok(Json(config.users))
 }
 
 pub async fn delete_user(
     config_file: Extension<ConfigFile>,
-    mut config: Config,
     _admin: AdminToken,
     Path(user_login): Path<(String, String)>,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
+    let mut config = config_or_error(&config_file).await?;
     // Find the user
     if let Some(pos) = config.users.iter().position(|u| u.login == user_login.1) {
         // It is an existing user, delete it
@@ -358,10 +361,12 @@ pub async fn delete_user(
 
 pub async fn add_user(
     config_file: Extension<ConfigFile>,
-    mut config: Config,
+    Extension(config): Extension<Arc<Config>>,
     _admin: AdminToken,
     Json(mut payload): Json<User>,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
+    // Clone the config
+    let mut config = (*config).clone();
     // Find the user
     if let Some(user) = config.users.iter_mut().find(|u| u.login == payload.login) {
         // It is an existing user, we only hash the password if it is not empty

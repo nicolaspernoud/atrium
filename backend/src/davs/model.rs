@@ -1,5 +1,7 @@
+use std::sync::Arc;
+
 use crate::{
-    configuration::{Config, ConfigFile},
+    configuration::{config_or_error, Config, ConfigFile},
     users::AdminToken,
     utils::{option_string_trim, string_trim, vec_trim_remove_empties},
 };
@@ -46,16 +48,21 @@ impl Dav {
     }
 }
 
-pub async fn get_davs(config: Config, _admin: AdminToken) -> Json<Vec<Dav>> {
-    Json(config.davs)
+pub async fn get_davs(
+    Extension(config_file): Extension<ConfigFile>,
+    _admin: AdminToken,
+) -> Result<Json<Vec<Dav>>, (StatusCode, &'static str)> {
+    let config = config_or_error(&config_file).await?;
+    // Return all the davs as Json
+    Ok(Json(config.davs))
 }
 
 pub async fn delete_dav(
     config_file: Extension<ConfigFile>,
-    mut config: Config,
     _admin: AdminToken,
     Path(dav_id): Path<(String, usize)>,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
+    let mut config = config_or_error(&config_file).await?;
     // Find the dav
     if let Some(pos) = config.davs.iter().position(|d| d.id == dav_id.1) {
         // It is an existing dav, delete it
@@ -74,10 +81,12 @@ pub async fn delete_dav(
 
 pub async fn add_dav(
     config_file: Extension<ConfigFile>,
-    mut config: Config,
+    Extension(config): Extension<Arc<Config>>,
     _admin: AdminToken,
     Json(payload): Json<Dav>,
 ) -> Result<(StatusCode, &'static str), (StatusCode, &'static str)> {
+    // Clone the config
+    let mut config = (*config).clone();
     // Find the dav
     if let Some(dav) = config.davs.iter_mut().find(|d| d.id == payload.id) {
         *dav = payload;

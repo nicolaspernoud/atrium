@@ -23,7 +23,7 @@ fn hostname() -> String {
     "atrium.io".to_owned()
 }
 
-#[derive(Deserialize, Serialize, Debug, Default, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Default, PartialEq, Clone)]
 pub struct Config {
     #[serde(default = "hostname", deserialize_with = "string_trim")]
     pub hostname: String,
@@ -110,25 +110,9 @@ impl Config {
     }
 }
 
-#[async_trait]
-impl<B> FromRequest<B> for Config
-where
-    B: Send,
-{
-    type Rejection = StatusCode;
-    async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
-        let Extension(config_file) = Extension::<ConfigFile>::from_request(req)
-            .await
-            .expect("`Config file` extension is missing");
-        // Load configuration
-        let config = Config::from_file(&config_file)
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-        Ok(config)
-    }
-}
-
-pub async fn load_config(config_file: &str) -> Result<(Config, Arc<ConfigMap>), anyhow::Error> {
+pub async fn load_config(
+    config_file: &str,
+) -> Result<(Arc<Config>, Arc<ConfigMap>), anyhow::Error> {
     let mut config = Config::from_file(config_file).await?;
     // if the cookie encryption key is not present, generate it and store it
     if config.cookie_key.is_none() {
@@ -166,7 +150,17 @@ pub async fn load_config(config_file: &str) -> Result<(Config, Arc<ConfigMap>), 
             )
         }))
         .collect();
-    Ok((config, Arc::new(hashmap)))
+    Ok((Arc::new(config), Arc::new(hashmap)))
+}
+
+pub async fn config_or_error(config_file: &str) -> Result<Config, (StatusCode, &'static str)> {
+    let config = Config::from_file(&config_file).await.map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "could not read config file",
+        )
+    })?;
+    Ok(config)
 }
 
 #[derive(PartialEq, Debug, Clone)]
