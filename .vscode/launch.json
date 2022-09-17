@@ -16,17 +16,7 @@
       "request": "launch",
       "name": "Debug atrium backend (axum)",
       "cargo": {
-        "args": [
-          "build",
-          "--bin=atrium",
-          "--package=atrium",
-          "--manifest-path",
-          "backend/Cargo.toml"
-        ],
-        "filter": {
-          "name": "atrium",
-          "kind": "bin"
-        }
+        "args": ["build", "--manifest-path", "backend/Cargo.toml"]
       },
       "args": [],
       "cwd": "${workspaceRoot}/backend"

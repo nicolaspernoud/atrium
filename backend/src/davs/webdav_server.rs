@@ -104,7 +104,7 @@ impl WebdavServer {
     pub async fn handle(self: Arc<Self>, mut req: Request, dav: &Dav) -> BoxResult<Response> {
         let mut res = Response::default();
 
-        let req_path = &req.uri().path().replace("//", "/");
+        let req_path = &req.uri().path();
         let headers = req.headers();
         let method = req.method().clone();
 
@@ -662,23 +662,10 @@ impl WebdavServer {
         if wanted_path.contains("..") {
             return None;
         }
-        let decoded_path = decode_uri(&wanted_path[1..])?;
-        let slashes_switched = if cfg!(windows) {
-            decoded_path.replace('/', "\\")
-        } else {
-            decoded_path.into_owned()
-        };
-        let stripped_path = match self.strip_path_prefix(&slashes_switched) {
-            Some(path) => path,
-            None => return None,
-        };
+        let decoded_path = decode_uri(&wanted_path[1..])?.into_owned();
+        let stripped_path = Path::new(&decoded_path).components().collect::<PathBuf>();
         let self_path = Path::new(dav_path);
         Some(self_path.join(&stripped_path))
-    }
-
-    fn strip_path_prefix<'a, P: AsRef<Path>>(&self, path: &'a P) -> Option<&'a Path> {
-        let path = path.as_ref();
-        Some(path)
     }
 
     async fn list_dir(
@@ -802,7 +789,13 @@ impl WebdavServer {
         // check if overwrite is "F"
         let exists = dmeta.is_ok();
 
-        // Fail if collection parent does not exist
+        // Fails if destination is the root directory
+        if dest == PathBuf::from(dav_path) {
+            *res.status_mut() = StatusCode::FORBIDDEN;
+            return Ok(());
+        }
+
+        // Fails if collection parent does not exist
         if dest.parent().is_none() || !dest.parent().unwrap().exists() {
             *res.status_mut() = StatusCode::CONFLICT;
             return Ok(());
