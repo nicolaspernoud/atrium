@@ -65,7 +65,17 @@ fn corresponding_disk_info(
     disksinfo.sort_by(|a, b| (*b).mount_point.partial_cmp(&(*a).mount_point).unwrap());
     disksinfo
         .into_iter()
-        .filter(|disk| path.starts_with(&disk.mount_point))
+        .filter(|disk| {
+            path.starts_with(&disk.mount_point)
+                || if cfg!(windows) {
+                    path.starts_with(format!(
+                        "\\\\?\\{}",
+                        disk.mount_point.to_str().unwrap_or("not-a-disk")
+                    ))
+                } else {
+                    false
+                }
+        })
         .nth(0)
         .ok_or("no disks found")
 }

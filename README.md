@@ -10,10 +10,6 @@ Rust/Flutter version of Vestibule.
 
 ### Backend
 
-- [ ] User authentication and security (OAuth2)
-
-- [ ] Security : harden cookie (HTTP Only, Lifetime, Secure if server is HTTPs, etc.)
-
 - [ ] Remove clones, panics, expects, unwraps, println!, etc.
 - [ ] Lifetimes for non serialized structs
 - [ ] Litmus compliance in CI tests
@@ -21,6 +17,7 @@ Rust/Flutter version of Vestibule.
 - [ ] Check that there is enough tests
 - [ ] OnlyOffice connector for documents editing
 - [ ] Reduce compiled file size (strip symbols, etc.)
+- [ ] User authentication and security (OAuth2)
 
 ### Frontend
 

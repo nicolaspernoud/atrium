@@ -272,6 +272,7 @@ pub async fn create_apps_file(id: &str, main_port: &u16, mock1_port: &u16, mock2
         apps: apps,
         davs: davs,
         users: users,
+        session_duration_days: None,
     };
 
     // Act

@@ -263,7 +263,7 @@ pub async fn local_auth(
         .domain(domain)
         .path("/")
         .same_site(axum_extra::extract::cookie::SameSite::Lax)
-        .secure(false)
+        .secure(config.auto_tls)
         .http_only(true)
         .finish();
 
@@ -323,7 +323,9 @@ pub fn authenticate_local_user(
         roles: user.roles.to_owned(),
         xsrf_token: random_string(16),
         share: None,
-        expires: (OffsetDateTime::now_utc() + Duration::days(7)).unix_timestamp(),
+        expires: (OffsetDateTime::now_utc()
+            + Duration::days(config.session_duration_days.unwrap_or(1)))
+        .unix_timestamp(),
     };
     Ok((user, user_token))
 }

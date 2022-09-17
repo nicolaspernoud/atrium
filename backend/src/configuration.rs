@@ -46,6 +46,7 @@ pub struct Config {
     pub apps: Vec<App>,
     pub davs: Vec<Dav>,
     pub users: Vec<User>,
+    pub session_duration_days: Option<i64>,
 }
 
 pub type ConfigMap = HashMap<String, HostType>;
@@ -338,6 +339,7 @@ mod tests {
             apps: APPS.clone(),
             davs: DAVS.clone(),
             users: USERS.clone(),
+            session_duration_days: None,
         };
 
         // Act

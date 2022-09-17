@@ -308,6 +308,7 @@ async fn redirect_test() {
         apps: apps,
         davs: vec![],
         users: vec![],
+        session_duration_days: None,
     };
     config.to_file(&filepath).await.unwrap();
     app.client
