@@ -18,9 +18,12 @@ Rust/Flutter version of Vestibule.
 - [ ] OnlyOffice connector for documents editing
 - [ ] Reduce compiled file size (strip symbols, etc.)
 - [ ] User authentication and security (OAuth2)
+- [ ] Inject basic auth headers
+- [ ] Remove anyhow if possible
 
 ### Frontend
 
+- [ ] Download progress on mobile
 - [ ] Improve upload (refresh on each upload ending, better view)
 - [ ] Confirm dialog for deletes
 

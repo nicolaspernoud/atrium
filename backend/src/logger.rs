@@ -17,7 +17,7 @@ pub fn city_from_ip(addr: SocketAddr, reader: Arc<Option<Reader<Vec<u8>>>>) -> S
     } else if addr.is_ipv4() && addr.ip().to_string().starts_with("192.168.") {
         "local network".to_owned()
     } else if reader.is_none() {
-        "no geo ip database".to_owned()
+        "unknown location (no geo ip database)".to_owned()
     } else {
         match (*reader)
             .as_ref()

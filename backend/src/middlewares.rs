@@ -11,11 +11,17 @@ use http::{HeaderValue, Method};
 use crate::configuration::{Config, HostType};
 
 pub async fn cors_middleware<B>(req: Request<B>, next: Next<B>) -> Result<Response, StatusCode> {
-    let hostname = req
-        .extensions()
-        .get::<Arc<Config>>()
-        .unwrap()
-        .get_hostname_header();
+    let hostname = {
+        let cfg = req.extensions().get::<Arc<Config>>().unwrap();
+        let hostname: HeaderValue = format!(
+            "{}{}",
+            if cfg.auto_tls { "https://" } else { "http://" },
+            cfg.hostname
+        )
+        .parse()
+        .expect("could not parse hostname : invalid format");
+        hostname
+    };
     let mut resp = next.run(req).await;
     let headers = resp.headers_mut();
     headers.insert("Access-Control-Allow-Origin", hostname);
@@ -59,11 +65,14 @@ pub async fn inject_security_headers<B>(
 where
     B: std::marker::Send,
 {
-    let hostname = req
-        .extensions()
-        .get::<Arc<Config>>()
-        .unwrap()
-        .get_hostname();
+    let source = {
+        let cfg = req.extensions().get::<Arc<Config>>().unwrap();
+        format!(
+            "{s}{h} {s}*.{h}",
+            s = if cfg.auto_tls { "https://" } else { "http://" },
+            h = cfg.hostname
+        )
+    };
     let mut parts = RequestParts::new(req);
     let inject = HostType::from_request(&mut parts)
         .await
@@ -73,7 +82,7 @@ where
     let req = parts.try_into_request().unwrap();
     let mut resp = next.run(req).await;
     if inject {
-        inject_security_headers_internal(&mut resp, &hostname)?;
+        inject_security_headers_internal(&mut resp, &source)?;
     }
     Ok(resp)
 }
@@ -109,7 +118,7 @@ fn inject_security_headers_internal(resp: &mut Response, source: &str) -> Result
         // If not, forge a default CSP Header
         None => {
             headers.insert("Content-Security-Policy", 
-            HeaderValue::from_str(&format!("default-src {source} 'self'; img-src {source} 'self' blob: data: ; script-src 'self' 'unsafe-inline' 'unsafe-eval' {source} https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline'; frame-src {source}; frame-ancestors {source}"))
+            HeaderValue::from_str(&format!("default-src 'self' {source} https://unpkg.com https://fonts.gstatic.com; script-src 'self' {source} 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' {source} 'unsafe-inline'; frame-src {source}; frame-ancestors {source}"))
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,);
         }
     }

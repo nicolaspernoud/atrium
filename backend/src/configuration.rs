@@ -10,7 +10,7 @@ use axum::{
     extract::{FromRequest, RequestParts},
     Extension, TypedHeader,
 };
-use http::HeaderValue;
+
 use hyper::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
@@ -92,22 +92,6 @@ impl Config {
             .collect::<Vec<String>>();
         domains.insert(0, self.hostname.to_owned());
         domains
-    }
-
-    pub fn get_hostname(&self) -> String {
-        format!(
-            "{}{}",
-            if self.auto_tls { "https://" } else { "http://" },
-            self.hostname
-        )
-    }
-
-    pub fn get_hostname_header(&self) -> HeaderValue {
-        let hostname: HeaderValue = self
-            .get_hostname()
-            .parse()
-            .expect("could not parse hostname : invalid format");
-        hostname
     }
 }
 
