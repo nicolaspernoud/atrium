@@ -789,8 +789,8 @@ impl WebdavServer {
         // check if overwrite is "F"
         let exists = dmeta.is_ok();
 
-        // Fails if destination is the root directory
-        if dest == PathBuf::from(dav_path) {
+        // Fails if we try to move a folder in place of the root directory itself
+        if path.is_dir() && dest == PathBuf::from(dav_path) {
             *res.status_mut() = StatusCode::FORBIDDEN;
             return Ok(());
         }

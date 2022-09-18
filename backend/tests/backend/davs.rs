@@ -779,6 +779,34 @@ async fn move_dir() -> Result<()> {
 }
 
 #[tokio::test]
+async fn move_dir_root() -> Result<()> {
+    let app = TestApp::spawn().await;
+    let url = format!("http://files1.atrium.io:{}/dira/", app.port);
+    let new_url = format!("http://files1.atrium.io:{}/", app.port);
+    let resp = mv(&app, &url)
+        .header("Destination", &new_url)
+        .send()
+        .await?;
+    assert_eq!(resp.status(), 403);
+    let resp = app.client.get(url).send().await?;
+    assert_eq!(resp.status(), 200);
+    Ok(())
+}
+
+#[tokio::test]
+async fn move_file_root() -> Result<()> {
+    let app = TestApp::spawn().await;
+    let url = format!("http://files1.atrium.io:{}/dira/file1", app.port);
+    let dest = format!("http://files1.atrium.io:{}/", app.port);
+    let new_url = format!("http://files1.atrium.io:{}/file1", app.port);
+    let resp = mv(&app, &url).header("Destination", &dest).send().await?;
+    assert_eq!(resp.status(), 201);
+    let resp = app.client.get(new_url).send().await?;
+    assert_eq!(resp.status(), 200);
+    Ok(())
+}
+
+#[tokio::test]
 async fn move_file_not_writable() -> Result<()> {
     let app = TestApp::spawn().await;
     let origin_url = format!("http://files3.atrium.io:{}/dira/file2", app.port);
