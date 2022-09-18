@@ -7,7 +7,9 @@ use axum::{
     response::IntoResponse,
     Extension, Json,
 };
+use base64ct::Encoding;
 use headers::HeaderValue;
+use http::header::AUTHORIZATION;
 use hyper::{
     header::{HOST, LOCATION},
     Body, StatusCode, Uri,
@@ -151,7 +153,18 @@ pub async fn proxy_handler(
         );
     }
 
-    // TODO : If the app contains basic auth information, forge a basic auth header
+    // If the app contains basic auth information, forge a basic auth header
+    if app.inner.login != "" && app.inner.password != "" {
+        let bauth = format!("{}:{}", app.inner.login, app.inner.password);
+        req.headers_mut().insert(
+            AUTHORIZATION,
+            HeaderValue::from_str(&format!(
+                "Basic {}",
+                base64ct::Base64::encode_string(bauth.as_bytes())
+            ))
+            .unwrap(),
+        );
+    }
 
     match PROXY_CLIENT
         .call(addr.ip(), &app.forward_uri.to_string(), req)
