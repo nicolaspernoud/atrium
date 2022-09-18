@@ -51,7 +51,28 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  int currentPageIndex = 0;
+  int _selectedIndex = 0;
+  late PageController _pageController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _onItemTapped(int index) {
+    setState(() {
+      _selectedIndex = index;
+      _pageController.animateToPage(index,
+          duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -59,42 +80,46 @@ class _HomePageState extends State<HomePage> {
       builder: (context, app, child) {
         return Scaffold(
           bottomNavigationBar: app.hasToken
-              ? NavigationBar(
-                  onDestinationSelected: (int index) {
-                    setState(() {
-                      currentPageIndex = index;
-                    });
-                  },
-                  selectedIndex: currentPageIndex,
-                  destinations: <Widget>[
-                    NavigationDestination(
+              ? BottomNavigationBar(
+                  onTap: _onItemTapped,
+                  currentIndex: _selectedIndex,
+                  selectedItemColor: Colors.amber[900],
+                  unselectedItemColor: Colors.black,
+                  items: <BottomNavigationBarItem>[
+                    BottomNavigationBarItem(
                       icon: const Icon(Icons.apps),
                       label: tr(context, "apps"),
                     ),
-                    NavigationDestination(
+                    BottomNavigationBarItem(
                       icon: const Icon(Icons.folder_open),
                       label: tr(context, "files"),
                     ),
                     if (app.isAdmin)
-                      NavigationDestination(
+                      BottomNavigationBarItem(
                         icon: const Icon(Icons.group),
                         label: tr(context, "users"),
                       ),
-                    NavigationDestination(
+                    BottomNavigationBarItem(
                       icon: const Icon(Icons.monitor_heart),
                       label: tr(context, "system_information"),
                     ),
                   ],
                 )
               : null,
-          body: <Widget>[
-            if (app.hasToken) ...[const AppsList(), const DavsList()] else
-              const WelcomeScreen(),
-            if (app.hasToken && app.isAdmin) ...[
-              const UsersList(),
-              const SystemInfo()
-            ]
-          ][currentPageIndex],
+          body: PageView(
+            controller: _pageController,
+            onPageChanged: (index) {
+              setState(() => _selectedIndex = index);
+            },
+            children: <Widget>[
+              if (app.hasToken) ...[const AppsList(), const DavsList()] else
+                const WelcomeScreen(),
+              if (app.hasToken && app.isAdmin) ...[
+                const UsersList(),
+                const SystemInfo()
+              ]
+            ],
+          ),
         );
       },
     );

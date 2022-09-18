@@ -99,78 +99,78 @@ class _AppsListState extends State<AppsList> {
             .map((app) => Padding(
                   padding: const EdgeInsets.all(8.0),
                   child: Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: ListTile(
-                        leading: Icon(
-                          IconData(app.icon, fontFamily: 'MaterialIcons'),
-                          color: app.color,
-                          size: 50,
-                          shadows: const <Shadow>[
-                            Shadow(
-                                color: Colors.black87,
-                                blurRadius: 5.0,
-                                offset: Offset(1, 1))
-                          ],
-                        ),
-                        title: Text(app.name),
-                        onTap: () {
-                          _openAppInWebView(context, app);
-                        },
-                        trailing: App().isAdmin
-                            ? PopupMenuButton(
-                                itemBuilder: (BuildContext context) =>
-                                    <PopupMenuEntry>[
-                                      PopupMenuItem(
-                                          onTap: () {
-                                            WidgetsBinding.instance
-                                                .addPostFrameCallback(
-                                                    (_) async {
-                                              await Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (context) =>
-                                                        CreateEditApp(
-                                                            app: app,
-                                                            isNew: false),
-                                                  ));
-                                              await _getData();
-                                              setState(() {});
-                                            });
-                                          },
-                                          child: Row(
-                                            children: [
-                                              const Padding(
-                                                padding: EdgeInsets.all(8.0),
-                                                child: Icon(Icons.edit),
-                                              ),
-                                              Text(tr(context, "edit"))
-                                            ],
-                                          )),
-                                      PopupMenuItem(
-                                          onTap: () {
-                                            WidgetsBinding.instance
-                                                .addPostFrameCallback(
-                                                    (_) async {
-                                              await ApiProvider()
-                                                  .deleteApp(app.id);
-                                              await _getData();
-                                              setState(() {});
-                                            });
-                                          },
-                                          child: Row(
-                                            children: [
-                                              const Padding(
-                                                padding: EdgeInsets.all(8.0),
-                                                child:
-                                                    Icon(Icons.delete_forever),
-                                              ),
-                                              Text(tr(context, "delete"))
-                                            ],
-                                          )),
-                                    ])
-                            : null,
+                    child: ListTile(
+                      leading: Icon(
+                        IconData(app.icon, fontFamily: 'MaterialIcons'),
+                        color: app.color,
+                        size: 50,
+                        shadows: const <Shadow>[
+                          Shadow(
+                              color: Colors.black87,
+                              blurRadius: 1.0,
+                              offset: Offset(1, 1))
+                        ],
                       ),
+                      title: Padding(
+                        padding: const EdgeInsets.all(20.0),
+                        child: Text(
+                          app.name,
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      onTap: () {
+                        _openAppInWebView(context, app);
+                      },
+                      trailing: App().isAdmin
+                          ? PopupMenuButton(
+                              itemBuilder: (BuildContext context) =>
+                                  <PopupMenuEntry>[
+                                    PopupMenuItem(
+                                        onTap: () {
+                                          WidgetsBinding.instance
+                                              .addPostFrameCallback((_) async {
+                                            await Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (context) =>
+                                                      CreateEditApp(
+                                                          app: app,
+                                                          isNew: false),
+                                                ));
+                                            await _getData();
+                                            setState(() {});
+                                          });
+                                        },
+                                        child: Row(
+                                          children: [
+                                            const Padding(
+                                              padding: EdgeInsets.all(8.0),
+                                              child: Icon(Icons.edit),
+                                            ),
+                                            Text(tr(context, "edit"))
+                                          ],
+                                        )),
+                                    PopupMenuItem(
+                                        onTap: () {
+                                          WidgetsBinding.instance
+                                              .addPostFrameCallback((_) async {
+                                            await ApiProvider()
+                                                .deleteApp(app.id);
+                                            await _getData();
+                                            setState(() {});
+                                          });
+                                        },
+                                        child: Row(
+                                          children: [
+                                            const Padding(
+                                              padding: EdgeInsets.all(8.0),
+                                              child: Icon(Icons.delete_forever),
+                                            ),
+                                            Text(tr(context, "delete"))
+                                          ],
+                                        )),
+                                  ])
+                          : null,
                     ),
                   ),
                 ))

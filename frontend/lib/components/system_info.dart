@@ -26,11 +26,12 @@ class _SystemInfoState extends State<SystemInfo> {
   void initState() {
     super.initState();
     _getData();
-    Timer.periodic(
-        const Duration(seconds: 1),
-        (Timer t) => setState(() {
-              _getData();
-            }));
+    Timer.periodic(const Duration(seconds: 1), (Timer t) {
+      if (!mounted) return;
+      setState(() {
+        _getData();
+      });
+    });
   }
 
   @override
@@ -63,13 +64,16 @@ class _SystemInfoState extends State<SystemInfo> {
                 Padding(
                   padding: const EdgeInsets.all(8.0),
                   child: Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.computer),
-                      title: Text(tr(context, "cpu_usage")),
-                      subtitle: LinearProgressIndicator(
-                        value: snapshot.data!.cpuUsage,
-                        color: colorFromPercent(snapshot.data!.cpuUsage),
-                        backgroundColor: Colors.grey[350],
+                    child: Padding(
+                      padding: const EdgeInsets.all(10.0),
+                      child: ListTile(
+                        leading: const Icon(Icons.computer),
+                        title: Text(tr(context, "cpu_usage")),
+                        subtitle: LinearProgressIndicator(
+                          value: snapshot.data!.cpuUsage,
+                          color: colorFromPercent(snapshot.data!.cpuUsage),
+                          backgroundColor: Colors.grey[350],
+                        ),
                       ),
                     ),
                   ),
@@ -77,13 +81,16 @@ class _SystemInfoState extends State<SystemInfo> {
                 Padding(
                   padding: const EdgeInsets.all(8.0),
                   child: Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.memory),
-                      title: Text(tr(context, "memory_usage")),
-                      subtitle: LinearProgressIndicator(
-                        value: snapshot.data!.memoryUsage,
-                        color: colorFromPercent(snapshot.data!.memoryUsage),
-                        backgroundColor: Colors.grey[350],
+                    child: Padding(
+                      padding: const EdgeInsets.all(10.0),
+                      child: ListTile(
+                        leading: const Icon(Icons.memory),
+                        title: Text(tr(context, "memory_usage")),
+                        subtitle: LinearProgressIndicator(
+                          value: snapshot.data!.memoryUsage,
+                          color: colorFromPercent(snapshot.data!.memoryUsage),
+                          backgroundColor: Colors.grey[350],
+                        ),
                       ),
                     ),
                   ),
@@ -91,12 +98,15 @@ class _SystemInfoState extends State<SystemInfo> {
                 Padding(
                   padding: const EdgeInsets.all(8.0),
                   child: Card(
-                    child: ListTile(
-                        leading: const Icon(Icons.timer),
-                        title: Text(tr(context, "uptime")),
-                        subtitle: Text(MyLocalizations.of(context)!
-                            .formatDuration(
-                                Duration(seconds: snapshot.data!.uptime)))),
+                    child: Padding(
+                      padding: const EdgeInsets.all(10.0),
+                      child: ListTile(
+                          leading: const Icon(Icons.timer),
+                          title: Text(tr(context, "uptime")),
+                          subtitle: Text(MyLocalizations.of(context)!
+                              .formatDuration(
+                                  Duration(seconds: snapshot.data!.uptime)))),
+                    ),
                   ),
                 ),
               ]);
