@@ -474,55 +474,64 @@ impl ChunkedPosition {
         }
     }
 }
+#[cfg(test)]
+mod tests {
+    use crate::davs::dav_file::{
+        decrypted_size, ChunkedPosition, ENCRYPTED_CHUNK_SIZE, ENCRYPTION_OVERHEAD, NONCE_SIZE,
+        PLAIN_CHUNK_SIZE,
+    };
 
-#[test]
-fn test_decrypted_size() {
-    let nonce_size = NONCE_SIZE as u64;
-    let encryption_overhead = ENCRYPTION_OVERHEAD as u64;
-    let encrypted_chunk_size = ENCRYPTED_CHUNK_SIZE as u64;
-    let plain_chunk_size = PLAIN_CHUNK_SIZE as u64;
+    #[test]
+    fn test_decrypted_size() {
+        let nonce_size = NONCE_SIZE as u64;
+        let encryption_overhead = ENCRYPTION_OVERHEAD as u64;
+        let encrypted_chunk_size = ENCRYPTED_CHUNK_SIZE as u64;
+        let plain_chunk_size = PLAIN_CHUNK_SIZE as u64;
 
-    assert_eq!(decrypted_size(nonce_size + encryption_overhead), 0);
-    assert_eq!(
-        decrypted_size(nonce_size + 3 * encrypted_chunk_size),
-        3 * plain_chunk_size
-    );
-    assert_eq!(
-        decrypted_size(nonce_size + 3 * encrypted_chunk_size + ENCRYPTION_OVERHEAD as u64 + 150),
-        3 * plain_chunk_size + 150
-    );
-}
+        assert_eq!(decrypted_size(nonce_size + encryption_overhead), 0);
+        assert_eq!(
+            decrypted_size(nonce_size + 3 * encrypted_chunk_size),
+            3 * plain_chunk_size
+        );
+        assert_eq!(
+            decrypted_size(
+                nonce_size + 3 * encrypted_chunk_size + ENCRYPTION_OVERHEAD as u64 + 150
+            ),
+            3 * plain_chunk_size + 150
+        );
+    }
 
-#[test]
-fn test_chunked_position() {
-    let nonce_size = NONCE_SIZE as u64;
-    let encrypted_chunk_size = ENCRYPTED_CHUNK_SIZE as u64;
-    let plain_chunk_size = PLAIN_CHUNK_SIZE as u64;
+    #[test]
+    fn test_chunked_position() {
+        let nonce_size = NONCE_SIZE as u64;
+        let encrypted_chunk_size = ENCRYPTED_CHUNK_SIZE as u64;
+        let plain_chunk_size = PLAIN_CHUNK_SIZE as u64;
 
-    assert_eq!(
-        ChunkedPosition::new(0),
-        ChunkedPosition {
-            beginning_of_active_chunk: nonce_size,
-            offset_in_active_chunk: 0,
-            active_chunk_counter: 0
-        }
-    );
+        assert_eq!(
+            ChunkedPosition::new(0),
+            ChunkedPosition {
+                beginning_of_active_chunk: nonce_size,
+                offset_in_active_chunk: 0,
+                active_chunk_counter: 0
+            }
+        );
 
-    assert_eq!(
-        ChunkedPosition::new(100),
-        ChunkedPosition {
-            beginning_of_active_chunk: nonce_size,
-            offset_in_active_chunk: 100,
-            active_chunk_counter: 0
-        }
-    );
+        assert_eq!(
+            ChunkedPosition::new(100),
+            ChunkedPosition {
+                beginning_of_active_chunk: nonce_size,
+                offset_in_active_chunk: 100,
+                active_chunk_counter: 0
+            }
+        );
 
-    assert_eq!(
-        ChunkedPosition::new(100 + 2 * plain_chunk_size),
-        ChunkedPosition {
-            beginning_of_active_chunk: nonce_size + 2 * encrypted_chunk_size,
-            offset_in_active_chunk: 100,
-            active_chunk_counter: 2
-        }
-    );
+        assert_eq!(
+            ChunkedPosition::new(100 + 2 * plain_chunk_size),
+            ChunkedPosition {
+                beginning_of_active_chunk: nonce_size + 2 * encrypted_chunk_size,
+                offset_in_active_chunk: 100,
+                active_chunk_counter: 2
+            }
+        );
+    }
 }

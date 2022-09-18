@@ -106,34 +106,41 @@ pub async fn system_info(_user: UserToken) -> Result<Json<SystemInfo>, (StatusCo
     Ok(Json(sysinfo))
 }
 
-#[test]
-fn test_corresponding_disk_info() {
-    let diskinfos = vec![
-        DiskInfo {
-            name: "disk_info_1".to_owned(),
-            mount_point: PathBuf::from("/base/dir/"),
-            available_space: 0,
-            total_space: 0,
-        },
-        DiskInfo {
-            name: "disk_info_2".to_owned(),
-            mount_point: PathBuf::from("/base/"),
-            available_space: 0,
-            total_space: 0,
-        },
-        DiskInfo {
-            name: "disk_info_3".to_owned(),
-            mount_point: PathBuf::from("/base/dir/subdir/"),
-            available_space: 0,
-            total_space: 0,
-        },
-        DiskInfo {
-            name: "disk_info_4".to_owned(),
-            mount_point: PathBuf::from("/otherbase/dir/subdir/"),
-            available_space: 0,
-            total_space: 0,
-        },
-    ];
-    let diskinfo = corresponding_disk_info(diskinfos, PathBuf::from("/base/dir/subdir/1")).unwrap();
-    assert_eq!(diskinfo.mount_point, PathBuf::from("/base/dir/subdir/"));
+#[cfg(test)]
+mod tests {
+    use crate::sysinfo::{corresponding_disk_info, DiskInfo};
+    use std::path::PathBuf;
+
+    #[test]
+    fn test_corresponding_disk_info() {
+        let diskinfos = vec![
+            DiskInfo {
+                name: "disk_info_1".to_owned(),
+                mount_point: PathBuf::from("/base/dir/"),
+                available_space: 0,
+                total_space: 0,
+            },
+            DiskInfo {
+                name: "disk_info_2".to_owned(),
+                mount_point: PathBuf::from("/base/"),
+                available_space: 0,
+                total_space: 0,
+            },
+            DiskInfo {
+                name: "disk_info_3".to_owned(),
+                mount_point: PathBuf::from("/base/dir/subdir/"),
+                available_space: 0,
+                total_space: 0,
+            },
+            DiskInfo {
+                name: "disk_info_4".to_owned(),
+                mount_point: PathBuf::from("/otherbase/dir/subdir/"),
+                available_space: 0,
+                total_space: 0,
+            },
+        ];
+        let diskinfo =
+            corresponding_disk_info(diskinfos, PathBuf::from("/base/dir/subdir/1")).unwrap();
+        assert_eq!(diskinfo.mount_point, PathBuf::from("/base/dir/subdir/"));
+    }
 }

@@ -16,9 +16,8 @@ Rust/Flutter version of Vestibule.
 - [ ] Remove axum macros
 - [ ] Check that there is enough tests
 - [ ] OnlyOffice connector for documents editing
-- [ ] Reduce compiled file size (strip symbols, etc.)
 - [ ] User authentication and security (OAuth2)
-- [ ] Remove anyhow if possible
+- [ ] Improve content security policy
 
 ### Frontend
 
