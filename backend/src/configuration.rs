@@ -104,6 +104,10 @@ pub async fn load_config(
         config.cookie_key = Some(crate::utils::random_string(64));
         config.to_file(config_file).await?;
     }
+    // Allow overriding the hostname with env variable
+    if let Some(h) = std::env::var("HOSTNAME").ok() {
+        config.hostname = h
+    }
     let hashmap = config
         .apps
         .iter()

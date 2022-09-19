@@ -42,6 +42,7 @@ impl Server {
             std::sync::Arc::new(maxminddb::Reader::open_readfile("GeoLite2-City.mmdb").ok());
 
         let config = load_config(config_file).await?;
+        tracing::info!("Atrium's main hostname: {}", config.0.hostname);
 
         let config_file: ConfigFile = config_file.to_owned();
         let key = axum_extra::extract::cookie::Key::from(

@@ -748,7 +748,7 @@ async fn move_file_to_dir() -> Result<()> {
         .header("Destination", &new_url)
         .send()
         .await?;
-    assert_eq!(resp.status(), 201);
+    assert_eq!(resp.status(), 204);
     let resp = app.client.get(format!("{new_url}file2")).send().await?;
     assert_eq!(resp.status(), 200);
     let resp = app.client.get(origin_url).send().await?;
@@ -800,7 +800,7 @@ async fn move_file_root() -> Result<()> {
     let dest = format!("http://files1.atrium.io:{}/", app.port);
     let new_url = format!("http://files1.atrium.io:{}/file1", app.port);
     let resp = mv(&app, &url).header("Destination", &dest).send().await?;
-    assert_eq!(resp.status(), 201);
+    assert_eq!(resp.status(), 204);
     let resp = app.client.get(new_url).send().await?;
     assert_eq!(resp.status(), 200);
     Ok(())
@@ -845,11 +845,11 @@ async fn lock_file() -> Result<()> {
 }
 
 #[tokio::test]
-async fn lock_file_404() -> Result<()> {
+async fn lock_unexisting_file() -> Result<()> {
     let app = TestApp::spawn().await;
     let url = format!("http://files1.atrium.io:{}/file3", app.port);
     let resp = lock(&app, &url).send().await?;
-    assert_eq!(resp.status(), 404);
+    assert_eq!(resp.status(), 201);
     Ok(())
 }
 

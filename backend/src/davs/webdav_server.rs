@@ -255,11 +255,10 @@ impl WebdavServer {
                 }
                 "LOCK" => {
                     // Fake lock
-                    if is_file {
-                        let has_auth = true;
-                        self.handle_lock(req_path, has_auth, &mut res).await?;
-                    } else {
+                    if is_dir {
                         status_not_found(&mut res);
+                    } else {
+                        self.handle_lock(req_path, is_miss, &mut res).await?;
                     }
                 }
                 "UNLOCK" => {
@@ -602,12 +601,13 @@ impl WebdavServer {
         }
     }
 
-    async fn handle_lock(&self, req_path: &str, auth: bool, res: &mut Response) -> BoxResult<()> {
-        let token = if auth {
-            format!("opaquelocktoken:{}", Uuid::new_v4())
-        } else {
-            Utc::now().timestamp().to_string()
-        };
+    async fn handle_lock(
+        &self,
+        req_path: &str,
+        is_miss: bool,
+        res: &mut Response,
+    ) -> BoxResult<()> {
+        let token = format!("opaquelocktoken:{}", Uuid::new_v4());
 
         res.headers_mut().insert(
             CONTENT_TYPE,
@@ -624,6 +624,9 @@ impl WebdavServer {
 </D:activelock></D:lockdiscovery></D:prop>"#,
             token, req_path
         ));
+        if is_miss {
+            *res.status_mut() = StatusCode::CREATED;
+        }
         Ok(())
     }
 
@@ -652,10 +655,17 @@ impl WebdavServer {
         path.ok().map(|v| v.starts_with(dir)).unwrap_or_default()
     }
 
-    fn extract_dest(&self, headers: &HeaderMap<HeaderValue>, dav_path: &str) -> Option<PathBuf> {
+    async fn extract_dest(
+        &self,
+        headers: &HeaderMap<HeaderValue>,
+        dav_path: &str,
+    ) -> Option<Destination> {
         let dest = headers.get("Destination")?.to_str().ok()?;
         let uri: Uri = dest.parse().ok()?;
-        self.extract_path(uri.path(), dav_path)
+        match self.extract_path(uri.path(), dav_path) {
+            Some(dest) => Some(Destination::new(dest, uri.to_string().ends_with("/")).await),
+            None => None,
+        }
     }
 
     fn extract_path(&self, wanted_path: &str, dav_path: &str) -> Option<PathBuf> {
@@ -760,7 +770,7 @@ impl WebdavServer {
         };
 
         // decode and validate destination.
-        let mut dest = match self.extract_dest(req.headers(), dav_path) {
+        let mut dest = match self.extract_dest(req.headers(), dav_path).await {
             Some(dest) => dest,
             None => {
                 *res.status_mut() = StatusCode::FORBIDDEN;
@@ -768,63 +778,43 @@ impl WebdavServer {
             }
         };
 
-        // for the destination, check if it's a symlink. If we are going
-        // to remove it first, we want to remove the link, not what it points to.
-        let (dest_is_file, dmeta) = match fs::symlink_metadata(&dest).await {
-            Ok(meta) => {
-                let mut is_file = false;
-                if meta.is_symlink() {
-                    if let Ok(m) = fs::metadata(&dest).await {
-                        is_file = m.is_file();
-                    }
-                }
-                if meta.is_file() {
-                    is_file = true;
-                }
-                (is_file, Ok(meta))
-            }
-            Err(e) => (false, Err(e)),
-        };
-
-        // check if overwrite is "F"
-        let exists = dmeta.is_ok();
-
         // Fails if we try to move a folder in place of the root directory itself
-        if path.is_dir() && dest == PathBuf::from(dav_path) {
+        if path.is_dir() && dest.path() == &PathBuf::from(dav_path) {
             *res.status_mut() = StatusCode::FORBIDDEN;
             return Ok(());
         }
 
         // Fails if collection parent does not exist
-        if dest.parent().is_none() || !dest.parent().unwrap().exists() {
+        if dest.path().parent().is_none() || !dest.path().parent().unwrap().exists() {
             *res.status_mut() = StatusCode::CONFLICT;
             return Ok(());
         }
 
-        if !overwrite && exists {
+        // Fails if exists and overwrite is false
+        if !overwrite && dest.exists() {
             *res.status_mut() = StatusCode::PRECONDITION_FAILED;
             return Ok(());
         }
 
-        // check if source == dest
-        if path == dest {
+        // Fails if source == dest
+        if path == dest.path() {
             *res.status_mut() = StatusCode::FORBIDDEN;
             return Ok(());
         }
 
-        // see if we need to delete the destination first.
-        if path.is_dir() && overwrite && exists && depth != Depth::Zero && !dest_is_file {
-            if fs::remove_dir_all(&dest).await.is_err() {
+        // see if we need to delete the destination first
+        if path.is_dir() && dest.exists() && dest.is_dir() && overwrite && depth != Depth::Zero {
+            if fs::remove_dir_all(dest.path()).await.is_err() {
                 *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
                 return Ok(());
             }
         }
 
-        // COPY or MOVE.
+        // COPY or MOVE
         if method.as_str() == "COPY" {
-            self.do_copy(&path, &dest, &dest, !dest_is_file, depth)
+            self.do_copy(&path, dest.path(), dest.path(), dest.is_dir(), depth)
                 .await?;
-            if overwrite && exists {
+            if overwrite && dest.exists() {
                 *res.status_mut() = StatusCode::NO_CONTENT;
             } else {
                 *res.status_mut() = StatusCode::CREATED;
@@ -832,10 +822,18 @@ impl WebdavServer {
         } else {
             // if the source is a file but the destination is a directory, alter the destination
             if path.is_file() && dest.is_dir() {
-                dest.push::<PathBuf>(path.file_name().unwrap().into());
+                dest.push(path.file_name().unwrap().into());
             }
-            fs::rename(path, &dest).await?;
-            *res.status_mut() = StatusCode::CREATED;
+            if path.is_dir() && dest.is_file() {
+                *res.status_mut() = StatusCode::NO_CONTENT;
+            } else {
+                fs::rename(path, dest.path()).await?;
+                if dest.exists() {
+                    *res.status_mut() = StatusCode::NO_CONTENT;
+                } else {
+                    *res.status_mut() = StatusCode::CREATED;
+                }
+            }
         }
         Ok(())
     }
@@ -1160,4 +1158,81 @@ pub fn decode_uri(v: &str) -> Option<Cow<str>> {
     percent_encoding::percent_decode(v.as_bytes())
         .decode_utf8()
         .ok()
+}
+
+enum Destination {
+    ExistingDir(PathBuf),
+    DirToBe(PathBuf),
+    ExistingFile(PathBuf),
+    FileToBe(PathBuf),
+}
+
+impl Destination {
+    async fn new(dest: PathBuf, is_new_dir: bool) -> Destination {
+        match fs::symlink_metadata(&dest).await {
+            Ok(meta) => {
+                if meta.is_symlink() {
+                    if let Ok(m) = fs::metadata(&dest).await {
+                        if m.is_file() {
+                            return Destination::ExistingFile(dest);
+                        }
+                        if m.is_dir() {
+                            return Destination::ExistingDir(dest);
+                        }
+                    }
+                }
+                if meta.is_file() {
+                    return Destination::ExistingFile(dest);
+                } else {
+                    return Destination::ExistingDir(dest);
+                }
+            }
+            Err(_) => {
+                if is_new_dir {
+                    return Destination::DirToBe(dest);
+                }
+                Destination::FileToBe(dest)
+            }
+        }
+    }
+
+    fn exists(&self) -> bool {
+        match self {
+            Destination::ExistingDir(_) => true,
+            Destination::DirToBe(_) => false,
+            Destination::ExistingFile(_) => true,
+            Destination::FileToBe(_) => false,
+        }
+    }
+
+    fn is_dir(&self) -> bool {
+        match self {
+            Destination::ExistingDir(_) => true,
+            Destination::DirToBe(_) => true,
+            Destination::ExistingFile(_) => false,
+            Destination::FileToBe(_) => false,
+        }
+    }
+
+    fn is_file(&self) -> bool {
+        !self.is_dir()
+    }
+
+    fn path(&self) -> &PathBuf {
+        match self {
+            Destination::ExistingDir(p) => p,
+            Destination::DirToBe(p) => p,
+            Destination::ExistingFile(p) => p,
+            Destination::FileToBe(p) => p,
+        }
+    }
+
+    fn push(&mut self, path: PathBuf) {
+        match self {
+            Destination::ExistingDir(p) => p.push(path),
+            Destination::DirToBe(p) => p.push(path),
+            Destination::ExistingFile(p) => p.push(path),
+            Destination::FileToBe(p) => p.push(path),
+        }
+    }
 }
