@@ -105,7 +105,7 @@ pub async fn load_config(
         config.to_file(config_file).await?;
     }
     // Allow overriding the hostname with env variable
-    if let Some(h) = std::env::var("HOSTNAME").ok() {
+    if let Some(h) = std::env::var("MAIN_HOSTNAME").ok() {
         config.hostname = h
     }
     let hashmap = config

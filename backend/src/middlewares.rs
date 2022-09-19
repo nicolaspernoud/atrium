@@ -118,7 +118,7 @@ fn inject_security_headers_internal(resp: &mut Response, source: &str) -> Result
         // If not, forge a default CSP Header
         None => {
             headers.insert("Content-Security-Policy", 
-            HeaderValue::from_str(&format!("default-src 'self' {source} https://unpkg.com https://fonts.gstatic.com; script-src 'self' {source} 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' {source} 'unsafe-inline'; frame-src {source}; frame-ancestors {source}"))
+            HeaderValue::from_str(&format!("default-src 'self' {source} https://unpkg.com https://fonts.gstatic.com; script-src 'self' {source} 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' {source} 'unsafe-inline'; frame-src {source}; frame-ancestors {source}; img-src blob:"))
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,);
         }
     }

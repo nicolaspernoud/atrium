@@ -20,7 +20,6 @@ Rust/Flutter version of Vestibule.
 
 ### Frontend
 
-- [ ] Download progress on mobile
 - [ ] Improve upload (refresh on each upload ending, better view)
 - [ ] Confirm dialog for deletes
 
