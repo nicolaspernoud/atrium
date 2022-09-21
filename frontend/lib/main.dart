@@ -94,15 +94,16 @@ class _HomePageState extends State<HomePage> {
                       icon: const Icon(Icons.folder_open),
                       label: tr(context, "files"),
                     ),
-                    if (app.isAdmin)
+                    if (app.hasToken && app.isAdmin) ...[
                       BottomNavigationBarItem(
                         icon: const Icon(Icons.group),
                         label: tr(context, "users"),
                       ),
-                    BottomNavigationBarItem(
-                      icon: const Icon(Icons.monitor_heart),
-                      label: tr(context, "system_information"),
-                    ),
+                      BottomNavigationBarItem(
+                        icon: const Icon(Icons.monitor_heart),
+                        label: tr(context, "system_information"),
+                      ),
+                    ]
                   ],
                 )
               : null,

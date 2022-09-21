@@ -36,7 +36,10 @@ class _DavsListState extends State<DavsList> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(tr(context, "files"))),
+      appBar: AppBar(
+        title: Text(tr(context, "files")),
+        actions: logoutAction,
+      ),
       body: Padding(
         padding: const EdgeInsets.all(8.0),
         child: FutureBuilder(

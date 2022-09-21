@@ -2,6 +2,7 @@ import 'package:atrium/components/create_edit_user.dart';
 import 'package:atrium/components/login_dialog.dart';
 import 'package:atrium/i18n.dart';
 import 'package:atrium/models/api_provider.dart';
+import 'package:atrium/utils.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
@@ -30,7 +31,10 @@ class _UsersListState extends State<UsersList> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(tr(context, "users"))),
+      appBar: AppBar(
+        title: Text(tr(context, "users")),
+        actions: logoutAction,
+      ),
       body: FutureBuilder(
           future: users,
           builder:

@@ -7,6 +7,7 @@ import 'package:atrium/components/webview.dart'
     if (dart.library.html) 'package:atrium/components/iframe_webview.dart';
 import 'package:atrium/i18n.dart';
 import 'package:atrium/models/api_provider.dart';
+import 'package:atrium/utils.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
@@ -36,7 +37,10 @@ class _AppsListState extends State<AppsList> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(tr(context, "apps"))),
+      appBar: AppBar(
+        title: Text(tr(context, "apps")),
+        actions: logoutAction,
+      ),
       body: Padding(
         padding: const EdgeInsets.all(8.0),
         child: FutureBuilder(

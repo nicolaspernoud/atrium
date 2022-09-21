@@ -37,7 +37,10 @@ class _SystemInfoState extends State<SystemInfo> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(tr(context, "system_information"))),
+      appBar: AppBar(
+        title: Text(tr(context, "system_information")),
+        actions: logoutAction,
+      ),
       body: Padding(
         padding: const EdgeInsets.all(8.0),
         child: FutureBuilder(
