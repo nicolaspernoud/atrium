@@ -16,7 +16,6 @@ Rust/Flutter version of Vestibule.
 - [ ] Check that there is enough tests
 - [ ] OnlyOffice connector for documents editing
 - [ ] User authentication and security (OAuth2)
-- [ ] Improve content security policy
 
 ### Frontend
 
@@ -28,6 +27,5 @@ Rust/Flutter version of Vestibule.
 
 - [ ] Sound files displaying
 - [ ] Video files displaying
-- [ ] Image previews in explorer
 
 - [ ] OnlyOffice connector for documents editing

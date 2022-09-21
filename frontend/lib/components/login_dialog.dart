@@ -101,9 +101,11 @@ class _LoginDialogState extends State<LoginDialog> {
         TextButton(
           onPressed: () async {
             if (widget.formKey.currentState!.validate()) {
-              await ApiProvider().login(login, password);
-              if (!widget.mounted) return;
-              Navigator.pop(context, 'OK');
+              try {
+                await ApiProvider().login(login, password);
+                if (!widget.mounted) return;
+                Navigator.pop(context, 'OK');
+              } catch (_) {}
             }
           },
           child: const Text('OK'),

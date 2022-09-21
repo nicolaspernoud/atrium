@@ -18,19 +18,6 @@ class _ImageViewerState extends State<ImageViewer> {
   Future<Uint8List>? imgData;
 
   @override
-  void initState() {
-    super.initState();
-    getFileContent();
-  }
-
-  Future<void> getFileContent() async {
-    var content = await widget.client.read(widget.file.path!);
-    setState(() {
-      imgData = Future.value(Uint8List.fromList(content));
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -38,7 +25,9 @@ class _ImageViewerState extends State<ImageViewer> {
       ),
       body: Center(
           child: FutureBuilder<Uint8List>(
-              future: imgData,
+              future: widget.client
+                  .read(widget.file.path!)
+                  .then((value) => Uint8List.fromList(value)),
               builder:
                   (BuildContext context, AsyncSnapshot<Uint8List> snapshot) {
                 Widget child;
