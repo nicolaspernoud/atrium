@@ -194,6 +194,19 @@ class ExplorerState extends State<Explorer> {
   }
 
   Widget _buildListView(BuildContext context, List<webdav.File> list) {
+    // Sort : folders first and then alphabetically
+    list.sort((a, b) {
+      if (a.isDir! && !(b.isDir!)) {
+        return -1;
+      }
+      if (!(a.isDir!) && (b.isDir!)) {
+        return 1;
+      }
+      if (a.name != null && b.name != null) {
+        return a.name!.compareTo(b.name!);
+      }
+      return 0;
+    });
     return ListView(children: [
       if (dirPath != "/")
         ListTile(
@@ -381,16 +394,10 @@ class ExplorerState extends State<Explorer> {
   }
 
   Widget widgetFromFileType(File file, String? mimeType) {
-    if (file.isDir == null || mimeType == null) {
-      return const Icon(
-        Icons.file_present_rounded,
-        size: 30,
-      );
-    }
-    if (file.isDir!) {
+    if (file.isDir != null && file.isDir!) {
       return const Icon(Icons.folder, size: 30);
     }
-    if (mimeType.contains("image")) {
+    if (mimeType != null && mimeType.contains("image")) {
       return SizedBox(
         width: 30,
         height: 30,

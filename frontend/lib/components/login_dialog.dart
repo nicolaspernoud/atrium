@@ -6,13 +6,11 @@ import 'package:flutter/material.dart';
 
 Future<void> showLoginDialog(BuildContext context, bool mounted) async {
   final formKey = GlobalKey<FormState>();
-  while (!App().hasToken) {
-    await showDialog<String>(
-      context: context,
-      builder: (BuildContext context) =>
-          LoginDialog(formKey: formKey, mounted: mounted),
-    );
-  }
+  await showDialog<String>(
+    context: context,
+    builder: (BuildContext context) =>
+        LoginDialog(formKey: formKey, mounted: mounted),
+  );
 }
 
 class LoginDialog extends StatefulWidget {

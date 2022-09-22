@@ -20,22 +20,6 @@ class _PdfViewerState extends State<PdfViewer> {
   late PdfControllerPinch pdfController;
 
   @override
-  void initState() {
-    super.initState();
-    getFileContent();
-  }
-
-  Future<void> getFileContent() async {
-    var content = await widget.client.read(widget.file.path!);
-    setState(() {
-      pdfData = Future.value(Uint8List.fromList(content));
-      pdfController = PdfControllerPinch(
-        document: PdfDocument.openData(pdfData!),
-      );
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -43,7 +27,15 @@ class _PdfViewerState extends State<PdfViewer> {
       ),
       body: Center(
           child: FutureBuilder<Uint8List>(
-              future: pdfData,
+              future: widget.client
+                  .read(widget.file.path!)
+                  .then((value) => Uint8List.fromList(value))
+                  .then((value) {
+                pdfController = PdfControllerPinch(
+                  document: PdfDocument.openData(value),
+                );
+                return value;
+              }),
               builder:
                   (BuildContext context, AsyncSnapshot<Uint8List> snapshot) {
                 Widget child;
