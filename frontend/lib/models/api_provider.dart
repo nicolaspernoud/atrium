@@ -56,6 +56,7 @@ class ApiProvider {
       }
       App().isAdmin = response.data["is_admin"];
       App().xsrfToken = response.data["xsrf_token"];
+      App().prefs.username = login;
     }
   }
 
@@ -155,7 +156,7 @@ class ApiProvider {
   }
 
   Future<DiskInfo> getDiskInfo(DavModel dav) async {
-    final response = await _dio.get('${davUrl(dav)}?diskusage');
+    final response = await _dio.get('${modelUrl(dav)}?diskusage');
     return DiskInfo.fromJson(response.data);
   }
 
@@ -165,8 +166,6 @@ class ApiProvider {
   }
 }
 
-String davUrl(DavModel dav) {
-  var parts = App().prefs.hostname.split("://");
-  var url = "${parts[0]}://${dav.host}.${parts[1]}";
-  return url;
+String modelUrl(Model mdl) {
+  return "${App().prefs.hostnameScheme}://${mdl.host}.${App().prefs.hostnameHost}${App().prefs.hostnamePort != null ? ":${App().prefs.hostnamePort}" : ""}";
 }

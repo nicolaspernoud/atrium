@@ -309,6 +309,8 @@ async fn redirect_test() {
         davs: vec![],
         users: vec![],
         session_duration_days: None,
+        onlyoffice_title: None,
+        onlyoffice_server: None,
     };
     config.to_file(&filepath).await.unwrap();
     app.client
@@ -407,4 +409,26 @@ pub async fn absoluteredirect_server(listener: TcpListener) {
         .serve(app.into_make_service())
         .await
         .unwrap();
+}
+
+#[tokio::test]
+async fn onlyoffice_page_test() {
+    // Arrange
+    let app = TestApp::spawn().await;
+
+    // Act
+    let response = app
+        .client
+        .get(format!("http://atrium.io:{}/onlyoffice", app.port))
+        .send()
+        .await
+        .expect("failed to execute request");
+
+    // Assert
+    assert!(response.status().is_success());
+    let txt = response.text().await.unwrap();
+    assert!(txt.contains("onlyoffice/onlyoffice.js"));
+    assert!(txt.contains("AtriumOffice"));
+    assert!(txt.contains("http://atrium.io"));
+    assert!(txt.contains("http://onlyoffice.atrium.io"));
 }

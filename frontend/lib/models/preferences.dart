@@ -7,6 +7,8 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+var urlRegExp = RegExp(r"(https|http)?(:\/\/)?([^:]*):?(\d*)?");
+
 class Preferences with LocalFilePersister {
   Preferences();
 
@@ -18,6 +20,23 @@ class Preferences with LocalFilePersister {
   }
 
   String get hostname => _hostname;
+  String get hostnameScheme =>
+      urlRegExp.allMatches(_hostname).first.group(1) ?? "https";
+  String get hostnameHost =>
+      urlRegExp.allMatches(_hostname).first.group(3) ?? "atrium.io";
+  int? get hostnamePort {
+    var portString = urlRegExp.allMatches(_hostname).first.group(4);
+    return portString != null ? int.parse(portString) : null;
+  }
+
+  String _username = "";
+
+  set username(String v) {
+    _username = v;
+    write();
+  }
+
+  String get username => _username;
 
   String _cookie = "";
 
@@ -75,6 +94,7 @@ class Preferences with LocalFilePersister {
   fromJson(String source) {
     Map settingsMap = jsonDecode(source);
     _hostname = settingsMap['hostname'];
+    _username = settingsMap['username'];
     _cookie = settingsMap['cookie'];
     _xsrfToken = settingsMap['xsrfToken'];
     _isAdmin = settingsMap['isAdmin'];
@@ -86,6 +106,7 @@ class Preferences with LocalFilePersister {
   String toJson() {
     Map<String, dynamic> settingsMap = {
       'hostname': _hostname,
+      'username': _username,
       'cookie': _cookie,
       'xsrfToken': _xsrfToken,
       'isAdmin': _isAdmin,

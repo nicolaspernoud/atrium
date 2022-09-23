@@ -23,6 +23,7 @@ use crate::{
     },
     dir_server::dir_handler,
     middlewares::{cors_middleware, debug_cors_middleware, inject_security_headers},
+    onlyoffice::{onlyoffice_callback, onlyoffice_page},
     sysinfo::system_info,
     users::{
         add_user, cookie_to_body, delete_user, get_share_token, get_users, list_services,
@@ -80,6 +81,8 @@ impl Server {
             .route("/auth/local", post(local_auth))
             .nest("/api/admin", admin_router)
             .nest("/api/user", user_router)
+            .route("/onlyoffice/save", post(onlyoffice_callback))
+            .route("/onlyoffice", get(onlyoffice_page))
             .fallback(get_service(ServeDir::new("web")).handle_error(error_500));
 
         let proxy_router = Router::new().route("/*path", any(proxy_handler));

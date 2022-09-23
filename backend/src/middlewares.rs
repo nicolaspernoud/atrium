@@ -68,9 +68,14 @@ where
     let source = {
         let cfg = req.extensions().get::<Arc<Config>>().unwrap();
         format!(
-            "{s}{h} {s}*.{h}",
+            "{s}{h}{p} {s}*.{h}{p}",
             s = if cfg.auto_tls { "https://" } else { "http://" },
-            h = cfg.hostname
+            h = cfg.hostname,
+            p = &(if cfg.auto_tls {
+                "".to_owned()
+            } else {
+                format!(":{}", cfg.http_port)
+            })
         )
     };
     let mut parts = RequestParts::new(req);

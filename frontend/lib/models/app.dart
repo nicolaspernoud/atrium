@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 abstract class Model {
+  late String host;
   late Color color;
   late int icon;
 }
@@ -29,6 +30,7 @@ class AppModel implements Model {
   @override
   late Color color;
   late bool isProxy;
+  @override
   late String host;
   late String target;
   late bool secured;

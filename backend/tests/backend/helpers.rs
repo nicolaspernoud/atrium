@@ -273,6 +273,8 @@ pub async fn create_apps_file(id: &str, main_port: &u16, mock1_port: &u16, mock2
         davs: davs,
         users: users,
         session_duration_days: None,
+        onlyoffice_title: Some("AtriumOffice".to_owned()),
+        onlyoffice_server: Some("http://onlyoffice.atrium.io".to_owned()),
     };
 
     // Act

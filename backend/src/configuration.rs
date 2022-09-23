@@ -47,6 +47,8 @@ pub struct Config {
     pub davs: Vec<Dav>,
     pub users: Vec<User>,
     pub session_duration_days: Option<i64>,
+    pub onlyoffice_title: Option<String>,
+    pub onlyoffice_server: Option<String>,
 }
 
 pub type ConfigMap = HashMap<String, HostType>;
@@ -77,6 +79,14 @@ impl Config {
             )
         })?;
         Ok(())
+    }
+
+    pub fn full_hostname(&self) -> String {
+        format!(
+            "{s}{h}",
+            s = if self.auto_tls { "https://" } else { "http://" },
+            h = self.hostname
+        )
     }
 
     pub fn domains(&self) -> Vec<String> {
@@ -328,6 +338,8 @@ mod tests {
             davs: DAVS.clone(),
             users: USERS.clone(),
             session_duration_days: None,
+            onlyoffice_title: None,
+            onlyoffice_server: None,
         };
 
         // Act

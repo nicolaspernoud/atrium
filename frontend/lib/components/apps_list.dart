@@ -186,8 +186,7 @@ void _openAppInWebView(BuildContext context, AppModel app) {
   Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (context) {
-        var parts = App().prefs.hostname.split("://");
-        var initialUrl = "${parts[0]}://${app.host}.${parts[1]}";
+        var initialUrl = modelUrl(app);
         return Scaffold(
             appBar: AppBar(
               title: Text(app.name),

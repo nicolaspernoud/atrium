@@ -212,7 +212,7 @@ void _openExplorer(BuildContext context, DavModel dav) {
   Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (context) {
-        String url = davUrl(dav);
+        String url = modelUrl(dav);
         return Explorer(
           url: url,
           name: dav.name,

@@ -42,6 +42,7 @@ dependencies:
   flutter_iconpicker: ^3.2.1
   flutter_local_notifications: ^11.0.0
   mime: ^1.0.2
+  url_launcher: ^6.1.5
   webdav_client: ^1.1.7
   webview_flutter: ^3.0.4
 

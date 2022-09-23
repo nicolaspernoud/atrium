@@ -8,12 +8,14 @@ import 'package:atrium/components/text_editor.dart';
 import 'package:atrium/components/uploads.dart';
 import 'package:atrium/globals.dart';
 import 'package:atrium/i18n.dart';
+import 'package:atrium/models/api_provider.dart';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:filesize/filesize.dart';
 import 'package:flutter/material.dart';
 import 'package:mime/mime.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:webdav_client/webdav_client.dart' as webdav;
 import 'package:atrium/platform/mobile.dart'
     if (dart.library.html) 'package:atrium/platform/web.dart';
@@ -355,7 +357,7 @@ class ExplorerState extends State<Explorer> {
                           ))
                     ]
                   ]),
-          onTap: () {
+          onTap: () async {
             if (file.isDir!) {
               dirPath = file.path!;
               setState(() {
@@ -384,6 +386,25 @@ class ExplorerState extends State<Explorer> {
                         builder: (context) => PdfViewer(
                             client: client, url: widget.url, file: file)),
                   );
+                } else if (mimeType.contains("openxmlformats") ||
+                    mimeType.contains("opendocument")) {
+                  // Get a share token for this document
+                  var shareToken = await ApiProvider().getShareToken(
+                      widget.url.split("://")[1].split(":")[0], file.path!,
+                      shareWith: "external_editor", shareForDays: 1);
+                  final Uri launchUri = Uri(
+                    scheme: App().prefs.hostnameScheme,
+                    host: App().prefs.hostnameHost,
+                    port: App().prefs.hostnamePort,
+                    path: 'onlyoffice',
+                    query: encodeQueryParameters(<String, String>{
+                      'file': '${widget.url}${file.path}',
+                      'mtime': file.mTime!.toIso8601String(),
+                      'user': App().prefs.username,
+                      'token': shareToken!
+                    }),
+                  );
+                  launchUrl(launchUri);
                 }
               }
             }
@@ -431,4 +452,11 @@ class ExplorerState extends State<Explorer> {
 String formatTime(DateTime? d) {
   if (d == null) return "-";
   return "${d.year.toString()}-${d.month.toString().padLeft(2, "0")}-${d.day.toString().padLeft(2, "0")} ${d.hour.toString().padLeft(2, "0")}:${d.minute.toString().padLeft(2, "0")}:${d.second.toString().padLeft(2, "0")}";
+}
+
+String? encodeQueryParameters(Map<String, String> params) {
+  return params.entries
+      .map((MapEntry<String, String> e) =>
+          '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}')
+      .join('&');
 }
