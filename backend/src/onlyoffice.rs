@@ -1,4 +1,4 @@
-use axum::extract::Query;
+use axum::extract::RawQuery;
 use axum::response::IntoResponse;
 use axum::{response::Html, Extension, Json};
 use http::{header, StatusCode};
@@ -36,35 +36,29 @@ pub async fn onlyoffice_page(
 pub struct OnlyOfficeCallback {
     pub key: String,
     pub status: i64,
-    pub url: String,
-}
-
-#[derive(Deserialize)]
-pub struct Target {
-    file: usize,
-    token: usize,
+    pub url: Option<String>,
 }
 
 // onlyoffice_callback is the callback function wanted by onlyoffice to allow saving a document
 // the body provides information on where to get the altered document, and the query provides information on where to put it
 pub async fn onlyoffice_callback(
     Json(payload): Json<OnlyOfficeCallback>,
-    target: Query<Target>,
+    RawQuery(query): RawQuery,
 ) -> Result<impl IntoResponse, (StatusCode, &'static str)> {
     // Case of document closed after editing
-    if payload.status == 2 {
+    if payload.status == 2 && payload.url.is_some() && query.is_some() {
         // Get the binary content from url
-        let response = reqwest::get(payload.url).await.map_err(|_| {
+        let response = reqwest::get(payload.url.unwrap()).await.map_err(|e| {
+            tracing::log::error!("ERROR: {e}");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "could not get document from OnlyOffice server",
             )
         })?;
         // PUT the content on the ressource gotten from the query
-        let target_url = format!("{}?token={}", target.file, target.token);
         let client = reqwest::Client::new();
         client
-            .put(target_url)
+            .put(query.unwrap())
             .body(Body::wrap_stream(response.bytes_stream()))
             .send()
             .await

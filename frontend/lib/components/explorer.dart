@@ -397,7 +397,7 @@ class ExplorerState extends State<Explorer> {
                     host: App().prefs.hostnameHost,
                     port: App().prefs.hostnamePort,
                     path: 'onlyoffice',
-                    query: encodeQueryParameters(<String, String>{
+                    query: joinQueryParameters(<String, String>{
                       'file': '${widget.url}${file.path}',
                       'mtime': file.mTime!.toIso8601String(),
                       'user': App().prefs.username,
@@ -454,9 +454,8 @@ String formatTime(DateTime? d) {
   return "${d.year.toString()}-${d.month.toString().padLeft(2, "0")}-${d.day.toString().padLeft(2, "0")} ${d.hour.toString().padLeft(2, "0")}:${d.minute.toString().padLeft(2, "0")}:${d.second.toString().padLeft(2, "0")}";
 }
 
-String? encodeQueryParameters(Map<String, String> params) {
+String? joinQueryParameters(Map<String, String> params) {
   return params.entries
-      .map((MapEntry<String, String> e) =>
-          '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}')
+      .map((MapEntry<String, String> e) => '${e.key}=${e.value}')
       .join('&');
 }

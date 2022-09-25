@@ -16,9 +16,12 @@ Rust/Flutter version of Vestibule.
 - [ ] Check that there is enough tests
 - [ ] OnlyOffice connector for documents editing
 - [ ] User authentication and security (OAuth2)
+- [ ] OnlyOffice : custom logo / favicon / title
+- [ ] Allow working behind https proxy
 
 ### Frontend
 
+- [ ] Dio interceptor (Future already completed and 403)
 - [ ] Improve upload (refresh on each upload ending, better view)
 - [ ] Confirm dialog for deletes
 

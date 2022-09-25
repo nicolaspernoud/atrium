@@ -65,7 +65,7 @@ class ApiProvider {
     _dio.options.baseUrl = App().prefs.hostname;
     final Map<String, dynamic> request = {
       "hostname": hostname,
-      "path": Uri.encodeFull(path)
+      "path": escapePath(path)
     };
     if (shareForDays != null) {
       request.addAll({"share_with": shareWith, "share_for_days": shareForDays});
@@ -168,4 +168,8 @@ class ApiProvider {
 
 String modelUrl(Model mdl) {
   return "${App().prefs.hostnameScheme}://${mdl.host}.${App().prefs.hostnameHost}${App().prefs.hostnamePort != null ? ":${App().prefs.hostnamePort}" : ""}";
+}
+
+String escapePath(String path) {
+  return Uri.encodeFull(path).replaceAll("'", "%27");
 }

@@ -30,7 +30,7 @@ futures-util = "0.3"
 headers = "0.3"
 hyper = { version = "0.14", features = ["client"] }
 hyper-reverse-proxy = { git = "https://github.com/felipenoris/hyper-reverse-proxy", branch = "master" }
-hyper-trust-dns = { version = "0.5", default-features = false, features = [
+hyper-trust-dns = { version = "0.4", default-features = false, features = [
   "rustls-http2",
   "dnssec-ring",
   "dns-over-https-rustls",
@@ -42,7 +42,7 @@ maxminddb = "0.23"
 mime_guess = "2.0"
 percent-encoding = "2.1"
 rand= "0.8"
-reqwest = { version = "0.11", default-features = false, features = ["stream"] }
+reqwest = { version = "0.11", default-features = false, features = ["stream", "rustls-tls"] }
 rustls = "0.20.6"
 rustls-acme = { git = "https://github.com/FlorianUekermann/rustls-acme.git", features = ["axum"]}
 serde = { version = "1", features = ["derive"] }

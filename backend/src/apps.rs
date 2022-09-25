@@ -133,23 +133,30 @@ pub async fn proxy_handler(
         _ => panic!("Service is not an app !"),
     };
 
-    // Alter request
-    let uri = req.uri_mut();
-    let mut parts = uri.clone().into_parts();
-    parts.scheme = Some(app.forward_scheme);
-    if let Some(port) = &app.forward_authority.port() {
-        parts.authority = Some(format!("{}:{}", app.forward_host, port).parse().unwrap());
-    } else {
-        parts.authority = Some(app.forward_host.parse().unwrap());
-    }
-
-    *uri = Uri::from_parts(parts).unwrap();
-
-    // If the target service contains no port, is to an external service and we need to rewrite the host header to fool the target site
+    // If the target service contains no port, is to an external service and we need to rewrite the request to fool the target site
     if app.forward_authority.port().is_none() {
+        let uri = req.uri_mut();
+        let mut parts = uri.clone().into_parts();
+        parts.scheme = Some(app.forward_scheme);
+        if let Some(port) = &app.forward_authority.port() {
+            parts.authority = Some(format!("{}:{}", app.forward_host, port).parse().unwrap());
+        } else {
+            parts.authority = Some(app.forward_host.parse().unwrap());
+        }
+        *uri = Uri::from_parts(parts).unwrap();
         req.headers_mut().insert(
             HOST,
             HeaderValue::from_str(&app.forward_authority.to_string()).unwrap(),
+        );
+    } else {
+        // else we inform the app that we are proxying to it
+        req.headers_mut().insert(
+            "X-Forwarded-Host",
+            HeaderValue::from_str(&app.app_authority.to_string()).unwrap(),
+        );
+        req.headers_mut().insert(
+            "X-Forwarded-Proto",
+            HeaderValue::from_str(&app.app_scheme.to_string()).unwrap(),
         );
     }
 

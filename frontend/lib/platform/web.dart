@@ -42,7 +42,7 @@ download(String url, webdav.Client client, webdav.File file,
   var shareToken = await ApiProvider()
       .getShareToken(url.split("://")[1].split(":")[0], file.path!);
   AnchorElement()
-    ..href = '$url${file.path}?token=$shareToken'
+    ..href = '$url${escapePath(file.path!)}?token=$shareToken'
     ..click();
 }
 

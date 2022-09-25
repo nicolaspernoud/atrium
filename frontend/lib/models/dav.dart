@@ -17,6 +17,7 @@ class DavModel implements Model {
   });
 
   late int id;
+  @override
   late String host;
   late String directory;
   late bool writable;

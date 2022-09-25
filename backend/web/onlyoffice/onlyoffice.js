@@ -2,8 +2,8 @@ openDocument();
 
 async function openDocument() {
   const urlParams = new URLSearchParams(window.location.search);
-  const file = EncodeURIWithSpecialsCharacters(urlParams.get("file"));
-  const token = EncodeURIWithSpecialsCharacters(urlParams.get("token"));
+  const file = urlParams.get("file");
+  const token = getRawUrlParameter("token");
   const url = `${file}?token=${token}`;
   const user = urlParams.get("user");
   const mtime = urlParams.get("mtime");
@@ -19,16 +19,8 @@ async function openDocument() {
     },
     editorConfig: {
       lang: "fr-FR",
-      mode: `${
-        fileExtension === "docx" ||
-        fileExtension === "xlsx" ||
-        fileExtension === "pptx"
-          ? "edit"
-          : "view"
-      }`,
-      callbackUrl: `${
-        document.getElementById("hostname").innerText
-      }/onlyoffice/save?file=${file}&token=${token}`,
+      callbackUrl: `${document.getElementById("hostname").innerText
+        }/onlyoffice/save?${url}`,
       customization: {
         autosave: false,
       },
@@ -51,3 +43,10 @@ async function digestMessage(message) {
 function EncodeURIWithSpecialsCharacters(str) {
   return encodeURI(str).replace(/[!'()*]/g, encodeURIComponent);
 }
+
+function getRawUrlParameter(name) {
+  name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+  var regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+  var results = regex.exec(location.search);
+  return results === null ? '' : results[1];
+};

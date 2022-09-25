@@ -60,7 +60,7 @@ class _ShareDialogState extends State<ShareDialog> {
                       shareWith: _shareWith,
                       shareForDays: _shareForDays.round());
                   var shareUrl =
-                      '${widget.url}${widget.file.path}?token=$shareToken';
+                      '${widget.url}${escapePath(widget.file.path!)}?token=$shareToken';
                   Clipboard.setData(ClipboardData(text: shareUrl));
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
