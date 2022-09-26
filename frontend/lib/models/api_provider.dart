@@ -9,6 +9,26 @@ import 'package:flutter/foundation.dart';
 
 import '../globals.dart';
 
+class InterceptorsWrapper extends QueuedInterceptorsWrapper {
+  @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    if (!kIsWeb) {
+      options.headers["cookie"] = App().cookie;
+    }
+    options.headers["xsrf-token"] = App().xsrfToken;
+    super.onRequest(options, handler);
+  }
+
+  @override
+  void onError(DioError err, ErrorInterceptorHandler handler) {
+    if (err.response != null &&
+        (err.response!.statusCode == 401 || err.response!.statusCode == 403)) {
+      App().cookie = "";
+    }
+    super.onError(err, handler);
+  }
+}
+
 class ApiProvider {
   late Dio _dio;
 
@@ -23,23 +43,7 @@ class ApiProvider {
 
   ApiProvider._internal() {
     _dio = newDio(options);
-    _dio.interceptors.add(QueuedInterceptorsWrapper(onRequest: (
-      RequestOptions requestOptions,
-      RequestInterceptorHandler handler,
-    ) {
-      if (!kIsWeb) {
-        requestOptions.headers["cookie"] = App().cookie;
-      }
-      requestOptions.headers["xsrf-token"] = App().xsrfToken;
-      handler.next(requestOptions);
-    }, onError: (DioError e, handler) async {
-      if (e.response != null) {
-        if (e.response!.statusCode == 401) {
-          App().cookie = "";
-        }
-        handler.next(e);
-      }
-    }));
+    _dio.interceptors.add(InterceptorsWrapper());
   }
 
   Future login(String login, String password) async {

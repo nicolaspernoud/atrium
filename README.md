@@ -18,7 +18,6 @@ Rust/Flutter version of Vestibule.
 
 ### Frontend
 
-- [ ] Dio interceptor (Future already completed and 403)
 - [ ] Improve upload (refresh on each upload ending, better view)
 - [ ] Confirm dialog for deletes
 
@@ -27,4 +26,3 @@ Rust/Flutter version of Vestibule.
 
 - [ ] Sound files displaying
 - [ ] Video files displaying
-
