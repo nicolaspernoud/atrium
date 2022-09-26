@@ -73,7 +73,7 @@ COPY --from=backend-builder /myapp /
 WORKDIR /app
 COPY --from=backend-builder /build/atrium ./
 COPY --from=frontend-builder /build/build/web/ /app/web/
-COPY ./backend/src/web/onlyoffice/ /app/web/onlyoffice/
+COPY ./backend/web/onlyoffice/ /app/web/onlyoffice/
 
 USER appuser:appuser
 ENTRYPOINT ["./atrium"]

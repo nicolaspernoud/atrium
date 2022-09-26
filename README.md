@@ -14,10 +14,7 @@ Rust/Flutter version of Vestibule.
 - [ ] Lifetimes for non serialized structs
 - [ ] Remove axum macros
 - [ ] Check that there is enough tests
-- [ ] OnlyOffice connector for documents editing
 - [ ] User authentication and security (OAuth2)
-- [ ] OnlyOffice : custom logo / favicon / title
-- [ ] Allow working behind https proxy
 
 ### Frontend
 
@@ -31,4 +28,3 @@ Rust/Flutter version of Vestibule.
 - [ ] Sound files displaying
 - [ ] Video files displaying
 
-- [ ] OnlyOffice connector for documents editing
