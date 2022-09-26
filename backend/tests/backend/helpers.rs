@@ -4,8 +4,13 @@ use tokio::sync::broadcast;
 use tracing::info;
 
 use atrium::{
-    apps::App, configuration::Config, davs::model::Dav, mocks::mock_proxied_server, server::Server,
-    users::User, utils::random_string,
+    apps::App,
+    configuration::{Config, OnlyOfficeConfig, TlsMode},
+    davs::model::Dav,
+    mocks::mock_proxied_server,
+    server::Server,
+    users::User,
+    utils::random_string,
 };
 
 use anyhow::Result;
@@ -264,7 +269,7 @@ pub async fn create_apps_file(id: &str, main_port: &u16, mock1_port: &u16, mock2
     let config = Config {
         hostname: "atrium.io".to_owned(),
         debug_mode: false,
-        auto_tls: false,
+        tls_mode: TlsMode::No,
         letsencrypt_email: "foo@bar.com".to_owned(),
         http_port: *main_port,
         cookie_key: None,
@@ -273,8 +278,10 @@ pub async fn create_apps_file(id: &str, main_port: &u16, mock1_port: &u16, mock2
         davs: davs,
         users: users,
         session_duration_days: None,
-        onlyoffice_title: Some("AtriumOffice".to_owned()),
-        onlyoffice_server: Some("http://onlyoffice.atrium.io".to_owned()),
+        onlyoffice_config: Some(OnlyOfficeConfig {
+            title: Some("AtriumOffice".to_owned()),
+            server: "http://onlyoffice.atrium.io".to_owned(),
+        }),
     };
 
     // Act

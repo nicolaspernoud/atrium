@@ -24,6 +24,31 @@ fn hostname() -> String {
 }
 
 #[derive(Deserialize, Serialize, Debug, Default, PartialEq, Clone)]
+pub struct OnlyOfficeConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    pub server: String,
+}
+
+#[derive(Deserialize, Serialize, Debug, Default, PartialEq, Clone)]
+pub enum TlsMode {
+    #[default]
+    No,
+    BehindProxy,
+    Auto,
+}
+
+impl TlsMode {
+    pub fn is_secure(&self) -> bool {
+        match self {
+            TlsMode::No => false,
+            TlsMode::BehindProxy => true,
+            TlsMode::Auto => true,
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, Debug, Default, PartialEq, Clone)]
 pub struct Config {
     #[serde(default = "hostname", deserialize_with = "string_trim")]
     pub hostname: String,
@@ -32,7 +57,7 @@ pub struct Config {
     #[serde(default = "http_port")]
     pub http_port: u16,
     #[serde(default)]
-    pub auto_tls: bool,
+    pub tls_mode: TlsMode,
     #[serde(deserialize_with = "string_trim")]
     pub letsencrypt_email: String,
     #[serde(
@@ -43,12 +68,13 @@ pub struct Config {
     pub cookie_key: Option<String>,
     #[serde(default)]
     pub log_to_file: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_duration_days: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub onlyoffice_config: Option<OnlyOfficeConfig>,
     pub apps: Vec<App>,
     pub davs: Vec<Dav>,
     pub users: Vec<User>,
-    pub session_duration_days: Option<i64>,
-    pub onlyoffice_title: Option<String>,
-    pub onlyoffice_server: Option<String>,
 }
 
 pub type ConfigMap = HashMap<String, HostType>;
@@ -81,12 +107,16 @@ impl Config {
         Ok(())
     }
 
+    pub fn scheme(&self) -> &str {
+        if self.tls_mode.is_secure() {
+            "https"
+        } else {
+            "http"
+        }
+    }
+
     pub fn full_hostname(&self) -> String {
-        format!(
-            "{s}{h}",
-            s = if self.auto_tls { "https://" } else { "http://" },
-            h = self.hostname
-        )
+        format!("{s}://{h}", s = self.scheme(), h = self.hostname)
     }
 
     pub fn domains(&self) -> Vec<String> {
@@ -122,7 +152,7 @@ pub async fn load_config(
         .apps
         .iter()
         .map(|app| {
-            let port = if config.auto_tls {
+            let port = if config.tls_mode.is_secure() {
                 None
             } else {
                 Some(config.http_port)
@@ -236,7 +266,12 @@ where
 mod tests {
     use std::fs;
 
-    use crate::{apps::App, configuration::Config, davs::model::Dav, users::User};
+    use crate::{
+        apps::App,
+        configuration::{Config, TlsMode},
+        davs::model::Dav,
+        users::User,
+    };
 
     lazy_static::lazy_static! {
         static ref APPS: Vec<App> = {
@@ -330,7 +365,7 @@ mod tests {
             hostname: "atrium.io".to_owned(),
             debug_mode: false,
             http_port: 8080,
-            auto_tls: false,
+            tls_mode: TlsMode::No,
             letsencrypt_email: "foo@bar.com".to_owned(),
             cookie_key: None,
             log_to_file: false,
@@ -338,8 +373,7 @@ mod tests {
             davs: DAVS.clone(),
             users: USERS.clone(),
             session_duration_days: None,
-            onlyoffice_title: None,
-            onlyoffice_server: None,
+            onlyoffice_config: None,
         };
 
         // Act

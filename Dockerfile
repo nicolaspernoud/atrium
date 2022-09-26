@@ -32,10 +32,10 @@ RUN adduser \
 
 WORKDIR /build
 
-COPY backend/.cargo ./.cargo
-COPY backend/Cargo.toml ./
-COPY backend/src ./src
-COPY backend/tests ./tests
+COPY ./backend/.cargo ./.cargo
+COPY ./backend/Cargo.toml ./
+COPY ./backend/src ./src
+COPY ./backend/tests ./tests
 
 #RUN cargo test --release --target $(cat /rust_target.txt)
 RUN cargo build --release --target $(cat /rust_target.txt)
@@ -44,7 +44,7 @@ RUN cp target/$(cat /rust_target.txt)/release/atrium .
 RUN setcap cap_net_bind_service=+ep ./atrium
 
 RUN mkdir -p /myapp/app
-COPY backend/atrium.yaml /myapp/app
+COPY ./backend/atrium.yaml /myapp/app
 RUN chown -Rf "${UID}":"${UID}" /myapp
 
 ############################
@@ -73,6 +73,7 @@ COPY --from=backend-builder /myapp /
 WORKDIR /app
 COPY --from=backend-builder /build/atrium ./
 COPY --from=frontend-builder /build/build/web/ /app/web/
+COPY ./backend/src/web/onlyoffice/ /app/web/onlyoffice/
 
 USER appuser:appuser
 ENTRYPOINT ["./atrium"]

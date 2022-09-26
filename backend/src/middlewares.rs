@@ -8,18 +8,15 @@ use axum::{
 };
 use http::{HeaderValue, Method};
 
-use crate::configuration::{Config, HostType};
+use crate::configuration::{Config, HostType, TlsMode};
 
 pub async fn cors_middleware<B>(req: Request<B>, next: Next<B>) -> Result<Response, StatusCode> {
     let hostname = {
         let cfg = req.extensions().get::<Arc<Config>>().unwrap();
-        let hostname: HeaderValue = format!(
-            "{}{}",
-            if cfg.auto_tls { "https://" } else { "http://" },
-            cfg.hostname
-        )
-        .parse()
-        .expect("could not parse hostname : invalid format");
+        let hostname: HeaderValue = cfg
+            .full_hostname()
+            .parse()
+            .expect("could not parse hostname : invalid format");
         hostname
     };
     let mut resp = next.run(req).await;
@@ -65,19 +62,6 @@ pub async fn inject_security_headers<B>(
 where
     B: std::marker::Send,
 {
-    let source = {
-        let cfg = req.extensions().get::<Arc<Config>>().unwrap();
-        format!(
-            "{s}{h}{p} {s}*.{h}{p}",
-            s = if cfg.auto_tls { "https://" } else { "http://" },
-            h = cfg.hostname,
-            p = &(if cfg.auto_tls {
-                "".to_owned()
-            } else {
-                format!(":{}", cfg.http_port)
-            })
-        )
-    };
     let mut parts = RequestParts::new(req);
     let inject = HostType::from_request(&mut parts)
         .await
@@ -85,11 +69,26 @@ where
         .map(|app| app.inject_security_headers())
         .unwrap_or(true);
     let req = parts.try_into_request().unwrap();
-    let mut resp = next.run(req).await;
     if inject {
+        let source = {
+            let cfg = req.extensions().get::<Arc<Config>>().unwrap();
+            format!(
+                "{s}://{h}{p} {s}://*.{h}{p}",
+                s = cfg.scheme(),
+                h = cfg.hostname,
+                p = &(if cfg.tls_mode == TlsMode::No {
+                    format!(":{}", cfg.http_port)
+                } else {
+                    "".to_owned()
+                })
+            )
+        };
+        let mut resp = next.run(req).await;
         inject_security_headers_internal(&mut resp, &source)?;
+        Ok(resp)
+    } else {
+        Ok(next.run(req).await)
     }
-    Ok(resp)
 }
 
 fn inject_security_headers_internal(resp: &mut Response, source: &str) -> Result<(), StatusCode> {

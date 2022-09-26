@@ -263,7 +263,7 @@ pub async fn local_auth(
         .domain(domain)
         .path("/")
         .same_site(axum_extra::extract::cookie::SameSite::Lax)
-        .secure(config.auto_tls)
+        .secure(config.tls_mode.is_secure())
         .http_only(true)
         .finish();
 

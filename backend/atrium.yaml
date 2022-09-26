@@ -1,10 +1,13 @@
 hostname: atrium.127.0.0.1.nip.io
 debug_mode: true
 http_port: 8080
-auto_tls: false
+tls_mode: No
 letsencrypt_email: foo@bar.com
-cookie_key: C95pavPJksDGl0EgoPDPelH9bxRHo30dWBJs5fUBtKF5344tcrEtccks7IRG3vhn
 log_to_file: false
+session_duration_days: 1
+onlyoffice_config:
+  title: AtriumOffice
+  server: http://onlyoffice.atrium.127.0.1.nip.io:8080
 apps:
   - id: 1
     name: App 1

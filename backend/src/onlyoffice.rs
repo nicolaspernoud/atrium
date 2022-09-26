@@ -13,7 +13,11 @@ use crate::configuration::Config;
 pub async fn onlyoffice_page(
     Extension(config): Extension<Arc<Config>>,
 ) -> Result<Html<String>, (StatusCode, &'static str)> {
-    if let (Some(title), Some(server)) = (&config.onlyoffice_title, &config.onlyoffice_server) {
+    if let Some(server) = &config
+        .onlyoffice_config
+        .as_ref()
+        .map(|c| c.server.to_owned())
+    {
         let template = fs::read_to_string("./web/onlyoffice/index.tmpl")
             .await
             .map_err(|_| {
@@ -22,8 +26,16 @@ pub async fn onlyoffice_page(
                     "couldn't read onlyoffice template file",
                 )
             })?;
+        let title = config
+            .onlyoffice_config
+            .as_ref()
+            .unwrap()
+            .title
+            .as_ref()
+            .unwrap_or(&"AtriumOffice".to_owned())
+            .to_owned();
         let response = template
-            .replace("{{.Title}}", title)
+            .replace("{{.Title}}", &title)
             .replace("{{.OnlyOfficeServer}}", server)
             .replace("{{.Hostname}}", &config.full_hostname());
         Ok(Html(response))

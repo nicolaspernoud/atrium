@@ -1,4 +1,4 @@
-use atrium::apps::App;
+use atrium::{apps::App, configuration::TlsMode};
 use axum::{response::Redirect, routing::get, Router};
 use hyper::header::LOCATION;
 use tracing::info;
@@ -300,7 +300,7 @@ async fn redirect_test() {
     let config = atrium::configuration::Config {
         hostname: "atrium.io".to_owned(),
         debug_mode: false,
-        auto_tls: false,
+        tls_mode: TlsMode::No,
         letsencrypt_email: "foo@bar.com".to_owned(),
         http_port: app.port,
         cookie_key: None,
@@ -309,8 +309,7 @@ async fn redirect_test() {
         davs: vec![],
         users: vec![],
         session_duration_days: None,
-        onlyoffice_title: None,
-        onlyoffice_server: None,
+        onlyoffice_config: None,
     };
     config.to_file(&filepath).await.unwrap();
     app.client

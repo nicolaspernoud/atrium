@@ -1,4 +1,9 @@
 use anyhow::Result;
+use atrium::{
+    configuration::{Config, TlsMode},
+    mocks::mock_proxied_server,
+    server::Server,
+};
 use axum_server::Handle;
 use rustls::ServerConfig;
 use rustls_acme::{caches::DirCache, AcmeConfig};
@@ -8,7 +13,6 @@ use tokio_stream::StreamExt;
 use tracing::{error, info};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{fmt, fmt::time::OffsetTime, prelude::*};
-use atrium::{configuration::Config, mocks::mock_proxied_server, server::Server};
 
 pub const CONFIG_FILE: &'static str = "atrium.yaml";
 
@@ -67,7 +71,7 @@ async fn run() -> Result<()> {
             }
         });
 
-        if config.0.auto_tls {
+        if config.0.tls_mode == TlsMode::Auto {
             let config = atrium::configuration::load_config(CONFIG_FILE).await?;
             let domains: Vec<String> = config.0.domains();
             let mut state = AcmeConfig::new(domains)
