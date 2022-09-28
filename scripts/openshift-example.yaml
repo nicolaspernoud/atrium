@@ -1,0 +1,116 @@
+---
+# Application
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: atrium
+  namespace: my-namespace
+spec:
+  selector:
+    matchLabels:
+      app: atrium
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: atrium
+    spec:
+      volumes:
+        - name: atrium-data
+          persistentVolumeClaim:
+            claimName: pvc-01-my-namespace-claim
+      containers:
+        - name: atrium
+          image: nicolaspernoud/atrium:latest
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: atrium-data
+              mountPath: /app/data
+              subPath: data
+            - name: atrium-data
+              mountPath: /app/atrium.yaml
+              subPath: atrium.yaml
+---
+# Temp shell to access volume from command line (to push base configuration)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shell
+  namespace: my-namespace
+spec:
+  selector:
+    matchLabels:
+      app: shell
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: shell
+    spec:
+      volumes:
+        - name: atrium-data
+          persistentVolumeClaim:
+            claimName: pvc-01-my-namespace-claim
+      containers:
+        - name: shell
+          image: ubuntu
+          command: ["/bin/sleep", "3650d"]
+          volumeMounts:
+            - name: atrium-data
+              mountPath: /data
+---
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: atrium-svc
+  namespace: my-namespace
+spec:
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+      name: http
+  selector:
+    app: atrium
+---
+# Main route
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  name: main
+  namespace: my-namespace
+spec:
+  host: "atrium.mydomain.com"
+  path: /
+  to:
+    kind: Service
+    name: atrium-svc
+    weight: 100
+  port:
+    targetPort: 8080
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None
+---
+# Apps and davs routes
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  name: wildcard
+  namespace: my-namespace
+spec:
+  host: "wildcard.atrium.mydomain.com"
+  path: /
+  to:
+    kind: Service
+    name: atrium-svc
+    weight: 100
+  port:
+    targetPort: 8080
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+    wildcardPolicy: Subdomain

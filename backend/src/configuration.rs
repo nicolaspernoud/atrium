@@ -116,7 +116,16 @@ impl Config {
     }
 
     pub fn full_hostname(&self) -> String {
-        format!("{s}://{h}", s = self.scheme(), h = self.hostname)
+        format!(
+            "{s}://{h}{p}",
+            s = self.scheme(),
+            h = self.hostname,
+            p = &(if self.tls_mode == TlsMode::No {
+                format!(":{}", self.http_port)
+            } else {
+                "".to_owned()
+            })
+        )
     }
 
     pub fn domains(&self) -> Vec<String> {

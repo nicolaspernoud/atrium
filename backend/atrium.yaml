@@ -7,7 +7,7 @@ log_to_file: false
 session_duration_days: 1
 onlyoffice_config:
   title: AtriumOffice
-  server: http://onlyoffice.atrium.127.0.1.nip.io:8080
+  server: http://onlyoffice.atrium.127.0.0.1.nip.io:8080
 apps:
   - id: 1
     name: App 1
@@ -46,6 +46,21 @@ apps:
     is_proxy: false
     host: static-app
     target: tests/data
+    secured: false
+    login: ""
+    password: ""
+    openpath: ""
+    roles:
+      - ADMINS
+      - USERS
+    inject_security_headers: false
+  - id: 4
+    name: OnlyOffice
+    icon: 59631
+    color: 4286141768
+    is_proxy: true
+    host: onlyoffice
+    target: localhost:8083
     secured: false
     login: ""
     password: ""

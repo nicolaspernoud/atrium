@@ -42,6 +42,8 @@ class MyLocalizations {
       "inject_security_headers": "Inject security headers",
       "is_proxy": "Is a proxy",
       "is_writable": "Is writable",
+      "leave_empty_to_keep_current_password":
+          "Leave empty to keep current password",
       "login_screen": "Please log in...",
       "login": "Login",
       "memory_usage": "Memory usage",
@@ -101,6 +103,8 @@ class MyLocalizations {
       "inject_security_headers": "Injecter des en-têtes pour la sécurité",
       "is_proxy": "Serveur proxy",
       "is_writable": "Accès en écriture",
+      "leave_empty_to_keep_current_password":
+          "Laisser vide pour garder le mot de passe actuel",
       "login_screen": "Veuillez vous authentifier...",
       "login": "Nom d'utilisateur",
       "memory_usage": "Utilisation mémoire",
