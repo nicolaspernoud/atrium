@@ -78,6 +78,7 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Consumer<App>(
       builder: (context, app, child) {
+        _selectedIndex = 0;
         return Scaffold(
           bottomNavigationBar: app.hasToken
               ? BottomNavigationBar(

@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:atrium/components/create_edit_dav.dart';
+import 'package:atrium/components/delete_dialog.dart';
 import 'package:atrium/components/explorer.dart';
 import 'package:atrium/components/login_dialog.dart';
 import 'package:atrium/globals.dart';
@@ -185,9 +186,16 @@ class _DavsListState extends State<DavsList> {
                               onTap: () {
                                 WidgetsBinding.instance
                                     .addPostFrameCallback((_) async {
-                                  await ApiProvider().deleteDav(dav.id);
-                                  await _getData();
-                                  setState(() {});
+                                  var confirmed = await showDialog<bool>(
+                                    context: context,
+                                    builder: (context) =>
+                                        DeleteDialog(dav.name),
+                                  );
+                                  if (confirmed!) {
+                                    await ApiProvider().deleteDav(dav.id);
+                                    await _getData();
+                                    setState(() {});
+                                  }
                                 });
                               },
                               child: Row(

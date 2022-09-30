@@ -15,11 +15,11 @@ Rust/Flutter version of Vestibule.
 - [ ] Remove axum macros
 - [ ] Check that there is enough tests
 - [ ] User authentication and security (OAuth2)
+- [ ] Add OnlyOffice JWT security
 
 ### Frontend
 
 - [ ] Improve upload (refresh on each upload ending, better view)
-- [ ] Confirm dialog for deletes
 
 - [ ] Use research file capability
 - [ ] Error handling (fix uncaught exceptions)

@@ -1,4 +1,5 @@
 import 'package:atrium/components/create_edit_user.dart';
+import 'package:atrium/components/delete_dialog.dart';
 import 'package:atrium/components/login_dialog.dart';
 import 'package:atrium/i18n.dart';
 import 'package:atrium/models/api_provider.dart';
@@ -109,9 +110,15 @@ class _UsersListState extends State<UsersList> {
                 IconButton(
                     icon: const Icon(Icons.delete_forever),
                     onPressed: () async {
-                      await ApiProvider().deleteUser(user.login);
-                      await _getData();
-                      setState(() {});
+                      var confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => DeleteDialog(user.login),
+                      );
+                      if (confirmed!) {
+                        await ApiProvider().deleteUser(user.login);
+                        await _getData();
+                        setState(() {});
+                      }
                     }),
               ],
             ),

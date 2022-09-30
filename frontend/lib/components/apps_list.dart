@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:atrium/components/create_edit_app.dart';
+import 'package:atrium/components/delete_dialog.dart';
 
 import 'package:atrium/components/login_dialog.dart';
 import 'package:atrium/components/webview.dart'
@@ -158,10 +159,18 @@ class _AppsListState extends State<AppsList> {
                                         onTap: () {
                                           WidgetsBinding.instance
                                               .addPostFrameCallback((_) async {
-                                            await ApiProvider()
-                                                .deleteApp(app.id);
-                                            await _getData();
-                                            setState(() {});
+                                            var confirmed =
+                                                await showDialog<bool>(
+                                              context: context,
+                                              builder: (context) =>
+                                                  DeleteDialog(app.name),
+                                            );
+                                            if (confirmed!) {
+                                              await ApiProvider()
+                                                  .deleteApp(app.id);
+                                              await _getData();
+                                              setState(() {});
+                                            }
                                           });
                                         },
                                         child: Row(

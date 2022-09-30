@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:atrium/components/delete_dialog.dart';
 import 'package:atrium/components/image_viewer.dart';
 import 'package:atrium/components/pdf_viewer.dart';
 import 'package:atrium/components/rename_dialog.dart';
@@ -341,9 +342,18 @@ class ExplorerState extends State<Explorer> {
                           )),
                       PopupMenuItem(
                           onTap: () async {
-                            await client.removeAll(file.path!);
-                            setState(() {
-                              _getData();
+                            WidgetsBinding.instance
+                                .addPostFrameCallback((_) async {
+                              var confirmed = await showDialog<bool>(
+                                context: context,
+                                builder: (context) => DeleteDialog(file.name!),
+                              );
+                              if (confirmed!) {
+                                await client.removeAll(file.path!);
+                                setState(() {
+                                  _getData();
+                                });
+                              }
                             });
                           },
                           child: Row(
