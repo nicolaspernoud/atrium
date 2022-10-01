@@ -78,7 +78,8 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Consumer<App>(
       builder: (context, app, child) {
-        _selectedIndex = 0;
+        // Reset index on logout
+        if (!app.hasToken) _selectedIndex = 0;
         return Scaffold(
           bottomNavigationBar: app.hasToken
               ? BottomNavigationBar(

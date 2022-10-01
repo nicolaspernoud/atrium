@@ -824,7 +824,7 @@ impl WebdavServer {
             if path.is_file() && dest.is_dir() {
                 dest.push(path.file_name().unwrap().into());
             }
-            if path.is_dir() && dest.is_file() {
+            if path.is_dir() && dest.is_file() && dest.exists() {
                 *res.status_mut() = StatusCode::NO_CONTENT;
             } else {
                 fs::rename(path, dest.path()).await?;
