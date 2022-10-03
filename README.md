@@ -23,6 +23,3 @@ Rust/Flutter version of Vestibule.
 
 - [ ] Use research file capability
 - [ ] Error handling (fix uncaught exceptions)
-
-- [ ] Sound files displaying
-- [ ] Video files displaying

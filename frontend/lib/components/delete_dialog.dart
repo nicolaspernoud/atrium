@@ -24,7 +24,7 @@ class _DeleteDialogState extends State<DeleteDialog> {
             children: [
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  primary: Colors.red, // background
+                  backgroundColor: Colors.red, // background
                 ),
                 onPressed: () => Navigator.pop(context, true),
                 child: Padding(
@@ -34,7 +34,7 @@ class _DeleteDialogState extends State<DeleteDialog> {
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  primary: Colors.green, // background
+                  backgroundColor: Colors.green, // background
                 ),
                 onPressed: () => Navigator.pop(context, false),
                 child: Padding(

@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:atrium/components/delete_dialog.dart';
 import 'package:atrium/components/image_viewer.dart';
+import 'package:atrium/components/media_player.dart';
 import 'package:atrium/components/pdf_viewer.dart';
 import 'package:atrium/components/rename_dialog.dart';
 import 'package:atrium/components/share_dialog.dart';
@@ -415,6 +416,19 @@ class ExplorerState extends State<Explorer> {
                     }),
                   );
                   launchUrl(launchUri);
+                } else if (mimeType.contains("video/") ||
+                    mimeType.contains("audio/")) {
+                  var shareToken = await ApiProvider().getShareToken(
+                      widget.url.split("://")[1].split(":")[0], file.path!,
+                      shareWith: "media_player", shareForDays: 1);
+                  var uri =
+                      '${widget.url}${escapePath(file.path!)}?token=$shareToken';
+                  if (!mounted) return;
+                  Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) =>
+                              MediaPlayer(uri: uri, file: file)));
                 }
               }
             }
