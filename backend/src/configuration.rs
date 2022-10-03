@@ -31,6 +31,16 @@ pub struct OnlyOfficeConfig {
 }
 
 #[derive(Deserialize, Serialize, Debug, Default, PartialEq, Clone)]
+pub struct OpenIdConfig {
+    pub client_id: String,
+    pub client_secret: String,
+    pub redirect_url: String,
+    pub auth_url: String,
+    pub token_url: String,
+    pub userinfo_url: String,
+}
+
+#[derive(Deserialize, Serialize, Debug, Default, PartialEq, Clone)]
 pub enum TlsMode {
     #[default]
     No,
@@ -72,6 +82,7 @@ pub struct Config {
     pub session_duration_days: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub onlyoffice_config: Option<OnlyOfficeConfig>,
+    pub openid_config: Option<OpenIdConfig>,
     pub apps: Vec<App>,
     pub davs: Vec<Dav>,
     pub users: Vec<User>,
@@ -383,6 +394,7 @@ mod tests {
             users: USERS.clone(),
             session_duration_days: None,
             onlyoffice_config: None,
+            openid_config: None,
         };
 
         // Act

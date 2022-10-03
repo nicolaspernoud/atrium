@@ -147,7 +147,7 @@ where
                         addr.0,
                     ) {
                         Ok(user) => Ok(user.1),
-                        Err(e) => Err((e, "no user found in basic auth")),
+                        Err(e) => Err((e.0, "no user found in basic auth")),
                     };
                 }
             }
@@ -244,35 +244,10 @@ pub async fn local_auth(
     Extension(config): Extension<Arc<Config>>,
     Host(hostname): Host,
     Json(payload): Json<LocalAuth>,
-) -> Result<(PrivateCookieJar, Json<AuthResponse>), StatusCode> {
+) -> Result<(PrivateCookieJar, Json<AuthResponse>), (StatusCode, &'static str)> {
     // Find the user in configuration
     let (user, user_token) = authenticate_local_user(&config, payload, reader.clone(), addr)?;
-
-    // Serialize him/her as a cookie value
-    let encoded =
-        serde_json::to_string(&user_token).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    let domain = hostname
-        .split(":")
-        .next()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?
-        .to_owned();
-
-    // Store the user into the cookie
-    let cookie = Cookie::build(COOKIE_NAME, encoded)
-        .domain(domain)
-        .path("/")
-        .same_site(axum_extra::extract::cookie::SameSite::Lax)
-        .secure(config.tls_mode.is_secure())
-        .http_only(true)
-        .finish();
-
-    // Log the authentication success
-    info!(
-        "AUTHENTICATION SUCCESS for {} from {}",
-        user.login,
-        city_from_ip(addr, reader)
-    );
+    let cookie = create_user_cookie(&user_token, hostname, &config, addr, reader, user)?;
 
     Ok((
         jar.add(cookie),
@@ -283,12 +258,42 @@ pub async fn local_auth(
     ))
 }
 
+pub(crate) fn create_user_cookie(
+    user_token: &UserToken,
+    hostname: String,
+    config: &Arc<Config>,
+    addr: SocketAddr,
+    reader: Arc<Option<Reader<Vec<u8>>>>,
+    user: &User,
+) -> Result<Cookie<'static>, (StatusCode, &'static str)> {
+    let encoded = serde_json::to_string(user_token)
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "could not encode user"))?;
+    let domain = hostname
+        .split(":")
+        .next()
+        .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "could not find domain"))?
+        .to_owned();
+    let cookie = Cookie::build(COOKIE_NAME, encoded)
+        .domain(domain)
+        .path("/")
+        .same_site(axum_extra::extract::cookie::SameSite::Lax)
+        .secure(config.tls_mode.is_secure())
+        .http_only(true)
+        .finish();
+    info!(
+        "AUTHENTICATION SUCCESS for {} from {}",
+        user.login,
+        city_from_ip(addr, reader)
+    );
+    Ok(cookie)
+}
+
 pub fn authenticate_local_user(
     config: &Config,
     payload: LocalAuth,
     reader: Arc<Option<Reader<Vec<u8>>>>,
     addr: SocketAddr,
-) -> Result<(&User, UserToken), StatusCode> {
+) -> Result<(&User, UserToken), (StatusCode, &'static str)> {
     let user = config
         .users
         .iter()
@@ -300,12 +305,16 @@ pub fn authenticate_local_user(
                 payload.login,
                 city_from_ip(addr, reader.clone())
             );
-            e
+            (e, "user does not exist")
         })?;
 
     // Check if the given password is correct
-    let parsed_hash =
-        PasswordHash::new(&user.password).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let parsed_hash = PasswordHash::new(&user.password).map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "could not compute password hash",
+        )
+    })?;
     Argon2::default()
         .verify_password(payload.password.as_bytes(), &parsed_hash)
         .map_err(|_| {
@@ -314,10 +323,15 @@ pub fn authenticate_local_user(
                 user.login,
                 city_from_ip(addr, reader.clone())
             );
-            StatusCode::UNAUTHORIZED
+            (StatusCode::UNAUTHORIZED, "user is not authorized")
         })?;
 
     // Create a token payload from the user
+    let user_token = user_to_token(user, config);
+    Ok((user, user_token))
+}
+
+pub(crate) fn user_to_token(user: &User, config: &Config) -> UserToken {
     let user_token = UserToken {
         login: user.login.to_owned(),
         roles: user.roles.to_owned(),
@@ -327,7 +341,7 @@ pub fn authenticate_local_user(
             + Duration::days(config.session_duration_days.unwrap_or(1)))
         .unix_timestamp(),
     };
-    Ok((user, user_token))
+    user_token
 }
 
 pub async fn get_users(

@@ -5,9 +5,9 @@ use tracing::info;
 
 use atrium::{
     apps::App,
-    configuration::{Config, OnlyOfficeConfig, TlsMode},
+    configuration::{Config, OnlyOfficeConfig, OpenIdConfig, TlsMode},
     davs::model::Dav,
-    mocks::mock_proxied_server,
+    mocks::{mock_oauth2_server, mock_proxied_server},
     server::Server,
     users::User,
     utils::random_string,
@@ -30,25 +30,42 @@ impl TestApp {
             .expect("could not start server");
     }
 
-    pub async fn spawn() -> Self {
+    pub async fn spawn(config: Option<Config>) -> Self {
         let id = random_string(16);
         create_test_tree(&id).ok();
         let main_listener =
-            std::net::TcpListener::bind("127.0.0.1:0").expect("failed to bind to random port");
+            std::net::TcpListener::bind(":::0").expect("failed to bind to random port");
 
         let main_addr = (&main_listener).local_addr().unwrap();
         let main_port = main_addr.port();
         let mock1_listener =
-            std::net::TcpListener::bind("127.0.0.1:0").expect("failed to bind to random port");
+            std::net::TcpListener::bind(":::0").expect("failed to bind to random port");
         let mock1_port = mock1_listener.local_addr().unwrap().port();
         let mock2_listener =
-            std::net::TcpListener::bind("127.0.0.1:0").expect("failed to bind to random port");
+            std::net::TcpListener::bind(":::0").expect("failed to bind to random port");
         let mock2_port = mock2_listener.local_addr().unwrap().port();
+        let mock_oauth2_listener =
+            std::net::TcpListener::bind(":::0").expect("failed to bind to random port");
+        let mock_oauth2_port = mock_oauth2_listener.local_addr().unwrap().port();
 
-        create_apps_file(&id, &main_port, &mock1_port, &mock2_port).await;
+        let mut config = config.unwrap_or(create_default_config(
+            &id,
+            &main_port,
+            &mock1_port,
+            &mock2_port,
+            &mock_oauth2_port,
+        ));
+
+        config.openid_config = config.openid_config.as_ref().map(|oidc| OpenIdConfig {
+            redirect_url: format!("http://atrium.io:{main_port}/auth/oauth2callback"),
+            ..oidc.clone()
+        });
+
+        create_apps_file(&id, config).await;
 
         tokio::spawn(mock_proxied_server(mock1_listener));
         tokio::spawn(mock_proxied_server(mock2_listener));
+        tokio::spawn(mock_oauth2_server(mock_oauth2_listener));
 
         let (tx, _) = broadcast::channel(16);
         let fp = format!("{}.yaml", &id);
@@ -115,8 +132,18 @@ impl Drop for TestApp {
     }
 }
 
-pub async fn create_apps_file(id: &str, main_port: &u16, mock1_port: &u16, mock2_port: &u16) {
+pub async fn create_apps_file(id: &str, config: Config) {
     let filepath = format!("{}.yaml", &id);
+    config.to_file(&filepath).await.unwrap();
+}
+
+pub fn create_default_config(
+    id: &str,
+    main_port: &u16,
+    mock1_port: &u16,
+    mock2_port: &u16,
+    mock_oauth2_port: &u16,
+) -> Config {
     let apps = vec![
         App {
             id: 1,
@@ -266,7 +293,7 @@ pub async fn create_apps_file(id: &str, main_port: &u16, mock1_port: &u16, mock2
         },
     ];
 
-    let config = Config {
+    Config {
         hostname: "atrium.io".to_owned(),
         debug_mode: false,
         tls_mode: TlsMode::No,
@@ -282,10 +309,15 @@ pub async fn create_apps_file(id: &str, main_port: &u16, mock1_port: &u16, mock2
             title: Some("AtriumOffice".to_owned()),
             server: "http://onlyoffice.atrium.io".to_owned(),
         }),
-    };
-
-    // Act
-    config.to_file(&filepath).await.unwrap();
+        openid_config: Some(OpenIdConfig {
+            client_id: "dummy".to_owned(),
+            client_secret: "dummy".to_owned(),
+            redirect_url: format!("http://atrium.io:{main_port}/auth/oauth2callback"),
+            auth_url: format!("http://localhost:{mock_oauth2_port}/authorize"),
+            token_url: format!("http://localhost:{mock_oauth2_port}/token"),
+            userinfo_url: format!("http://localhost:{mock_oauth2_port}/userinfo"),
+        }),
+    }
 }
 
 fn create_test_tree(base: &str) -> Result<()> {

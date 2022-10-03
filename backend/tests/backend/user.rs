@@ -1,12 +1,12 @@
-use hyper::StatusCode;
 use atrium::sysinfo::SystemInfo;
+use hyper::StatusCode;
 
 use crate::helpers::TestApp;
 
 #[tokio::test]
 async fn list_services_api_for_unlogged_user_test() {
     // Arrange
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     // Do not log
 
     // Act and Assert : Get the services (must fail)
@@ -29,7 +29,7 @@ async fn list_services_api_for_unlogged_user_test() {
 #[tokio::test]
 async fn list_services_api_for_normal_user_test() {
     // Arrange
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     // Log as user
     let response = app
         .client
@@ -108,7 +108,7 @@ async fn list_services_api_for_normal_user_test() {
 #[tokio::test]
 async fn get_share_token_test() {
     // Arrange
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     // Log as user
     let response = app
         .client
@@ -174,7 +174,7 @@ async fn get_share_token_test() {
 #[tokio::test]
 async fn use_share_token_test() {
     // Arrange
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     // Log as admin (could be an user, it is just because the secured test app service is reserved to admins)
     let response = app
         .client
@@ -213,17 +213,14 @@ async fn use_share_token_test() {
     // Create a client without cookie store
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
-        .resolve(
-            "atrium.io",
-            format!("127.0.0.1:{}", app.port).parse().unwrap(),
-        )
+        .resolve("atrium.io", format!("[::1]:{}", app.port).parse().unwrap())
         .resolve(
             "secured-files.atrium.io",
-            format!("127.0.0.1:{}", app.port).parse().unwrap(),
+            format!("[::1]:{}", app.port).parse().unwrap(),
         )
         .resolve(
             "secured-files-2.atrium.io",
-            format!("127.0.0.1:{}", app.port).parse().unwrap(),
+            format!("[::1]:{}", app.port).parse().unwrap(),
         )
         .cookie_store(false)
         .build()
@@ -271,7 +268,7 @@ async fn use_share_token_test() {
 #[tokio::test]
 async fn get_system_info_test() {
     // Arrange
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     // Log as user
     let response = app
         .client

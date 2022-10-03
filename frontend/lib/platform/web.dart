@@ -58,3 +58,25 @@ upload(String destPath, PlatformFile file, webdav.Client client,
     cancelToken: cancelToken,
   );
 }
+
+void openIdConnectLogin(BuildContext context) {
+  window.open(
+    '${App().prefs.hostname}/auth/oauth2login',
+    "Auth",
+    "width=400, height=500, scrollbars=yes",
+  );
+  bool isAdmin = false;
+  String? xsrfToken;
+  window.onMessage.listen((event) {
+    xsrfToken = event.data.toString().split('xsrf_token=')[1].split('&')[0];
+    isAdmin =
+        event.data.toString().split('is_admin=')[1].split('&')[0] == "true";
+    if (xsrfToken != null) {
+      App().cookie = "ATRIUM_AUTH=DUMMY_COOKIE_REAL_ONE_FROM_BROWSER";
+      App().isAdmin = isAdmin;
+      App().xsrfToken = xsrfToken!;
+      App().prefs.username = "OIDC_user";
+      Navigator.pop(context, 'OK');
+    }
+  });
+}

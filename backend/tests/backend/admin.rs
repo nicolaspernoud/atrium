@@ -6,7 +6,7 @@ use crate::helpers::TestApp;
 #[tokio::test]
 async fn users_api_for_unlogged_user_test() {
     // Arrange
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     // Do not log
 
     // Get the existing users (must fail)
@@ -45,7 +45,7 @@ async fn users_api_for_unlogged_user_test() {
 #[tokio::test]
 async fn users_api_for_normal_user_test() {
     // Arrange
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     // Log as user
     let response = app
         .client
@@ -99,7 +99,7 @@ async fn users_api_for_normal_user_test() {
 #[tokio::test]
 async fn users_api_for_admin_user_test() {
     // Arrange
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     // Log as admin
     let response = app
         .client
@@ -214,7 +214,7 @@ const NEW_APP: &'static str = r##"
 #[tokio::test]
 async fn apps_api_for_unlogged_user_test() {
     // Arrange
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     // Do not log
 
     // Get the existing apps (must fail)
@@ -250,7 +250,7 @@ async fn apps_api_for_unlogged_user_test() {
 #[tokio::test]
 async fn apps_api_for_normal_user_test() {
     // Arrange
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     // Log as user
     let response = app
         .client
@@ -301,7 +301,7 @@ async fn apps_api_for_normal_user_test() {
 #[tokio::test]
 async fn apps_api_for_admin_user_test() {
     // Arrange
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     // Log as admin
     let response = app
         .client
@@ -411,7 +411,7 @@ const NEW_DAV: &'static str = r##"
 #[tokio::test]
 async fn davs_api_for_unlogged_user_test() {
     // Arrange
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     // Do not log
 
     // Get the existing davs (must fail)
@@ -447,7 +447,7 @@ async fn davs_api_for_unlogged_user_test() {
 #[tokio::test]
 async fn davs_api_for_normal_user_test() {
     // Arrange
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     // Log as user
     let response = app
         .client
@@ -498,7 +498,7 @@ async fn davs_api_for_normal_user_test() {
 #[tokio::test]
 async fn davs_api_for_admin_user_test() {
     // Arrange
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     // Log as admin
     let response = app
         .client

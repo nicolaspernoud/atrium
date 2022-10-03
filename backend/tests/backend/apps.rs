@@ -9,7 +9,7 @@ use std::{fs, net::TcpListener};
 #[tokio::test]
 async fn secured_proxy_test() {
     // Arrange
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
 
     // Act : try to access app as unlogged user
     let response = app
@@ -73,7 +73,7 @@ async fn secured_proxy_test() {
 #[tokio::test]
 async fn proxy_test() {
     // Arrange
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
 
     // Act
     let response = app
@@ -130,7 +130,7 @@ async fn proxy_test() {
 #[tokio::test]
 async fn static_test() {
     // Arrange
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
 
     println!(
         "Current directory is: {:?}",
@@ -177,7 +177,7 @@ async fn static_test() {
 #[tokio::test]
 async fn reload_test() {
     // Arrange
-    let mut app = TestApp::spawn().await;
+    let mut app = TestApp::spawn(None).await;
     // alter the configuration file
     let fp = format!("{}.yaml", &app.id);
     let mut src = fs::File::open(&fp).expect("failed to open config file");
@@ -233,16 +233,16 @@ async fn reload_test() {
 async fn redirect_test() {
     // ARRANGE
     // Create base test app
-    let mut app = TestApp::spawn().await;
+    let mut app = TestApp::spawn(None).await;
     // Spawn 3 targets with different redirect behaviors
     let fwdtoredirect_listener =
-        std::net::TcpListener::bind("127.0.0.1:0").expect("failed to bind to random port");
+        std::net::TcpListener::bind(":::0").expect("failed to bind to random port");
     let fwdtoredirect_port = fwdtoredirect_listener.local_addr().unwrap().port();
     let relativeredirect_listener =
-        std::net::TcpListener::bind("127.0.0.1:0").expect("failed to bind to random port");
+        std::net::TcpListener::bind(":::0").expect("failed to bind to random port");
     let relativeredirect_port = relativeredirect_listener.local_addr().unwrap().port();
     let absoluteredirect_listener =
-        std::net::TcpListener::bind("127.0.0.1:0").expect("failed to bind to random port");
+        std::net::TcpListener::bind(":::0").expect("failed to bind to random port");
     let absoluteredirect_port = absoluteredirect_listener.local_addr().unwrap().port();
     tokio::spawn(fwdtoredirect_server(fwdtoredirect_listener));
     tokio::spawn(relativeredirect_server(relativeredirect_listener, app.port));
@@ -310,6 +310,7 @@ async fn redirect_test() {
         users: vec![],
         session_duration_days: None,
         onlyoffice_config: None,
+        openid_config: None,
     };
     config.to_file(&filepath).await.unwrap();
     app.client
@@ -413,7 +414,7 @@ pub async fn absoluteredirect_server(listener: TcpListener) {
 #[tokio::test]
 async fn onlyoffice_page_test() {
     // Arrange
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
 
     // Act
     let response = app

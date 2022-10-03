@@ -6,6 +6,7 @@ pub mod extractors;
 pub mod logger;
 pub mod middlewares;
 pub mod mocks;
+pub mod oauth2;
 pub mod onlyoffice;
 pub mod server;
 pub mod sysinfo;

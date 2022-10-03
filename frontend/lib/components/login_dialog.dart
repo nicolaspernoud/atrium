@@ -4,6 +4,8 @@ import 'package:atrium/models/api_provider.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:atrium/platform/mobile.dart'
+    if (dart.library.html) 'package:atrium/platform/web.dart';
 
 Future<void> showLoginDialog(BuildContext context, bool mounted) async {
   final formKey = GlobalKey<FormState>();
@@ -35,6 +37,7 @@ class _LoginDialogState extends State<LoginDialog> {
   String password = "";
   bool _isObscure = true;
   String errorMessage = "";
+
   @override
   Widget build(BuildContext context) {
     if (kIsWeb && !kDebugMode) {
@@ -119,32 +122,45 @@ class _LoginDialogState extends State<LoginDialog> {
           ),
         ),
       ),
-      actions: <Widget>[
-        TextButton(
-          onPressed: () async {
-            if (widget.formKey.currentState!.validate()) {
-              try {
-                await ApiProvider().login(login, password);
-                if (!widget.mounted) return;
-                Navigator.pop(context, 'OK');
-              } catch (e) {
-                if (e is DioError && e.response?.statusCode == 401) {
-                  setState(() {
-                    errorMessage = tr(context, "login_failed");
-                  });
-                } else {
-                  setState(() {
-                    errorMessage = tr(context, "could_not_reach_server");
-                  });
+      actions: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            if (kIsWeb)
+              TextButton.icon(
+                icon: const Icon(Icons.login), // Your icon here
+                label: const Text("Open Id Connect"), // Your text here
+                onPressed: () {
+                  openIdConnectLogin(context);
+                },
+              ),
+            TextButton(
+              onPressed: () async {
+                if (widget.formKey.currentState!.validate()) {
+                  try {
+                    await ApiProvider().login(login, password);
+                    if (!widget.mounted) return;
+                    Navigator.pop(context, 'OK');
+                  } catch (e) {
+                    if (e is DioError && e.response?.statusCode == 401) {
+                      setState(() {
+                        errorMessage = tr(context, "login_failed");
+                      });
+                    } else {
+                      setState(() {
+                        errorMessage = tr(context, "could_not_reach_server");
+                      });
+                    }
+                    await Future.delayed(const Duration(seconds: 3));
+                    setState(() {
+                      errorMessage = "";
+                    });
+                  }
                 }
-                await Future.delayed(const Duration(seconds: 3));
-                setState(() {
-                  errorMessage = "";
-                });
-              }
-            }
-          },
-          child: const Text('OK'),
+              },
+              child: const Text('OK'),
+            ),
+          ],
         ),
       ],
     );

@@ -3,7 +3,7 @@
 ###########################
 
 # Set up an environnement to cross-compile the app for musl to create a statically-linked binary
-FROM --platform=$BUILDPLATFORM rust:1.63 AS backend-builder
+FROM --platform=$BUILDPLATFORM rust:1.64 AS backend-builder
 ARG TARGETPLATFORM
 RUN case "$TARGETPLATFORM" in \
       "linux/amd64") echo x86_64-unknown-linux-musl > /rust_target.txt ;; \
@@ -38,8 +38,8 @@ COPY ./backend/src ./src
 COPY ./backend/tests ./tests
 
 #RUN cargo test --release --target $(cat /rust_target.txt)
-RUN cargo build --release --target $(cat /rust_target.txt)
-RUN cp target/$(cat /rust_target.txt)/release/atrium .
+RUN cargo build --profile release_optimized --target $(cat /rust_target.txt)
+RUN cp target/$(cat /rust_target.txt)/release_optimized/atrium .
 # Allow running on ports < 1000
 RUN setcap cap_net_bind_service=+ep ./atrium
 

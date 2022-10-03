@@ -111,3 +111,7 @@ upload(String destPath, PlatformFile file, webdav.Client client,
   await client.writeFromFile(file.path!, "$destPath/${file.name}",
       onProgress: onProgress, cancelToken: cancelToken);
 }
+
+void openIdConnectLogin(BuildContext context) {
+  // TODO: this
+}

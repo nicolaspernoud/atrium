@@ -1,7 +1,7 @@
 use anyhow::Result;
 use atrium::{
     configuration::{Config, TlsMode},
-    mocks::mock_proxied_server,
+    mocks::{mock_oauth2_server, mock_proxied_server},
     server::Server,
 };
 use axum_server::Handle;
@@ -36,6 +36,9 @@ async fn run() -> Result<()> {
         let mock2_listener =
             std::net::TcpListener::bind(":::8082").expect("failed to bind to port");
         tokio::spawn(mock_proxied_server(mock2_listener));
+        let mock_oauth2_listener =
+            std::net::TcpListener::bind(":::8090").expect("failed to bind to port");
+        tokio::spawn(mock_oauth2_server(mock_oauth2_listener));
     }
 
     let reload_loop = std::sync::Arc::new(std::sync::Mutex::new(true));

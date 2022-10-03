@@ -8,7 +8,7 @@ use axum::{
 };
 use http::{HeaderValue, Method};
 
-use crate::configuration::{Config, HostType, TlsMode};
+use crate::configuration::{Config, HostType};
 
 pub async fn cors_middleware<B>(req: Request<B>, next: Next<B>) -> Result<Response, StatusCode> {
     let hostname = {
@@ -73,14 +73,9 @@ where
         let source = {
             let cfg = req.extensions().get::<Arc<Config>>().unwrap();
             format!(
-                "{s}://{h}{p} {s}://*.{h}{p}",
+                "{s}://{h}:* {s}://*.{h}:*",
                 s = cfg.scheme(),
                 h = cfg.hostname,
-                p = &(if cfg.tls_mode == TlsMode::No {
-                    format!(":{}", cfg.http_port)
-                } else {
-                    "".to_owned()
-                })
             )
         };
         let mut resp = next.run(req).await;

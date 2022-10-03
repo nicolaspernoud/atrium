@@ -13,7 +13,7 @@ use xml::escape::escape_str_pcdata;
 
 #[tokio::test]
 async fn put_and_retrieve_tests() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     put_and_get_file(&app, app.port, "lorem.txt", "files1", "text/plain", false).await?;
     put_and_get_file(&app, app.port, "lorem.txt", "files2", "text/plain", true).await?;
 
@@ -141,7 +141,7 @@ fn create_big_binary_file(path: &str) {
 
 #[tokio::test]
 async fn get_correct_range() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
 
     let cases = vec!["files1", "files2"];
 
@@ -175,7 +175,7 @@ async fn get_correct_range() -> Result<()> {
 
 #[tokio::test]
 async fn get_file_range_limit_cases() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let url = format!(
         "http://files2.atrium.io:{}/get_file_range_limit_cases",
         app.port
@@ -212,7 +212,7 @@ async fn get_file_range_limit_cases() -> Result<()> {
 
 #[tokio::test]
 async fn try_to_hack() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let mut dst = std::fs::File::create(format!("./data/{}/test.txt", app.id))
         .expect("could not create file");
     std::io::Write::write(&mut dst, b"This should not be accessible !!!")
@@ -229,7 +229,7 @@ async fn try_to_hack() -> Result<()> {
 #[tokio::test]
 async fn try_to_use_wrong_key_to_decrypt() -> Result<()> {
     // Arrange
-    let mut app = TestApp::spawn().await;
+    let mut app = TestApp::spawn(None).await;
 
     // Act : send a file
     let url = format!("http://files2.atrium.io:{}/must_have_the_key", app.port);
@@ -264,7 +264,7 @@ async fn try_to_use_wrong_key_to_decrypt() -> Result<()> {
 
 #[tokio::test]
 async fn get_dir_404() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let resp = app
         .client
         .get(format!("http://files1.atrium.io:{}/404", app.port))
@@ -276,7 +276,7 @@ async fn get_dir_404() -> Result<()> {
 
 #[tokio::test]
 async fn get_dir_zip() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let resp = app
         .client
         .get(format!("http://files1.atrium.io:{}/dira", app.port))
@@ -293,7 +293,7 @@ async fn get_dir_zip() -> Result<()> {
 
 #[tokio::test]
 async fn head_dir_zip() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let resp = app
         .client
         .head(format!("http://files1.atrium.io:{}", app.port))
@@ -311,7 +311,7 @@ async fn head_dir_zip() -> Result<()> {
 
 #[tokio::test]
 async fn get_dir_search() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
 
     let resp = app
         .client
@@ -328,7 +328,7 @@ async fn get_dir_search() -> Result<()> {
 
 #[tokio::test]
 async fn get_dir_search_not_existing() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let resp = app
         .client
         .get(format!(
@@ -344,7 +344,7 @@ async fn get_dir_search_not_existing() -> Result<()> {
 
 #[tokio::test]
 async fn get_disk_usage() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let resp = app
         .client
         .get(format!("http://files1.atrium.io:{}?diskusage", app.port))
@@ -359,7 +359,7 @@ async fn get_disk_usage() -> Result<()> {
 
 #[tokio::test]
 async fn get_file_404() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let resp = app
         .client
         .get(format!("http://files1.atrium.io:{}/404", app.port))
@@ -372,7 +372,7 @@ async fn get_file_404() -> Result<()> {
 
 #[tokio::test]
 async fn head_file_404() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let resp = app
         .client
         .head(format!("http://files1.atrium.io:{}/404", app.port))
@@ -384,7 +384,7 @@ async fn head_file_404() -> Result<()> {
 
 #[tokio::test]
 async fn options_dir() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let resp = app
         .client
         .request(
@@ -404,7 +404,7 @@ async fn options_dir() -> Result<()> {
 
 #[tokio::test]
 async fn put_file() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let url = format!("http://files1.atrium.io:{}/myfile", app.port);
     let resp = app.client.put(&url).body(b"abc".to_vec()).send().await?;
     assert_eq!(resp.status(), 201);
@@ -415,7 +415,7 @@ async fn put_file() -> Result<()> {
 
 #[tokio::test]
 async fn put_file_not_writable() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let url = format!("http://files3.atrium.io:{}/myfile", app.port);
     let resp = app.client.put(&url).body(b"abc".to_vec()).send().await?;
     assert_eq!(resp.status(), 403);
@@ -426,7 +426,7 @@ async fn put_file_not_writable() -> Result<()> {
 
 #[tokio::test]
 async fn put_file_create_dir() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let url = format!(
         "http://files1.atrium.io:{}/xyz/my_file_in_dir.txt",
         app.port
@@ -440,7 +440,7 @@ async fn put_file_create_dir() -> Result<()> {
 
 #[tokio::test]
 async fn put_file_conflict_dir() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let resp = app
         .client
         .put(format!("http://files1.atrium.io:{}/dira", app.port))
@@ -453,7 +453,7 @@ async fn put_file_conflict_dir() -> Result<()> {
 
 #[tokio::test]
 async fn put_file_alter_modtime() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let url = format!("http://files1.atrium.io:{}/myfile", app.port);
     let resp = app
         .client
@@ -474,7 +474,7 @@ async fn put_file_alter_modtime() -> Result<()> {
 
 #[tokio::test]
 async fn delete_file() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let url = format!(
         "http://files1.atrium.io:{}/xyz/file_to_delete.txt",
         app.port
@@ -489,7 +489,7 @@ async fn delete_file() -> Result<()> {
 
 #[tokio::test]
 async fn delete_file_404() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let resp = app
         .client
         .delete(format!("http://files1.atrium.io:{}/file3", app.port))
@@ -530,7 +530,7 @@ fn unlock(app: &TestApp, url: &str) -> reqwest::RequestBuilder {
 
 #[tokio::test]
 async fn propfind_dir() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let url = format!("http://files1.atrium.io:{}/dira", app.port);
     let resp = propfind(&app, &url).send().await?;
     assert_eq!(resp.status(), 207);
@@ -550,7 +550,7 @@ async fn propfind_dir() -> Result<()> {
 
 #[tokio::test]
 async fn propfind_dir_depth0() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let url = format!("http://files1.atrium.io:{}/dira", app.port);
     let resp = propfind(&app, &url).header("depth", "0").send().await?;
     assert_eq!(resp.status(), 207);
@@ -568,7 +568,7 @@ async fn propfind_dir_depth0() -> Result<()> {
 
 #[tokio::test]
 async fn propfind_404() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let url = format!("http://files1.atrium.io:{}/404", app.port);
     let resp = propfind(&app, &url).send().await?;
     assert_eq!(resp.status(), 404);
@@ -577,7 +577,7 @@ async fn propfind_404() -> Result<()> {
 
 #[tokio::test]
 async fn propfind_file() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let url = format!("http://files1.atrium.io:{}/dira/file1", app.port);
     let resp = propfind(&app, &url).send().await?;
     assert_eq!(resp.status(), 207);
@@ -596,7 +596,7 @@ async fn propfind_file() -> Result<()> {
 
 #[tokio::test]
 async fn propfind_file_encrypted() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let url = format!("http://files2.atrium.io:{}/dira/file1", app.port);
     app.client.put(&url).body(b"abc".to_vec()).send().await?;
     let resp = propfind(&app, &url).send().await?;
@@ -623,7 +623,7 @@ async fn propfind_file_encrypted() -> Result<()> {
 
 #[tokio::test]
 async fn proppatch_file() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let url = format!("http://files1.atrium.io:{}/dira/file1", app.port);
     let resp = proppatch(&app, &url).send().await?;
     assert_eq!(resp.status(), 207);
@@ -634,7 +634,7 @@ async fn proppatch_file() -> Result<()> {
 
 #[tokio::test]
 async fn proppatch_404() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let url = format!("http://files1.atrium.io:{}/404", app.port);
     let resp = proppatch(&app, &url).send().await?;
 
@@ -644,7 +644,7 @@ async fn proppatch_404() -> Result<()> {
 
 #[tokio::test]
 async fn mkcol_dir() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let url = format!("http://files1.atrium.io:{}/newdir", app.port);
     let resp = mkcol(&app, &url).send().await?;
     assert_eq!(resp.status(), 201);
@@ -653,7 +653,7 @@ async fn mkcol_dir() -> Result<()> {
 
 #[tokio::test]
 async fn mkcol_not_writable() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let url = format!("http://files3.atrium.io:{}/newdir", app.port);
     let resp = mkcol(&app, &url).send().await?;
     assert_eq!(resp.status(), 403);
@@ -662,7 +662,7 @@ async fn mkcol_not_writable() -> Result<()> {
 
 #[tokio::test]
 async fn copy_file() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let url = format!("http://files1.atrium.io:{}/dira/file1", app.port);
     let new_url = format!("http://files1.atrium.io:{}/dira/file1%20(copy)", app.port);
     let resp = copy(&app, &url)
@@ -677,7 +677,7 @@ async fn copy_file() -> Result<()> {
 
 #[tokio::test]
 async fn copy_dir() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let url = format!("http://files1.atrium.io:{}/dira/", app.port);
     let new_url = format!("http://files1.atrium.io:{}/newdir/", app.port);
     let resp = copy(&app, &url)
@@ -696,7 +696,7 @@ async fn copy_dir() -> Result<()> {
 
 #[tokio::test]
 async fn copy_not_writable() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let url = format!("http://files3.atrium.io:{}/dira/file1", app.port);
     let new_url = format!("http://files3.atrium.io:{}/dira/file1%20(copy)", app.port);
     let resp = copy(&app, &url)
@@ -711,7 +711,7 @@ async fn copy_not_writable() -> Result<()> {
 
 #[tokio::test]
 async fn copy_file_404() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let url = format!("http://files1.atrium.io:{}/dira/file3", app.port);
     let new_url = format!("http://files1.atrium.io:{}/dira/file3%20(copy)", app.port);
     let resp = copy(&app, &url)
@@ -724,7 +724,7 @@ async fn copy_file_404() -> Result<()> {
 
 #[tokio::test]
 async fn move_file() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let origin_url = format!("http://files1.atrium.io:{}/dira/file2", app.port);
     let new_url = format!("http://files1.atrium.io:{}/dira/file2%20(moved)", app.port);
     let resp = mv(&app, &origin_url)
@@ -741,7 +741,7 @@ async fn move_file() -> Result<()> {
 
 #[tokio::test]
 async fn move_file_to_dir() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let origin_url = format!("http://files1.atrium.io:{}/dira/file2", app.port);
     let new_url = format!("http://files1.atrium.io:{}/dirb/", app.port);
     let resp = mv(&app, &origin_url)
@@ -758,7 +758,7 @@ async fn move_file_to_dir() -> Result<()> {
 
 #[tokio::test]
 async fn move_dir() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let url = format!("http://files1.atrium.io:{}/dira/", app.port);
     let new_url = format!("http://files1.atrium.io:{}/newdir/", app.port);
     let resp = mv(&app, &url)
@@ -780,7 +780,7 @@ async fn move_dir() -> Result<()> {
 
 #[tokio::test]
 async fn move_dir_root() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let url = format!("http://files1.atrium.io:{}/dira/", app.port);
     let new_url = format!("http://files1.atrium.io:{}/", app.port);
     let resp = mv(&app, &url)
@@ -795,7 +795,7 @@ async fn move_dir_root() -> Result<()> {
 
 #[tokio::test]
 async fn move_file_root() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let url = format!("http://files1.atrium.io:{}/dira/file1", app.port);
     let dest = format!("http://files1.atrium.io:{}/", app.port);
     let new_url = format!("http://files1.atrium.io:{}/file1", app.port);
@@ -808,7 +808,7 @@ async fn move_file_root() -> Result<()> {
 
 #[tokio::test]
 async fn move_file_not_writable() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let origin_url = format!("http://files3.atrium.io:{}/dira/file2", app.port);
     let new_url = format!("http://files3.atrium.io:{}/dira/file2%20(moved)", app.port);
     let resp = mv(&app, &origin_url)
@@ -825,7 +825,7 @@ async fn move_file_not_writable() -> Result<()> {
 
 #[tokio::test]
 async fn move_file_404() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let url = format!("http://files1.atrium.io:{}/file3", app.port);
     let new_url = format!("http://files1.atrium.io:{}/file3%20(moved)", app.port);
     let resp = mv(&app, &url).header("Destination", new_url).send().await?;
@@ -835,7 +835,7 @@ async fn move_file_404() -> Result<()> {
 
 #[tokio::test]
 async fn lock_file() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let url = format!("http://files1.atrium.io:{}/dira/file1", app.port);
     let resp = lock(&app, &url).send().await?;
     assert_eq!(resp.status(), 200);
@@ -846,7 +846,7 @@ async fn lock_file() -> Result<()> {
 
 #[tokio::test]
 async fn lock_unexisting_file() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let url = format!("http://files1.atrium.io:{}/file3", app.port);
     let resp = lock(&app, &url).send().await?;
     assert_eq!(resp.status(), 201);
@@ -855,7 +855,7 @@ async fn lock_unexisting_file() -> Result<()> {
 
 #[tokio::test]
 async fn unlock_file() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let url = format!("http://files1.atrium.io:{}/dira/file1", app.port);
     let resp = unlock(&app, &url).send().await?;
     assert_eq!(resp.status(), 200);
@@ -864,7 +864,7 @@ async fn unlock_file() -> Result<()> {
 
 #[tokio::test]
 async fn unlock_file_404() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     let url = format!("http://files1.atrium.io:{}/file3", app.port);
     let resp = unlock(&app, &url).send().await?;
     assert_eq!(resp.status(), 404);
@@ -878,7 +878,7 @@ use std::os::windows::fs::symlink_dir;
 
 #[tokio::test]
 async fn default_not_allow_symlinks() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     std::fs::create_dir_all(format!("./data/{}/dir_symlink", app.id))?;
     std::fs::write(
         format!("./data/{}/dir_symlink/file1", app.id),
@@ -907,7 +907,7 @@ async fn default_not_allow_symlinks() -> Result<()> {
 
 #[tokio::test]
 async fn allow_symlinks() -> Result<()> {
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
     std::fs::create_dir_all(format!("./data/{}/dir_symlink", app.id))?;
     std::fs::write(
         format!("./data/{}/dir_symlink/file1", app.id),
@@ -937,7 +937,7 @@ async fn allow_symlinks() -> Result<()> {
 #[tokio::test]
 async fn secured_dav_test() {
     // Arrange
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
 
     // Act : try to access app as unlogged user
     let response = app
@@ -1026,18 +1026,15 @@ async fn secured_dav_test() {
 #[tokio::test]
 async fn secured_dav_basic_auth_and_token_test() {
     // Arrange
-    let app = TestApp::spawn().await;
+    let app = TestApp::spawn(None).await;
 
     // Create a client without cookie store
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
-        .resolve(
-            "atrium.io",
-            format!("127.0.0.1:{}", app.port).parse().unwrap(),
-        )
+        .resolve("atrium.io", format!("[::1]:{}", app.port).parse().unwrap())
         .resolve(
             "secured-files.atrium.io",
-            format!("127.0.0.1:{}", app.port).parse().unwrap(),
+            format!("[::1]:{}", app.port).parse().unwrap(),
         )
         .cookie_store(false)
         .build()

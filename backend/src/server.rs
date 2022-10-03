@@ -23,6 +23,7 @@ use crate::{
     },
     dir_server::dir_handler,
     middlewares::{cors_middleware, debug_cors_middleware, inject_security_headers},
+    oauth2::{oauth2_callback, oauth2_login},
     onlyoffice::{onlyoffice_callback, onlyoffice_page},
     sysinfo::system_info,
     users::{
@@ -79,6 +80,8 @@ impl Server {
                 }),
             )
             .route("/auth/local", post(local_auth))
+            .route("/auth/oauth2login", get(oauth2_login))
+            .route("/auth/oauth2callback", get(oauth2_callback))
             .nest("/api/admin", admin_router)
             .nest("/api/user", user_router)
             .route("/onlyoffice/save", post(onlyoffice_callback))
