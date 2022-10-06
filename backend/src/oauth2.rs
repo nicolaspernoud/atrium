@@ -142,7 +142,11 @@ pub async fn oauth2_callback(
     let user = User {
         login: user_data.login,
         password: "".to_owned(),
-        roles: user_data.member_of,
+        roles: user_data
+            .member_of
+            .iter()
+            .map(|e| e.trim_start_matches("CN=").to_owned())
+            .collect(),
     };
     let user_token = user_to_token(&user, &config);
     let cookie = create_user_cookie(&user_token, hostname, &config, addr, reader, &user)?;
@@ -150,9 +154,10 @@ pub async fn oauth2_callback(
     Ok((
         private_jar.add(cookie),
         Redirect::to(&format!(
-            "/oauth2/oauth2.html?is_admin={}&xsrf_token={}",
+            "/oauth2/oauth2.html?is_admin={}&xsrf_token={}&user={}",
             user.roles.contains(&"ADMINS".to_owned()),
-            user_token.xsrf_token
+            user_token.xsrf_token,
+            user.login
         )),
     ))
 }

@@ -23,6 +23,7 @@ async fn log_with_oidc_as_user() {
         .await
         .expect("failed to execute request");
     assert!(response.status().is_success());
+    assert!(response.url().as_str().contains("is_admin=false"));
     assert!(response.text().await.unwrap().contains("Auth OK"));
 }
 
@@ -92,5 +93,6 @@ async fn log_with_oidc_as_admin() {
         .await
         .expect("failed to execute request");
     assert!(response.status().is_success());
+    assert!(response.url().as_str().contains("is_admin=true"));
     assert!(response.text().await.unwrap().contains("Auth OK"));
 }

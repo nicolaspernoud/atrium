@@ -14,12 +14,10 @@ Rust/Flutter version of Vestibule.
 - [ ] Lifetimes for non serialized structs
 - [ ] Remove axum macros
 - [ ] Check that there is enough tests
-- [ ] User authentication and security (OAuth2)
 - [ ] Add OnlyOffice JWT security
 
 ### Frontend
 
 - [ ] Improve upload (refresh on each upload ending, better view)
-
 - [ ] Use research file capability
 - [ ] Error handling (fix uncaught exceptions)

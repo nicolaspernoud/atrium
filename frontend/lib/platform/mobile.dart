@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:math';
+import 'package:atrium/globals.dart';
 import 'package:atrium/i18n.dart';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
@@ -7,6 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:webdav_client/webdav_client.dart' as webdav;
+import 'package:webview_cookie_manager/webview_cookie_manager.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
 class NotificationsPlugin {
   late FlutterLocalNotificationsPlugin flip;
@@ -112,6 +115,78 @@ upload(String destPath, PlatformFile file, webdav.Client client,
       onProgress: onProgress, cancelToken: cancelToken);
 }
 
-void openIdConnectLogin(BuildContext context) {
-  // TODO: this
+openIdConnectLogin(BuildContext context) async {
+  Navigator.pop(context, 'OK');
+  await Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (context) {
+        return const OpenIdWebView();
+      },
+    ),
+  );
+}
+
+class OpenIdWebView extends StatefulWidget {
+  const OpenIdWebView({super.key});
+  @override
+  State<OpenIdWebView> createState() => _OpenIdWebViewState();
+}
+
+class _OpenIdWebViewState extends State<OpenIdWebView> {
+  final cookieManager = WebviewCookieManager();
+  bool _dstReached = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Enable virtual display.
+    if (Platform.isAndroid) WebView.platform = AndroidWebView();
+    cookieManager.clearCookies();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_dstReached) {
+      return Scaffold(
+          appBar: AppBar(
+            title: const Text("Open Id Connect"),
+          ),
+          body: WebView(
+            initialUrl: "${App().prefs.hostname}/auth/oauth2login",
+            javascriptMode: JavascriptMode.unrestricted,
+            navigationDelegate: _interceptNavigation,
+          ));
+    } else {
+      cookieManager.getCookies(App().prefs.hostname).then((value) {
+        var authCookie =
+            value.singleWhere((element) => element.name == "ATRIUM_AUTH");
+        App().cookie = "ATRIUM_AUTH=${authCookie.value}";
+        Navigator.pop(context, 'OK');
+      });
+      return const SizedBox(
+        width: 60,
+        height: 60,
+        child: CircularProgressIndicator(),
+      );
+    }
+  }
+
+  NavigationDecision _interceptNavigation(NavigationRequest request) {
+    if (request.url.contains("is_admin")) {
+      String xsrfToken =
+          request.url.toString().split('xsrf_token=')[1].split('&')[0];
+      bool isAdmin =
+          request.url.toString().split('is_admin=')[1].split('&')[0] == "true";
+      String username = request.url.toString().split('user=')[1].split('&')[0];
+      if (xsrfToken.isNotEmpty) {
+        App().isAdmin = isAdmin;
+        App().xsrfToken = xsrfToken;
+        App().prefs.username = username;
+        setState(() {
+          _dstReached = true;
+        });
+      }
+    }
+    return NavigationDecision.navigate;
+  }
 }

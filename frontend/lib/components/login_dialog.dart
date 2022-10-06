@@ -126,14 +126,13 @@ class _LoginDialogState extends State<LoginDialog> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            if (kIsWeb)
-              TextButton.icon(
-                icon: const Icon(Icons.login), // Your icon here
-                label: const Text("Open Id Connect"), // Your text here
-                onPressed: () {
-                  openIdConnectLogin(context);
-                },
-              ),
+            TextButton.icon(
+              icon: const Icon(Icons.login), // Your icon here
+              label: const Text("Open Id Connect"), // Your text here
+              onPressed: () {
+                openIdConnectLogin(context);
+              },
+            ),
             TextButton(
               onPressed: () async {
                 if (widget.formKey.currentState!.validate()) {

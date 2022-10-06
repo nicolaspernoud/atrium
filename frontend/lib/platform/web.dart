@@ -65,17 +65,18 @@ void openIdConnectLogin(BuildContext context) {
     "Auth",
     "width=400, height=500, scrollbars=yes",
   );
-  bool isAdmin = false;
-  String? xsrfToken;
+
   window.onMessage.listen((event) {
-    xsrfToken = event.data.toString().split('xsrf_token=')[1].split('&')[0];
-    isAdmin =
+    String xsrfToken =
+        event.data.toString().split('xsrf_token=')[1].split('&')[0];
+    bool isAdmin =
         event.data.toString().split('is_admin=')[1].split('&')[0] == "true";
-    if (xsrfToken != null) {
+    String username = event.data.toString().split('user=')[1].split('&')[0];
+    if (xsrfToken.isNotEmpty) {
       App().cookie = "ATRIUM_AUTH=DUMMY_COOKIE_REAL_ONE_FROM_BROWSER";
       App().isAdmin = isAdmin;
-      App().xsrfToken = xsrfToken!;
-      App().prefs.username = "OIDC_user";
+      App().xsrfToken = xsrfToken;
+      App().prefs.username = username;
       Navigator.pop(context, 'OK');
     }
   });
