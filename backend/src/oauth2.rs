@@ -16,7 +16,7 @@ use serde::Deserialize;
 
 use crate::{
     configuration::{Config, OpenIdConfig},
-    users::{create_user_cookie, user_to_token, User},
+    users::{create_user_cookie, user_to_token, User, ADMINS_ROLE},
 };
 
 const STATE_COOKIE: &'static str = "ATRIUM_OAUTH2_STATE";
@@ -139,7 +139,7 @@ pub async fn oauth2_callback(
             )
         })?;
 
-    let user = User {
+    let mut user = User {
         login: user_data.login,
         password: "".to_owned(),
         roles: user_data
@@ -148,6 +148,15 @@ pub async fn oauth2_callback(
             .map(|e| e.trim_start_matches("CN=").to_owned())
             .collect(),
     };
+    // Map admins_group to ADMINS_ROLE if not already present
+    if oidc_config.admins_group.is_some()
+        && user
+            .roles
+            .contains(oidc_config.admins_group.as_ref().unwrap())
+        && !user.roles.contains(&ADMINS_ROLE.to_owned())
+    {
+        user.roles.push(ADMINS_ROLE.to_owned());
+    }
     let user_token = user_to_token(&user, &config);
     let cookie = create_user_cookie(&user_token, hostname, &config, addr, reader, &user)?;
 
@@ -155,7 +164,7 @@ pub async fn oauth2_callback(
         private_jar.add(cookie),
         Redirect::to(&format!(
             "/oauth2/oauth2.html?is_admin={}&xsrf_token={}&user={}",
-            user.roles.contains(&"ADMINS".to_owned()),
+            user.roles.contains(&ADMINS_ROLE.to_owned()),
             user_token.xsrf_token,
             user.login
         )),

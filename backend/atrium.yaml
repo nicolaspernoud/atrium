@@ -15,6 +15,7 @@ openid_config:
   auth_url: http://localhost:8090/authorize
   token_url: http://localhost:8090/token
   userinfo_url: http://localhost:8090/userinfo
+  admins_group: TO_BECOME_ADMINS
 apps:
   - id: 1
     name: App 1

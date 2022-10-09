@@ -42,6 +42,7 @@ async fn log_with_oidc_wrong_state() {
             auth_url: format!("http://localhost:{mock_oauth2_port}/authorize_wrong_state"),
             token_url: format!("http://localhost:{mock_oauth2_port}/token"),
             userinfo_url: format!("http://localhost:{mock_oauth2_port}/userinfo"),
+            admins_group: Some("TO_BECOME_ADMINS".to_owned()),
         }),
         ..Default::default()
     };
@@ -76,6 +77,7 @@ async fn log_with_oidc_as_admin() {
             auth_url: format!("http://localhost:{mock_oauth2_port}/authorize"),
             token_url: format!("http://localhost:{mock_oauth2_port}/token"),
             userinfo_url: format!("http://localhost:{mock_oauth2_port}/admininfo"),
+            admins_group: Some("TO_BECOME_ADMINS".to_owned()),
         }),
         ..Default::default()
     };

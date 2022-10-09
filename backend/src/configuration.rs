@@ -38,6 +38,8 @@ pub struct OpenIdConfig {
     pub auth_url: String,
     pub token_url: String,
     pub userinfo_url: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub admins_group: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Default, PartialEq, Clone)]

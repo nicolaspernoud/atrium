@@ -28,6 +28,7 @@ use tracing::info;
 static COOKIE_NAME: &str = "ATRIUM_AUTH";
 static SHARE_TOKEN: &str = "SHARE_TOKEN";
 static WWWAUTHENTICATE: HeaderName = HeaderName::from_static("www-authenticate");
+pub static ADMINS_ROLE: &str = "ADMINS";
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct User {
@@ -192,7 +193,7 @@ where
     type Rejection = (StatusCode, &'static str);
     async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
         let user = UserToken::from_request(req).await?;
-        if !user.roles.contains(&"ADMINS".to_owned()) {
+        if !user.roles.contains(&ADMINS_ROLE.to_owned()) {
             return Err((StatusCode::UNAUTHORIZED, "user is not in admin group"));
         }
         Ok(AdminToken(user))
@@ -252,7 +253,7 @@ pub async fn local_auth(
     Ok((
         jar.add(cookie),
         Json(AuthResponse {
-            is_admin: user.roles.contains(&"ADMINS".to_owned()),
+            is_admin: user.roles.contains(&ADMINS_ROLE.to_owned()),
             xsrf_token: user_token.xsrf_token,
         }),
     ))

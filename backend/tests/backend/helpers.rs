@@ -316,6 +316,7 @@ pub fn create_default_config(
             auth_url: format!("http://localhost:{mock_oauth2_port}/authorize"),
             token_url: format!("http://localhost:{mock_oauth2_port}/token"),
             userinfo_url: format!("http://localhost:{mock_oauth2_port}/userinfo"),
+            admins_group: Some("TO_BECOME_ADMINS".to_owned()),
         }),
     }
 }
