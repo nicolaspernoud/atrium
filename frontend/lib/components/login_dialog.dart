@@ -61,7 +61,9 @@ class _LoginDialogState extends State<LoginDialog> {
                   decoration:
                       InputDecoration(labelText: tr(context, "hostname")),
                   onChanged: (text) {
-                    App().prefs.hostname = text;
+                    setState(() {
+                      App().prefs.hostname = text;
+                    });
                   },
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -126,14 +128,30 @@ class _LoginDialogState extends State<LoginDialog> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            TextButton.icon(
-              icon: const Icon(Icons.login), // Your icon here
-              label: const Text("Open Id Connect"), // Your text here
-              onPressed: () {
-                openIdConnectLogin(context);
+            FutureBuilder(
+              future: ApiProvider().hasOIDC(),
+              builder: (BuildContext context, AsyncSnapshot<bool> snapshot) {
+                Widget child;
+                if (snapshot.hasData && snapshot.data == true) {
+                  child = TextButton.icon(
+                    icon: const Icon(Icons.login), // Your icon here
+                    label: const Text("OpenID Connect"), // Your text here
+                    onPressed: () {
+                      openIdConnectLogin(context);
+                    },
+                  );
+                } else {
+                  child = Container();
+                }
+                return AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 250),
+                  child: child,
+                );
               },
             ),
-            TextButton(
+            TextButton.icon(
+              icon: const Icon(Icons.check_rounded), // Your icon here
+              label: const Text("OK"), // Your text here
               onPressed: () async {
                 if (widget.formKey.currentState!.validate()) {
                   try {
@@ -157,8 +175,7 @@ class _LoginDialogState extends State<LoginDialog> {
                   }
                 }
               },
-              child: const Text('OK'),
-            ),
+            )
           ],
         ),
       ],

@@ -1,12 +1,13 @@
+use crate::middlewares::debug_cors_middleware;
 use axum::{
     extract::Query,
+    middleware,
     response::{IntoResponse, Redirect},
     routing::{get, post},
     Router,
 };
 use http::header;
 use serde::Deserialize;
-
 use std::net::TcpListener;
 
 pub async fn mock_proxied_server(listener: TcpListener) {
@@ -29,7 +30,10 @@ pub async fn mock_oauth2_server(listener: TcpListener) {
         .route("/token", post(token))
         .route("/userinfo", get(userinfo))
         .route("/admininfo", get(admininfo))
-        .route("/logout", get(logout));
+        .route("/logout", get(logout))
+        .layer(middleware::from_fn(move |req, next| {
+            debug_cors_middleware(req, next)
+        }));
 
     axum::Server::from_tcp(listener)
         .expect("failed to build mock server")

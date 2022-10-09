@@ -64,6 +64,16 @@ class ApiProvider {
     }
   }
 
+  Future<bool> hasOIDC() async {
+    _dio.options.baseUrl = App().prefs.hostname;
+    try {
+      await _dio.get('/auth/oauth2login');
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<String?> getShareToken(String hostname, String path,
       {String shareWith = "", int? shareForDays}) async {
     _dio.options.baseUrl = App().prefs.hostname;
