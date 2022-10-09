@@ -1,4 +1,6 @@
+import 'package:atrium/globals.dart';
 import 'package:atrium/i18n.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import 'package:webdav_client/webdav_client.dart';
@@ -15,15 +17,17 @@ class MediaPlayer extends StatefulWidget {
 
 class _MediaPlayerState extends State<MediaPlayer> {
   late VideoPlayerController _controller;
+  Map<String, String> headers = {};
 
   @override
   void initState() {
     super.initState();
-    _controller = VideoPlayerController.network(
-      widget.uri,
-      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: false),
-    );
-
+    if (!kIsWeb) {
+      headers = {"cookie": App().cookie, "xsrf-token": App().xsrfToken};
+    }
+    _controller = VideoPlayerController.network(widget.uri,
+        videoPlayerOptions: VideoPlayerOptions(mixWithOthers: false),
+        httpHeaders: headers);
     _controller.addListener(() {
       setState(() {});
     });

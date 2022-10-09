@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:atrium/components/delete_dialog.dart';
 import 'package:atrium/components/image_viewer.dart';
 import 'package:atrium/components/media_player.dart';
@@ -14,6 +12,7 @@ import 'package:atrium/models/api_provider.dart';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:filesize/filesize.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mime/mime.dart';
 import 'package:provider/provider.dart';
@@ -418,11 +417,13 @@ class ExplorerState extends State<Explorer> {
                   launchUrl(launchUri);
                 } else if (mimeType.contains("video/") ||
                     mimeType.contains("audio/")) {
-                  var shareToken = await ApiProvider().getShareToken(
-                      widget.url.split("://")[1].split(":")[0], file.path!,
-                      shareWith: "media_player", shareForDays: 1);
-                  var uri =
-                      '${widget.url}${escapePath(file.path!)}?token=$shareToken';
+                  String uri = '${widget.url}${escapePath(file.path!)}';
+                  if (kIsWeb) {
+                    var shareToken = await ApiProvider().getShareToken(
+                        widget.url.split("://")[1].split(":")[0], file.path!,
+                        shareWith: "media_player", shareForDays: 1);
+                    uri = '$uri?token=$shareToken';
+                  }
                   if (!mounted) return;
                   Navigator.push(
                       context,
