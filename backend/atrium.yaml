@@ -8,6 +8,7 @@ session_duration_days: 1
 onlyoffice_config:
   title: AtriumOffice
   server: http://onlyoffice.atrium.127.0.0.1.nip.io:8080
+  jwt_secret: CHANGE_ME_IN_PRODUCTION
 openid_config:
   client_id: dummy
   client_secret: dummy

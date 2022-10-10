@@ -28,6 +28,7 @@ pub struct OnlyOfficeConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
     pub server: String,
+    pub jwt_secret: String,
 }
 
 #[derive(Deserialize, Serialize, Debug, Default, PartialEq, Clone)]

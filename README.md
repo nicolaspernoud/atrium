@@ -14,7 +14,6 @@ Rust/Flutter version of Vestibule.
 - [ ] Lifetimes for non serialized structs
 - [ ] Remove axum macros
 - [ ] Check that there is enough tests
-- [ ] Add OnlyOffice JWT security
 
 ### Frontend
 

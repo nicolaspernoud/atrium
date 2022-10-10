@@ -308,6 +308,7 @@ pub fn create_default_config(
         onlyoffice_config: Some(OnlyOfficeConfig {
             title: Some("AtriumOffice".to_owned()),
             server: "http://onlyoffice.atrium.io".to_owned(),
+            jwt_secret: "CHANGE_ME_IN_PRODUCTION".to_owned(),
         }),
         openid_config: Some(OpenIdConfig {
             client_id: "dummy".to_owned(),

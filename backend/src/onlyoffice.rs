@@ -37,7 +37,11 @@ pub async fn onlyoffice_page(
         let response = template
             .replace("{{.Title}}", &title)
             .replace("{{.OnlyOfficeServer}}", server)
-            .replace("{{.Hostname}}", &config.full_hostname());
+            .replace("{{.Hostname}}", &config.full_hostname())
+            .replace(
+                "{{.JwtSecret}}",
+                &config.onlyoffice_config.as_ref().unwrap().jwt_secret,
+            );
         Ok(Html(response))
     } else {
         Ok(Html("OnlyOffice is not fully configured !".to_owned()))
