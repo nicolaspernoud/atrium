@@ -28,7 +28,7 @@ use crate::{
     sysinfo::system_info,
     users::{
         add_user, cookie_to_body, delete_user, get_share_token, get_users, list_services,
-        local_auth,
+        local_auth, whoami,
     },
 };
 
@@ -54,6 +54,7 @@ impl Server {
         let http_port = config.0.http_port;
 
         let user_router = Router::new()
+            .route("/whoami", get(whoami))
             .route("/list_services", get(list_services))
             .route("/system_info", get(system_info))
             .route(

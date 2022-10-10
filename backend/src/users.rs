@@ -29,6 +29,7 @@ static COOKIE_NAME: &str = "ATRIUM_AUTH";
 static SHARE_TOKEN: &str = "SHARE_TOKEN";
 static WWWAUTHENTICATE: HeaderName = HeaderName::from_static("www-authenticate");
 pub static ADMINS_ROLE: &str = "ADMINS";
+pub static REDACTED: &str = "REDACTED";
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct User {
@@ -415,14 +416,14 @@ fn strip_sensitive_data_and_push_to_vec(h: &HostType, apps: &mut Vec<App>, davs:
     match h {
         HostType::ReverseApp(s) => {
             let mut s = s.inner.clone();
-            s.login = "REDACTED".to_owned();
-            s.password = "REDACTED".to_owned();
+            s.login = REDACTED.to_owned();
+            s.password = REDACTED.to_owned();
             apps.push(s);
         }
         HostType::StaticApp(s) => {
             let mut s = s.clone();
-            s.login = "REDACTED".to_owned();
-            s.password = "REDACTED".to_owned();
+            s.login = REDACTED.to_owned();
+            s.password = REDACTED.to_owned();
             apps.push(s);
         }
         HostType::Dav(s) => {
@@ -456,6 +457,16 @@ pub async fn list_services(
         }
     }
     Json((apps, davs))
+}
+
+#[axum_macros::debug_handler]
+pub async fn whoami(token: UserTokenWithoutXSRFCheck) -> Json<User> {
+    let user = User {
+        login: token.0.login,
+        password: REDACTED.to_owned(),
+        roles: token.0.roles,
+    };
+    Json(user)
 }
 
 #[axum_macros::debug_handler]

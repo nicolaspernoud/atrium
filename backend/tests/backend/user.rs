@@ -1,4 +1,4 @@
-use atrium::sysinfo::SystemInfo;
+use atrium::{sysinfo::SystemInfo, users::User};
 use hyper::StatusCode;
 
 use crate::helpers::TestApp;
@@ -301,4 +301,33 @@ async fn get_system_info_test() {
     assert_eq!(response.status(), StatusCode::OK);
     let system_info = response.json::<SystemInfo>().await.unwrap();
     assert!(system_info.used_memory <= system_info.total_memory);
+}
+
+#[tokio::test]
+async fn whoami_test() {
+    // Arrange
+    let app = TestApp::spawn(None).await;
+    // Log as user
+    let response = app
+        .client
+        .post(format!("http://atrium.io:{}/auth/local", app.port))
+        .body(r#"{"login":"user","password":"password"}"#)
+        .header("Content-Type", "application/json")
+        .send()
+        .await
+        .expect("failed to execute request");
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Act and Assert : Test that the whoami route sends back who we are
+    let response = app
+        .client
+        .get(format!("http://atrium.io:{}/api/user/whoami", app.port))
+        .header("Content-Type", "application/json")
+        .send()
+        .await
+        .expect("failed to execute request");
+    assert_eq!(response.status(), StatusCode::OK);
+    let user = response.json::<User>().await.unwrap();
+    assert_eq!(user.login, "user");
+    assert_eq!(user.password, "REDACTED");
 }
