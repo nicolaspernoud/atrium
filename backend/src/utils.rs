@@ -46,9 +46,24 @@ where
     Ok(de_vec)
 }
 
+pub fn option_vec_trim_remove_empties<'de, D>(d: D) -> Result<Option<Vec<String>>, D::Error>
+where
+    D: de::Deserializer<'de>,
+{
+    let de_vec: Option<Vec<String>> = Option::deserialize(d)?;
+    Ok(de_vec.map(|mut e| {
+        e.iter_mut()
+            .map(|s| s.trim_in_place().to_owned())
+            .filter(|s| !s.is_empty())
+            .collect()
+    }))
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::utils::{option_string_trim, string_trim, vec_trim_remove_empties};
+    use crate::utils::{
+        option_string_trim, option_vec_trim_remove_empties, string_trim, vec_trim_remove_empties,
+    };
     use serde::Deserialize;
 
     #[test]
@@ -98,5 +113,23 @@ mod tests {
         assert!(foo.names.len() == 2);
         assert_eq!(foo.names[0], "to_keep");
         assert_eq!(foo.names[1], "to_trim");
+    }
+
+    #[test]
+    fn test_option_vec_trim_remove_empties() {
+        #[derive(Deserialize)]
+        struct Foo {
+            #[serde(default, deserialize_with = "option_vec_trim_remove_empties")]
+            names: Option<Vec<String>>,
+        }
+        let json = r#"{"names":["to_keep","  to_trim  ","","     "]}"#;
+        let foo = serde_json::from_str::<Foo>(json).unwrap();
+        let names = foo.names.unwrap();
+        assert!(names.len() == 2);
+        assert_eq!(names[0], "to_keep");
+        assert_eq!(names[1], "to_trim");
+        let json = r#"{}"#;
+        let foo = serde_json::from_str::<Foo>(json).unwrap();
+        assert!(foo.names.is_none());
     }
 }

@@ -23,7 +23,7 @@ use tracing::error;
 use crate::{
     configuration::{config_or_error, Config, ConfigFile, HostType},
     users::{check_authorization, AdminToken, UserTokenWithoutXSRFCheck},
-    utils::{string_trim, vec_trim_remove_empties},
+    utils::{option_vec_trim_remove_empties, string_trim, vec_trim_remove_empties},
 };
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -48,6 +48,12 @@ pub struct App {
     #[serde(deserialize_with = "vec_trim_remove_empties")]
     pub roles: Vec<String>,
     pub inject_security_headers: bool,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "option_vec_trim_remove_empties"
+    )]
+    pub subdomains: Option<Vec<String>>,
 }
 
 #[derive(PartialEq, Debug, Clone)]

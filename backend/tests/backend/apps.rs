@@ -128,6 +128,52 @@ async fn proxy_test() {
 }
 
 #[tokio::test]
+async fn subdomains_test() {
+    // Arrange
+    let app = TestApp::spawn(None).await;
+
+    // Act
+    let response = app
+        .client
+        .get(format!(
+            "http://app1-subdomain1.app1.atrium.io:{}",
+            app.port
+        ))
+        .send()
+        .await
+        .expect("failed to execute request");
+
+    // Assert
+    assert!(response.status().is_success());
+    assert!(!response.headers().contains_key("Content-Security-Policy"));
+    assert!(response
+        .text()
+        .await
+        .unwrap()
+        .contains("Hello world from mock server"));
+
+    // Act
+    let response = app
+        .client
+        .get(format!(
+            "http://app1.subdomain2.app1.atrium.io:{}",
+            app.port
+        ))
+        .send()
+        .await
+        .expect("failed to execute request");
+
+    // Assert
+    assert!(response.status().is_success());
+    assert!(!response.headers().contains_key("Content-Security-Policy"));
+    assert!(response
+        .text()
+        .await
+        .unwrap()
+        .contains("Hello world from mock server"));
+}
+
+#[tokio::test]
 async fn static_test() {
     // Arrange
     let app = TestApp::spawn(None).await;
@@ -264,6 +310,7 @@ async fn redirect_test() {
             openpath: "".to_owned(),
             roles: vec![],
             inject_security_headers: false,
+            subdomains: None,
         },
         App {
             id: 1,
@@ -279,6 +326,7 @@ async fn redirect_test() {
             openpath: "".to_owned(),
             roles: vec![],
             inject_security_headers: true,
+            subdomains: None,
         },
         App {
             id: 1,
@@ -294,6 +342,7 @@ async fn redirect_test() {
             openpath: "".to_owned(),
             roles: vec![],
             inject_security_headers: true,
+            subdomains: None,
         },
     ];
 

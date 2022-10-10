@@ -108,6 +108,8 @@ impl TestApp {
             .resolve("fwdtoredirect.atrium.io", main_addr)
             .resolve("relativeredirect.atrium.io", main_addr)
             .resolve("absoluteredirect.atrium.io", main_addr)
+            .resolve("app1-subdomain1.app1.atrium.io", main_addr)
+            .resolve("app1.subdomain2.app1.atrium.io", main_addr)
             .cookie_store(true)
             .build()
             .unwrap();
@@ -159,6 +161,10 @@ pub fn create_default_config(
             openpath: "".to_owned(),
             roles: vec!["ADMINS".to_owned(), "USERS".to_owned()],
             inject_security_headers: false,
+            subdomains: Some(vec![
+                "app1-subdomain1".to_owned(),
+                "app1.subdomain2".to_owned(),
+            ]),
         },
         App {
             id: 2,
@@ -174,6 +180,7 @@ pub fn create_default_config(
             openpath: "/javascript_simple.html".to_owned(),
             roles: vec!["ADMINS".to_owned()],
             inject_security_headers: true,
+            subdomains: None,
         },
         App {
             id: 3,
@@ -189,6 +196,7 @@ pub fn create_default_config(
             openpath: "".to_owned(),
             roles: vec!["ADMINS".to_owned()],
             inject_security_headers: true,
+            subdomains: None,
         },
         App {
             id: 4,
@@ -204,6 +212,7 @@ pub fn create_default_config(
             openpath: "".to_owned(),
             roles: vec!["ADMINS".to_owned()],
             inject_security_headers: true,
+            subdomains: None,
         },
     ];
 

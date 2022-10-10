@@ -14,6 +14,7 @@ class AppModel implements Model {
     this.color = const Color(0xffd32f2f),
     this.isProxy = true,
     this.host = "",
+    this.subdomains = const [],
     this.target = "",
     this.secured = true,
     this.login = "",
@@ -32,6 +33,7 @@ class AppModel implements Model {
   late bool isProxy;
   @override
   late String host;
+  late List<String> subdomains;
   late String target;
   late bool secured;
   late String login;
@@ -47,6 +49,9 @@ class AppModel implements Model {
     color = Color(json['color']);
     isProxy = json['is_proxy'];
     host = json['host'];
+    subdomains = json['subdomains'] != null
+        ? List.castFrom<dynamic, String>(json['subdomains'])
+        : [];
     target = json['target'];
     secured = json['secured'];
     login = json['login'];
@@ -64,6 +69,8 @@ class AppModel implements Model {
     data['color'] = color.value;
     data['is_proxy'] = isProxy;
     data['host'] = host;
+    data['subdomains'] =
+        subdomains.isNotEmpty && subdomains[0].isNotEmpty ? subdomains : null;
     data['target'] = target;
     data['secured'] = secured;
     data['login'] = login;

@@ -127,6 +127,14 @@ class CreateEditAppState extends State<CreateEditApp> {
                       },
                     ),
                     TextFormField(
+                      initialValue: widget.app.subdomains.join(","),
+                      decoration:
+                          InputDecoration(labelText: tr(context, "subdomains")),
+                      onChanged: (value) {
+                        widget.app.subdomains = value.split(",");
+                      },
+                    ),
+                    TextFormField(
                       initialValue: widget.app.target,
                       decoration:
                           InputDecoration(labelText: tr(context, "target")),

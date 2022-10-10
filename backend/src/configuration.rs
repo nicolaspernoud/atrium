@@ -154,6 +154,17 @@ impl Config {
             )
             .collect::<Vec<String>>();
         domains.insert(0, self.hostname.to_owned());
+        // Insert apps subdomains
+        for app in &self.apps {
+            for domain in app.subdomains.as_ref().unwrap_or(&Vec::new()) {
+                domains.push(format!(
+                    "{}.{}.{}",
+                    domain,
+                    app.host.to_owned(),
+                    self.hostname
+                ));
+            }
+        }
         domains
     }
 }
@@ -171,26 +182,18 @@ pub async fn load_config(
     if let Some(h) = std::env::var("MAIN_HOSTNAME").ok() {
         config.hostname = h
     }
-    let hashmap = config
+    let port = if config.tls_mode.is_secure() {
+        None
+    } else {
+        Some(config.http_port)
+    };
+    let mut hashmap: ConfigMap = config
         .apps
         .iter()
         .map(|app| {
-            let port = if config.tls_mode.is_secure() {
-                None
-            } else {
-                Some(config.http_port)
-            };
             (
                 format!("{}.{}", app.host.to_owned(), config.hostname),
-                if app.is_proxy {
-                    HostType::ReverseApp(AppWithUri::from_app_domain_and_http_port(
-                        app.clone(),
-                        &config.hostname,
-                        port,
-                    ))
-                } else {
-                    HostType::StaticApp(app.clone())
-                },
+                app_to_host_type(&app, &config, port),
             )
         })
         .chain(config.davs.iter().map(|dav| {
@@ -202,7 +205,28 @@ pub async fn load_config(
             )
         }))
         .collect();
+    // Insert apps subdomains
+    for app in &config.apps {
+        for domain in app.subdomains.as_ref().unwrap_or(&Vec::new()) {
+            hashmap.insert(
+                format!("{}.{}.{}", domain, app.host.to_owned(), config.hostname),
+                app_to_host_type(&app, &config, port),
+            );
+        }
+    }
     Ok((Arc::new(config), Arc::new(hashmap)))
+}
+
+fn app_to_host_type(app: &App, config: &Config, port: Option<u16>) -> HostType {
+    if app.is_proxy {
+        HostType::ReverseApp(AppWithUri::from_app_domain_and_http_port(
+            app.clone(),
+            &config.hostname,
+            port,
+        ))
+    } else {
+        HostType::StaticApp(app.clone())
+    }
 }
 
 pub async fn config_or_error(config_file: &str) -> Result<Config, (StatusCode, &'static str)> {
@@ -313,6 +337,7 @@ mod tests {
                     openpath: "".to_owned(),
                     roles: vec!["ADMINS".to_owned(), "USERS".to_owned()],
                     inject_security_headers: true,
+                    subdomains: None
                 },
                 App {
                     id: 2,
@@ -328,6 +353,7 @@ mod tests {
                     openpath: "/javascript_simple.html".to_owned(),
                     roles: vec!["ADMINS".to_owned()],
                     inject_security_headers: true,
+                    subdomains: None
                 },
             ]
         };

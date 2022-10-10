@@ -33,6 +33,7 @@ apps:
       - ADMINS
       - USERS
     inject_security_headers: false
+    subdomains: [app1-subdomain1, app1.subdomain2]
   - id: 2
     name: App 2
     icon: 62783
