@@ -85,6 +85,7 @@ pub struct Config {
     pub session_duration_days: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub onlyoffice_config: Option<OnlyOfficeConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub openid_config: Option<OpenIdConfig>,
     pub apps: Vec<App>,
     pub davs: Vec<Dav>,

@@ -13,8 +13,7 @@ name = "atrium"
 [dependencies]
 anyhow = "1.0"
 argon2 = "0.4"
-async_zip = "0.0.8"
-async-rustls = "0.2"
+async_zip = "0.0.9"
 async-stream = "0.3"
 async-walkdir = "0.2"
 axum = { version="0.5", features = ["headers"] }
@@ -30,9 +29,8 @@ futures-util = "0.3"
 headers = "0.3"
 hyper = { version = "0.14", features = ["client"] }
 hyper-reverse-proxy = { git = "https://github.com/felipenoris/hyper-reverse-proxy", branch = "master" }
-hyper-trust-dns = { version = "0.4", default-features = false, features = [
+hyper-trust-dns = { version = "0.5", default-features = false, features = [
   "rustls-http2",
-  "dnssec-ring",
   "dns-over-https-rustls",
   "rustls-webpki",
 ] }

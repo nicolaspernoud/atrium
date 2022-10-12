@@ -29,10 +29,7 @@ use super::{
 };
 use crate::davs::{dav_file::DavFile, headers::Overwrite};
 use async_walkdir::WalkDir;
-use async_zip::{
-    write::{EntryOptions, ZipFileWriter},
-    Compression,
-};
+use async_zip::{write::ZipFileWriter, Compression, ZipEntryBuilder};
 use chrono::{TimeZone, Utc};
 use futures::TryStreamExt;
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
@@ -1072,7 +1069,7 @@ async fn zip_dir<W: AsyncWrite + Unpin>(
                 Some(v) => v,
                 None => continue,
             };
-            let entry_options = EntryOptions::new(filename.to_owned(), Compression::Deflate);
+            let entry_options = ZipEntryBuilder::new(filename.to_owned(), Compression::Deflate);
             let file = DavFile::open(&entry_path, key).await?;
             let mut file_writer = writer.write_entry_stream(entry_options).await?;
 
