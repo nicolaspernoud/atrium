@@ -12,8 +12,6 @@ Rust/Flutter version of Vestibule.
 
 - [ ] Remove clones, panics, expects, unwraps, println!, etc.
 - [ ] Lifetimes for non serialized structs
-- [ ] Remove axum macros
-- [ ] Check that there is enough tests
 - [ ] Move OnlyOffice JWT to backend
 - [ ] Performance tests and improvements
 

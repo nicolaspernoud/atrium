@@ -11,6 +11,7 @@ import 'package:atrium/models/api_provider.dart';
 import 'package:atrium/utils.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 
 import '../globals.dart';
 import '../models/app.dart';
@@ -99,91 +100,136 @@ class _AppsListState extends State<AppsList> {
   }
 
   Widget _buildListView(BuildContext context, List<AppModel> list) {
-    return Wrap(
+    return GridView.extent(
+        maxCrossAxisExtent: 200,
+        padding: const EdgeInsets.all(8),
+        mainAxisSpacing: 8,
+        crossAxisSpacing: 8,
         children: list
-            .map((app) => Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Card(
-                    child: ListTile(
-                      leading: Icon(
-                        IconData(app.icon, fontFamily: 'MaterialIcons'),
-                        color: app.color,
-                        size: 50,
-                        shadows: const <Shadow>[
-                          Shadow(
-                              color: Colors.black87,
-                              blurRadius: 1.0,
-                              offset: Offset(1, 1))
-                        ],
-                      ),
-                      title: Padding(
-                        padding: const EdgeInsets.all(20.0),
-                        child: Text(
-                          app.name,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
+            .map((app) => Card(
+                  clipBehavior: Clip.antiAlias,
+                  elevation: 5.0,
+                  child: Container(
+                    decoration: BoxDecoration(
+                        border: Border(
+                            left: BorderSide(color: app.color, width: 5))),
+                    child: InkWell(
                       onTap: () {
                         _openAppInWebView(context, app);
                       },
-                      trailing: App().isAdmin
-                          ? PopupMenuButton(
-                              itemBuilder: (BuildContext context) =>
-                                  <PopupMenuEntry>[
-                                    PopupMenuItem(
-                                        onTap: () {
-                                          WidgetsBinding.instance
-                                              .addPostFrameCallback((_) async {
-                                            await Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (context) =>
-                                                      CreateEditApp(
-                                                          app: app,
-                                                          isNew: false),
-                                                ));
-                                            await _getData();
-                                            setState(() {});
-                                          });
-                                        },
-                                        child: Row(
-                                          children: [
-                                            const Padding(
-                                              padding: EdgeInsets.all(8.0),
-                                              child: Icon(Icons.edit),
-                                            ),
-                                            Text(tr(context, "edit"))
-                                          ],
-                                        )),
-                                    PopupMenuItem(
-                                        onTap: () {
-                                          WidgetsBinding.instance
-                                              .addPostFrameCallback((_) async {
-                                            var confirmed =
-                                                await showDialog<bool>(
-                                              context: context,
-                                              builder: (context) =>
-                                                  DeleteDialog(app.name),
-                                            );
-                                            if (confirmed!) {
-                                              await ApiProvider()
-                                                  .deleteApp(app.id);
-                                              await _getData();
-                                              setState(() {});
-                                            }
-                                          });
-                                        },
-                                        child: Row(
-                                          children: [
-                                            const Padding(
-                                              padding: EdgeInsets.all(8.0),
-                                              child: Icon(Icons.delete_forever),
-                                            ),
-                                            Text(tr(context, "delete"))
-                                          ],
-                                        )),
-                                  ])
-                          : null,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(12.0),
+                            child: Icon(
+                              IconData(app.icon, fontFamily: 'MaterialIcons'),
+                              color: app.color,
+                              size: 70,
+                              shadows: const <Shadow>[
+                                Shadow(
+                                    color: Colors.black87,
+                                    blurRadius: 1.0,
+                                    offset: Offset(1, 1))
+                              ],
+                            ),
+                          ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12.0),
+                                  child: Text(
+                                    app.name,
+                                    overflow: TextOverflow.fade,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ),
+                              PopupMenuButton(
+                                  itemBuilder: (BuildContext context) =>
+                                      <PopupMenuEntry>[
+                                        PopupMenuItem(
+                                            onTap: () {
+                                              launchUrlString(modelUrl(app));
+                                            },
+                                            child: Row(
+                                              children: [
+                                                const Padding(
+                                                  padding: EdgeInsets.all(8.0),
+                                                  child: Icon(Icons.tab),
+                                                ),
+                                                Text(tr(
+                                                    context, "open_in_new_tab"))
+                                              ],
+                                            )),
+                                        if (App().isAdmin) ...[
+                                          PopupMenuItem(
+                                              onTap: () {
+                                                WidgetsBinding.instance
+                                                    .addPostFrameCallback(
+                                                        (_) async {
+                                                  await Navigator.push(
+                                                      context,
+                                                      MaterialPageRoute(
+                                                        builder: (context) =>
+                                                            CreateEditApp(
+                                                                app: app,
+                                                                isNew: false),
+                                                      ));
+                                                  await _getData();
+                                                  setState(() {});
+                                                });
+                                              },
+                                              child: Row(
+                                                children: [
+                                                  const Padding(
+                                                    padding:
+                                                        EdgeInsets.all(8.0),
+                                                    child: Icon(Icons.edit),
+                                                  ),
+                                                  Text(tr(context, "edit"))
+                                                ],
+                                              )),
+                                          PopupMenuItem(
+                                              onTap: () {
+                                                WidgetsBinding.instance
+                                                    .addPostFrameCallback(
+                                                        (_) async {
+                                                  var confirmed =
+                                                      await showDialog<bool>(
+                                                    context: context,
+                                                    builder: (context) =>
+                                                        DeleteDialog(app.name),
+                                                  );
+                                                  if (confirmed!) {
+                                                    await ApiProvider()
+                                                        .deleteApp(app.id);
+                                                    await _getData();
+                                                    setState(() {});
+                                                  }
+                                                });
+                                              },
+                                              child: Row(
+                                                children: [
+                                                  const Padding(
+                                                    padding:
+                                                        EdgeInsets.all(8.0),
+                                                    child: Icon(
+                                                        Icons.delete_forever),
+                                                  ),
+                                                  Text(tr(context, "delete"))
+                                                ],
+                                              ))
+                                        ],
+                                      ])
+                            ],
+                          )
+                        ],
+                      ),
                     ),
                   ),
                 ))

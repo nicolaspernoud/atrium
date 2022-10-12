@@ -54,10 +54,7 @@ class _LoginDialogState extends State<LoginDialog> {
             children: [
               if (!kIsWeb || kDebugMode)
                 TextFormField(
-                  //initialValue: App().prefs.hostname,
-                  initialValue: App().prefs.hostname != ""
-                      ? App().prefs.hostname
-                      : "http://atrium.127.0.0.1.nip.io:8080-",
+                  initialValue: App().prefs.hostname,
                   decoration:
                       InputDecoration(labelText: tr(context, "hostname")),
                   onChanged: (text) {
@@ -112,6 +109,7 @@ class _LoginDialogState extends State<LoginDialog> {
                   }
                   return null;
                 },
+                onFieldSubmitted: (value) => submitForm(),
               ),
               Expanded(
                 child: Container(),
@@ -150,35 +148,36 @@ class _LoginDialogState extends State<LoginDialog> {
               },
             ),
             TextButton.icon(
-              icon: const Icon(Icons.check_rounded), // Your icon here
-              label: const Text("OK"), // Your text here
-              onPressed: () async {
-                if (widget.formKey.currentState!.validate()) {
-                  try {
-                    await ApiProvider().login(login, password);
-                    if (!widget.mounted) return;
-                    Navigator.pop(context, 'OK');
-                  } catch (e) {
-                    if (e is DioError && e.response?.statusCode == 401) {
-                      setState(() {
-                        errorMessage = tr(context, "login_failed");
-                      });
-                    } else {
-                      setState(() {
-                        errorMessage = tr(context, "could_not_reach_server");
-                      });
-                    }
-                    await Future.delayed(const Duration(seconds: 3));
-                    setState(() {
-                      errorMessage = "";
-                    });
-                  }
-                }
-              },
-            )
+                icon: const Icon(Icons.check_rounded), // Your icon here
+                label: const Text("OK"), // Your text here
+                onPressed: submitForm)
           ],
         ),
       ],
     );
+  }
+
+  Future<void> submitForm() async {
+    if (widget.formKey.currentState!.validate()) {
+      try {
+        await ApiProvider().login(login, password);
+        if (!widget.mounted) return;
+        Navigator.pop(context, 'OK');
+      } catch (e) {
+        if (e is DioError && e.response?.statusCode == 401) {
+          setState(() {
+            errorMessage = tr(context, "login_failed");
+          });
+        } else {
+          setState(() {
+            errorMessage = tr(context, "could_not_reach_server");
+          });
+        }
+        await Future.delayed(const Duration(seconds: 3));
+        setState(() {
+          errorMessage = "";
+        });
+      }
+    }
   }
 }

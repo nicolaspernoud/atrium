@@ -98,121 +98,158 @@ class _DavsListState extends State<DavsList> {
   }
 
   Widget _buildListView(BuildContext context, List<DavModel> list) {
-    return Wrap(
+    return GridView.extent(
+        maxCrossAxisExtent: 200,
+        padding: const EdgeInsets.all(8),
+        mainAxisSpacing: 8,
+        crossAxisSpacing: 8,
         children: list.map((dav) {
-      var diskusage = ApiProvider().getDiskInfo(dav);
-      return Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: Card(
-          child: ListTile(
-            leading: Icon(
-              IconData(dav.icon, fontFamily: 'MaterialIcons'),
-              color: dav.color,
-              size: 50,
-              shadows: const <Shadow>[
-                Shadow(
-                    color: Colors.black87,
-                    blurRadius: 1.0,
-                    offset: Offset(1, 1))
-              ],
-            ),
-            title: Padding(
-              padding:
-                  const EdgeInsets.only(top: 20.0, left: 20.0, right: 20.0),
-              child: Text(
-                dav.name,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-            subtitle: Padding(
-              padding:
-                  const EdgeInsets.only(left: 20.0, right: 20.0, bottom: 20.0),
-              child: FutureBuilder<DiskInfo>(
-                future: diskusage,
-                builder:
-                    (BuildContext context, AsyncSnapshot<DiskInfo> snapshot) {
-                  if (snapshot.hasData) {
-                    return Row(
+          var diskusage = ApiProvider().getDiskInfo(dav);
+          return Card(
+            clipBehavior: Clip.antiAlias,
+            elevation: 5.0,
+            child: Container(
+              decoration: BoxDecoration(
+                  border: Border(left: BorderSide(color: dav.color, width: 5))),
+              child: InkWell(
+                onTap: () {
+                  _openExplorer(context, dav);
+                },
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(12.0),
+                      child: Icon(
+                        IconData(dav.icon, fontFamily: 'MaterialIcons'),
+                        color: dav.color,
+                        size: 70,
+                        shadows: const <Shadow>[
+                          Shadow(
+                              color: Colors.black87,
+                              blurRadius: 1.0,
+                              offset: Offset(1, 1))
+                        ],
+                      ),
+                    ),
+                    Column(
                       children: [
-                        Expanded(
-                          child: LinearProgressIndicator(
-                            value: snapshot.data?.spaceUsage,
-                            color: colorFromPercent(snapshot.data?.spaceUsage),
-                            backgroundColor: Colors.grey[350],
-                          ),
+                        FutureBuilder<DiskInfo>(
+                          future: diskusage,
+                          builder: (BuildContext context,
+                              AsyncSnapshot<DiskInfo> snapshot) {
+                            Widget child;
+                            if (snapshot.hasData) {
+                              child = Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 12),
+                                child: Column(children: [
+                                  LinearProgressIndicator(
+                                    value: snapshot.data?.spaceUsage,
+                                    color: colorFromPercent(
+                                        snapshot.data?.spaceUsage),
+                                    backgroundColor: Colors.grey[350],
+                                  ),
+                                  Text(
+                                    snapshot.data!.usedSpaceLabel,
+                                    textAlign: TextAlign.right,
+                                  ),
+                                ]),
+                              );
+                            } else {
+                              child = const SizedBox(height: 20);
+                            }
+                            return AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 250),
+                              child: child,
+                            );
+                          },
                         ),
-                        Padding(
-                          padding: const EdgeInsets.only(left: 8.0),
-                          child: Text(snapshot.data!.usedSpaceLabel),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.all(12.0),
+                                child: Text(
+                                  dav.name,
+                                  overflow: TextOverflow.fade,
+                                  style: const TextStyle(
+                                      fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+                            if (App().isAdmin)
+                              PopupMenuButton(
+                                  itemBuilder: (BuildContext context) =>
+                                      <PopupMenuEntry>[
+                                        PopupMenuItem(
+                                            onTap: () {
+                                              WidgetsBinding.instance
+                                                  .addPostFrameCallback(
+                                                      (_) async {
+                                                await Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(
+                                                      builder: (context) =>
+                                                          CreateEditDav(
+                                                              dav: dav,
+                                                              isNew: false),
+                                                    ));
+                                                await _getData();
+                                                setState(() {});
+                                              });
+                                            },
+                                            child: Row(
+                                              children: [
+                                                const Padding(
+                                                  padding: EdgeInsets.all(8.0),
+                                                  child: Icon(Icons.edit),
+                                                ),
+                                                Text(tr(context, "edit"))
+                                              ],
+                                            )),
+                                        PopupMenuItem(
+                                            onTap: () {
+                                              WidgetsBinding.instance
+                                                  .addPostFrameCallback(
+                                                      (_) async {
+                                                var confirmed =
+                                                    await showDialog<bool>(
+                                                  context: context,
+                                                  builder: (context) =>
+                                                      DeleteDialog(dav.name),
+                                                );
+                                                if (confirmed!) {
+                                                  await ApiProvider()
+                                                      .deleteDav(dav.id);
+                                                  await _getData();
+                                                  setState(() {});
+                                                }
+                                              });
+                                            },
+                                            child: Row(
+                                              children: [
+                                                const Padding(
+                                                  padding: EdgeInsets.all(8.0),
+                                                  child: Icon(
+                                                      Icons.delete_forever),
+                                                ),
+                                                Text(tr(context, "delete"))
+                                              ],
+                                            )),
+                                      ])
+                          ],
                         )
                       ],
-                    );
-                  } else {
-                    return Container();
-                  }
-                },
+                    ),
+                  ],
+                ),
               ),
             ),
-            onTap: () {
-              _openExplorer(context, dav);
-            },
-            trailing: App().isAdmin
-                ? PopupMenuButton(
-                    itemBuilder: (BuildContext context) => <PopupMenuEntry>[
-                          PopupMenuItem(
-                              onTap: () {
-                                WidgetsBinding.instance
-                                    .addPostFrameCallback((_) async {
-                                  await Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => CreateEditDav(
-                                            dav: dav, isNew: false),
-                                      ));
-                                  await _getData();
-                                  setState(() {});
-                                });
-                              },
-                              child: Row(
-                                children: [
-                                  const Padding(
-                                    padding: EdgeInsets.all(8.0),
-                                    child: Icon(Icons.edit),
-                                  ),
-                                  Text(tr(context, "edit"))
-                                ],
-                              )),
-                          PopupMenuItem(
-                              onTap: () {
-                                WidgetsBinding.instance
-                                    .addPostFrameCallback((_) async {
-                                  var confirmed = await showDialog<bool>(
-                                    context: context,
-                                    builder: (context) =>
-                                        DeleteDialog(dav.name),
-                                  );
-                                  if (confirmed!) {
-                                    await ApiProvider().deleteDav(dav.id);
-                                    await _getData();
-                                    setState(() {});
-                                  }
-                                });
-                              },
-                              child: Row(
-                                children: [
-                                  const Padding(
-                                    padding: EdgeInsets.all(8.0),
-                                    child: Icon(Icons.delete_forever),
-                                  ),
-                                  Text(tr(context, "delete"))
-                                ],
-                              )),
-                        ])
-                : null,
-          ),
-        ),
-      );
-    }).toList());
+          );
+        }).toList());
   }
 }
 

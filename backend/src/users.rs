@@ -238,7 +238,6 @@ pub struct AuthResponse {
     pub xsrf_token: String,
 }
 
-#[axum_macros::debug_handler]
 pub async fn local_auth(
     Extension(reader): Extension<Arc<Option<Reader<Vec<u8>>>>>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
@@ -412,54 +411,35 @@ pub async fn add_user(
     Ok((StatusCode::CREATED, "user created or updated successfully"))
 }
 
-fn strip_sensitive_data_and_push_to_vec(h: &HostType, apps: &mut Vec<App>, davs: &mut Vec<Dav>) {
-    match h {
-        HostType::ReverseApp(s) => {
-            let mut s = s.inner.clone();
-            s.login = REDACTED.to_owned();
-            s.password = REDACTED.to_owned();
-            apps.push(s);
-        }
-        HostType::StaticApp(s) => {
-            let mut s = s.clone();
-            s.login = REDACTED.to_owned();
-            s.password = REDACTED.to_owned();
-            apps.push(s);
-        }
-        HostType::Dav(s) => {
-            let mut s = s.clone();
-            s.passphrase = None;
-            davs.push(s);
-        }
-    }
-}
-
-#[axum_macros::debug_handler]
 pub async fn list_services(
-    config_map: Extension<std::sync::Arc<ConfigMap>>,
+    config: Extension<std::sync::Arc<Config>>,
     user: UserToken,
 ) -> Json<(Vec<App>, Vec<Dav>)> {
-    let mut apps = Vec::new();
-    let mut davs = Vec::new();
-
-    for svc in config_map.iter() {
-        if !svc.1.secured() {
-            strip_sensitive_data_and_push_to_vec(svc.1, &mut apps, &mut davs);
-        } else {
-            'svc_loop: for svc_role in svc.1.roles() {
-                for user_role in user.roles.iter() {
-                    if user_role == svc_role {
-                        strip_sensitive_data_and_push_to_vec(svc.1, &mut apps, &mut davs);
-                        break 'svc_loop;
-                    }
-                }
-            }
-        }
-    }
-    Json((apps, davs))
+    Json((
+        config
+            .apps
+            .iter()
+            .filter(|app| !app.secured || check_user_has_role(&user, &app.roles))
+            .cloned()
+            .map(|mut app| {
+                app.login = REDACTED.to_owned();
+                app.password = REDACTED.to_owned();
+                app
+            })
+            .collect(),
+        config
+            .davs
+            .iter()
+            .filter(|dav| !dav.secured || check_user_has_role(&user, &dav.roles))
+            .cloned()
+            .map(|mut dav| {
+                dav.passphrase = None;
+                dav
+            })
+            .collect(),
+    ))
 }
 
-#[axum_macros::debug_handler]
 pub async fn whoami(token: UserTokenWithoutXSRFCheck) -> Json<User> {
     let user = User {
         login: token.0.login,
@@ -469,7 +449,6 @@ pub async fn whoami(token: UserTokenWithoutXSRFCheck) -> Json<User> {
     Json(user)
 }
 
-#[axum_macros::debug_handler]
 pub async fn get_share_token(
     config_map: Extension<std::sync::Arc<ConfigMap>>,
     Json(share): Json<Share>,
@@ -481,7 +460,7 @@ pub async fn get_share_token(
         .get(&share.hostname)
         .ok_or(StatusCode::FORBIDDEN)?;
     // Check that the user is allowed to access the wanted share
-    if check_user_has_role(&user, to_share) {
+    if check_user_has_role(&user, to_share.roles()) {
         // Create a token with the required information
         let share_login = share
             .share_with
@@ -539,9 +518,9 @@ fn hash_password(payload: &mut User) -> Result<(), argon2::password_hash::Error>
     Ok(())
 }
 
-pub fn check_user_has_role(user: &UserToken, target: &HostType) -> bool {
+pub fn check_user_has_role(user: &UserToken, roles: &Vec<String>) -> bool {
     for user_role in user.roles.iter() {
-        for role in target.roles().iter() {
+        for role in roles.iter() {
             if user_role == role {
                 return true;
             }
@@ -557,7 +536,7 @@ pub fn check_user_has_role_or_forbid(
     path: &str,
 ) -> Option<Response<Body>> {
     if let Some(user) = user {
-        if !check_user_has_role(user, target)
+        if !check_user_has_role(user, target.roles())
             || (user.share.is_some()
                 && (user.share.as_ref().unwrap().path != path
                     || user.share.as_ref().unwrap().hostname != hostname))

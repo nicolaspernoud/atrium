@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -12,7 +12,7 @@ var urlRegExp = RegExp(r"(https|http)?(:\/\/)?([^:]*):?(\d*)?");
 class Preferences with LocalFilePersister {
   Preferences();
 
-  String _hostname = "";
+  String _hostname = kDebugMode ? "http://atrium.127.0.0.1.nip.io:8080" : "";
 
   set hostname(String v) {
     _hostname = v;
