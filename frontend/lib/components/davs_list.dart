@@ -77,7 +77,8 @@ class _DavsListState extends State<DavsList> {
               child: const Icon(Icons.add),
               onPressed: () async {
                 var davs = await ApiProvider().getDavs();
-                var maxId = davs.map((e) => e.id).reduce(max);
+                var maxId =
+                    davs.isNotEmpty ? davs.map((e) => e.id).reduce(max) : 0;
                 var dav = DavModel(id: maxId + 1);
                 if (!mounted) return;
                 await Navigator.push(

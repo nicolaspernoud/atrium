@@ -79,7 +79,8 @@ class _AppsListState extends State<AppsList> {
               child: const Icon(Icons.add),
               onPressed: () async {
                 var apps = await ApiProvider().getApps();
-                var maxId = apps.map((e) => e.id).reduce(max);
+                var maxId =
+                    apps.isNotEmpty ? apps.map((e) => e.id).reduce(max) : 0;
                 var app = AppModel(id: maxId + 1);
                 if (!mounted) return;
                 await Navigator.push(

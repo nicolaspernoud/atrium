@@ -188,16 +188,17 @@ pub async fn proxy_handler(
 
             if let Some(location) = response.headers().get("location") {
                 // parse location as an url
-                let location_uri: Uri = match location.to_str().unwrap().parse() {
-                    Ok(uri) => uri,
-                    Err(e) => {
-                        error!("Proxy uri parse error : {:?}", e);
-                        return Response::builder()
-                            .status(StatusCode::INTERNAL_SERVER_ERROR)
-                            .body(Body::empty())
-                            .unwrap();
-                    }
-                };
+                let location_uri: Uri =
+                    match location.to_str().unwrap().trim_start_matches(".").parse() {
+                        Ok(uri) => uri,
+                        Err(e) => {
+                            error!("Proxy uri parse error : {:?}", e);
+                            return Response::builder()
+                                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                                .body(Body::empty())
+                                .unwrap();
+                        }
+                    };
                 // test if the host of this url contains the target service host
                 if location_uri.host().is_some()
                     && location_uri.host().unwrap().contains(&app.forward_host)
