@@ -137,7 +137,7 @@ async fn shutdown_signal() {
         _ = terminate => {},
     }
 
-    println!("signal received, starting graceful shutdown");
+    info!("signal received, starting graceful shutdown");
 }
 
 fn setup_logger(debug_mode: bool, log_to_file: bool) -> Vec<WorkerGuard> {

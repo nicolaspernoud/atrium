@@ -483,7 +483,7 @@ impl WebdavServer {
         let size = file.len();
 
         if let Some(range) = range {
-            println!("Requesting range: {:?}", range);
+            debug!("Requesting range: {:?}", range);
             if range
                 .end
                 .map_or_else(|| range.start < size, |v| v >= range.start)
