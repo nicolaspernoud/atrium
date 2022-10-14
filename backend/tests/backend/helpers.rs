@@ -56,10 +56,10 @@ impl TestApp {
             &mock_oauth2_port,
         ));
 
-        config.openid_config = config.openid_config.as_ref().map(|oidc| OpenIdConfig {
-            redirect_url: format!("http://atrium.io:{main_port}/auth/oauth2callback"),
-            ..oidc.clone()
-        });
+        if config.hostname.is_empty() {
+            config.hostname = "atrium.io".to_owned();
+            config.http_port = main_port;
+        }
 
         create_apps_file(&id, config).await;
 
@@ -322,7 +322,6 @@ pub fn create_default_config(
         openid_config: Some(OpenIdConfig {
             client_id: "dummy".to_owned(),
             client_secret: "dummy".to_owned(),
-            redirect_url: format!("http://atrium.io:{main_port}/auth/oauth2callback"),
             auth_url: format!("http://localhost:{mock_oauth2_port}/authorize"),
             token_url: format!("http://localhost:{mock_oauth2_port}/token"),
             userinfo_url: format!("http://localhost:{mock_oauth2_port}/userinfo"),

@@ -1,39 +1,39 @@
-hostname: atrium.127.0.0.1.nip.io
-debug_mode: true
-http_port: 8080
-tls_mode: No
-letsencrypt_email: foo@bar.com
-log_to_file: false
-session_duration_days: 1
-onlyoffice_config:
-  title: AtriumOffice
-  server: http://onlyoffice.atrium.127.0.0.1.nip.io:8080
-  jwt_secret: CHANGE_ME_IN_PRODUCTION
-openid_config:
-  client_id: dummy
-  client_secret: dummy
-  redirect_url: http://atrium.127.0.0.1.nip.io:8080/auth/oauth2callback
-  auth_url: http://localhost:8090/authorize
-  token_url: http://localhost:8090/token
-  userinfo_url: http://localhost:8090/userinfo
-  admins_group: TO_BECOME_ADMINS
-apps:
-  - id: 1
-    name: App 1
-    icon: 62783
-    color: 4292030255
-    is_proxy: true
-    host: app1
-    target: localhost:8081
-    secured: false
-    login: admin
-    password: ff54fds6f
-    openpath: ""
-    roles:
+hostname: atrium.127.0.0.1.nip.io # required : fully qualified domain name of the application, can be overridden with the environment variable MAIN_HOSTNAME
+debug_mode: true # optional, defaults to false : prints a lot of debug logs ; disable in production as it has a big performance impact
+http_port: 8080 # required, defaults to 8080 : http port to listen to if tls mode is not Auto
+tls_mode: No # required, defaults to No : use No for development/test http mode, Auto to generate Let's Encrypt certificates automatically (most common production usage) or ̀BehindProxy to use atrium behind a TLS offloading proxy
+letsencrypt_email: foo@bar.com # required if `tls_mode: Auto` is used : email for receiving Let's Encrypt information
+#cookie_key : # required, will be generated on first start : cookies and token signing key !!! SENSITIVE INFORMATION : TO BE KEPT HIDDEN !!!
+log_to_file: false # optional, defaults to false : log to a file in addition to std out
+session_duration_days: 1 # optional, defaults to 1 : lifetime of session cookies in days
+onlyoffice_config: # optional : OnlyOffice connector integration
+  title: AtriumOffice # optional, defaults to AtriumOffice
+  server: http://onlyoffice.atrium.127.0.0.1.nip.io:8080 # required : OnlyOffice server endpoint
+  jwt_secret: CHANGE_ME_IN_PRODUCTION # required : OnlyOffice JWTs signing key
+openid_config: # optional : allow login with OpenID Connect
+  client_id: dummy # required : client id to authenticate Atrium with the Identity Provider
+  client_secret: dummy # required : client secret to authenticate Atrium with the Identity Provider
+  auth_url: http://localhost:8090/authorize # required : Identity Provider's authorization endpoint
+  token_url: http://localhost:8090/token # required : Identity Provider's token endpoint
+  userinfo_url: http://localhost:8090/userinfo # required : Identity Provider's userinfo endpoint
+  admins_group: TO_BECOME_ADMINS # required : group gotten from memberOf attribute that will be mapped to ADMINS role
+apps: # optional : applications served by atrium
+  - id: 1 # required : app id
+    name: App 1 # required : app name
+    icon: 62783 # required : app icon reference
+    color: 4292030255 # required : app color reference
+    is_proxy: true # optional, defaults to false : if false, will serve target as a directory, if true will serve target as a reverse proxy
+    host: app1 # required : subdomain to serve the app from : for example it will respond at app1.atrium.127.0.0.1.nip.io with this configuration
+    target: localhost:8081 # required : target to serve, if is_proxy == false, will serve a directory, if is_proxy == true, will reverse proxy a server, defaulting to http, https can be specified
+    secured: false # optional, defaults to false : if true the app can only be accessed by a logged in user
+    login: admin # optional : if present, it will be used to forge a basic auth header to the proxied app
+    password: ff54fds6f # optional : if present, it will be used to forge a basic auth header to the proxied app
+    openpath: /some/path # optional : if present, this path will be used in to display the app in the UI
+    roles: # optional : user's roles allowed to access the app
       - ADMINS
       - USERS
-    inject_security_headers: false
-    subdomains: [app1-subdomain1, app1.subdomain2]
+    inject_security_headers: true # optional, defaults to false : if true some content security policy headers will be added to the app, following some good practices, and generally allowing the app to be displayed in the UI
+    subdomains: [app1-subdomain1, app1.subdomain2] # optional : subdomains that the app can be reached on : for example this app will respond to app1-subdomain1.app1.atrium.127.0.0.1.nip.io and app1.subdomain2.app1.atrium.127.0.0.1.nip.io in addition to app1.atrium.127.0.0.1.nip.io
   - id: 2
     name: App 2
     icon: 62783
@@ -42,28 +42,15 @@ apps:
     host: app2
     target: localhost:8082
     secured: true
-    login: admin
-    password: ff54fds6f
-    openpath: /javascript_simple.html
     roles:
       - ADMINS
       - USERS
-    inject_security_headers: false
   - id: 3
     name: App Static
     icon: 62783
     color: 4292030255
-    is_proxy: false
     host: static-app
     target: tests/data
-    secured: false
-    login: ""
-    password: ""
-    openpath: ""
-    roles:
-      - ADMINS
-      - USERS
-    inject_security_headers: false
   - id: 4
     name: OnlyOffice
     icon: 59631
@@ -71,44 +58,30 @@ apps:
     is_proxy: true
     host: onlyoffice
     target: localhost:8083
-    secured: false
-    login: ""
-    password: ""
-    openpath: ""
-    roles:
-      - ADMINS
-      - USERS
-    inject_security_headers: false
-davs:
+davs: # optional : webdav services served by atrium
   - id: 1
     host: files1
     directory: ./data/dir1
-    writable: true
     name: Files 1
     icon: 983856
     color: 4292030255
-    secured: false
-    allow_symlinks: false
-    roles:
-      - ADMINS
-      - USERS
-  - id: 2
-    host: files2
-    directory: ./data/dir2
-    writable: true
-    name: Files 2
-    icon: 983856
-    color: 4292030255
-    secured: true
-    allow_symlinks: false
-    roles:
+  - id: 2 # required : dav id
+    host: files2 # required : subdomain to serve the dav from : for example it will respond at files1.atrium.127.0.0.1.nip.io with this configuration
+    directory: ./data/dir2 # required : directory to serve with webdav protocol
+    writable: true # optional, defaults to false : if true the dav is writable
+    name: Files 2 # required : dav name
+    icon: 983856 # required : dav icon reference
+    color: 4292030255 # required : dav color reference
+    secured: true # optional, defaults to false : if true the dav can only be accessed by a logged in user
+    allow_symlinks: false # optional, defaults to false : if true symlinks in the directory will be followed, use with caution
+    roles: # optional : user's roles allowed to access the dav
       - USERS
       - ADMINS
-    passphrase: ABCD123
-users:
-  - login: admin
-    password: $argon2id$v=19$m=4096,t=3,p=1$QWsdpHrjCaPwy3IODegzNA$dqyioLh9ndJ3V7OoKpkCaczJmGNKjuG99F5hisd3bPs
-    roles:
+    passphrase: ABCD123 # optional : if present, the dav's data will be encrypted using this passphrase ; CAUTION : do not change it after set up, nor lose it, or data can be lost !!! SENSITIVE INFORMATION : TO BE KEPT HIDDEN !!!
+users: # optional : users allowed to log in with local authentication, if not present, users will need to use OpenID Connect only
+  - login: admin # required : user login
+    password: $argon2id$v=19$m=4096,t=3,p=1$QWsdpHrjCaPwy3IODegzNA$dqyioLh9ndJ3V7OoKpkCaczJmGNKjuG99F5hisd3bPs # required : hashed user password, do not add user in config file but use API or UI
+    roles: # optional : users roles
       - ADMINS
   - login: user
     password: $argon2id$v=19$m=4096,t=3,p=1$ZH9ZFCT6YjYQpxkNt3SQgQ$g3DQawMEWlU1rnMAserFAzUg3Lg2O80s8eH+PrvmUo0

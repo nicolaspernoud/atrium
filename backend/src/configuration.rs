@@ -2,7 +2,7 @@ use crate::{
     apps::{App, AppWithUri},
     davs::model::Dav,
     users::User,
-    utils::{option_string_trim, string_trim},
+    utils::{is_default, option_string_trim, string_trim},
 };
 use anyhow::Result;
 use axum::{
@@ -25,7 +25,7 @@ fn hostname() -> String {
 
 #[derive(Deserialize, Serialize, Debug, Default, PartialEq, Clone)]
 pub struct OnlyOfficeConfig {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "is_default")]
     pub title: Option<String>,
     pub server: String,
     pub jwt_secret: String,
@@ -35,11 +35,10 @@ pub struct OnlyOfficeConfig {
 pub struct OpenIdConfig {
     pub client_id: String,
     pub client_secret: String,
-    pub redirect_url: String,
     pub auth_url: String,
     pub token_url: String,
     pub userinfo_url: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "is_default")]
     pub admins_group: Option<String>,
 }
 
@@ -65,30 +64,37 @@ impl TlsMode {
 pub struct Config {
     #[serde(default = "hostname", deserialize_with = "string_trim")]
     pub hostname: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_default")]
     pub debug_mode: bool,
     #[serde(default = "http_port")]
     pub http_port: u16,
     #[serde(default)]
     pub tls_mode: TlsMode,
-    #[serde(deserialize_with = "string_trim")]
+    #[serde(
+        default,
+        skip_serializing_if = "is_default",
+        deserialize_with = "string_trim"
+    )]
     pub letsencrypt_email: String,
     #[serde(
         default,
-        skip_serializing_if = "Option::is_none",
+        skip_serializing_if = "is_default",
         deserialize_with = "option_string_trim"
     )]
     pub cookie_key: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_default")]
     pub log_to_file: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "is_default")]
     pub session_duration_days: Option<i64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "is_default")]
     pub onlyoffice_config: Option<OnlyOfficeConfig>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "is_default")]
     pub openid_config: Option<OpenIdConfig>,
+    #[serde(default, skip_serializing_if = "is_default")]
     pub apps: Vec<App>,
+    #[serde(default, skip_serializing_if = "is_default")]
     pub davs: Vec<Dav>,
+    #[serde(default, skip_serializing_if = "is_default")]
     pub users: Vec<User>,
 }
 

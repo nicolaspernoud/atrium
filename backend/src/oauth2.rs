@@ -30,18 +30,24 @@ pub struct OAuthUser {
     pub login: String,
 }
 
-fn oauth_client_internal(config: OpenIdConfig) -> Result<BasicClient, oauth2::url::ParseError> {
+fn oauth_client_internal(
+    config: OpenIdConfig,
+    redirect_url: String,
+) -> Result<BasicClient, oauth2::url::ParseError> {
     Ok(BasicClient::new(
         ClientId::new(config.client_id),
         Some(ClientSecret::new(config.client_secret)),
         AuthUrl::new(config.auth_url)?,
         Some(TokenUrl::new(config.token_url)?),
     )
-    .set_redirect_uri(RedirectUrl::new(config.redirect_url)?))
+    .set_redirect_uri(RedirectUrl::new(redirect_url)?))
 }
 
-fn oauth_client(config: OpenIdConfig) -> Result<BasicClient, (StatusCode, &'static str)> {
-    Ok(oauth_client_internal(config).map_err(|_| {
+fn oauth_client(
+    config: OpenIdConfig,
+    redirect_url: String,
+) -> Result<BasicClient, (StatusCode, &'static str)> {
+    Ok(oauth_client_internal(config, redirect_url).map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             "could not parse OpenID configuration",
@@ -59,7 +65,10 @@ pub async fn oauth2_login(
             "OpenID configuration is not available",
         ));
     }
-    let client = oauth_client(config.openid_config.as_ref().unwrap().clone())?;
+    let client = oauth_client(
+        config.openid_config.as_ref().unwrap().clone(),
+        format!("{}/auth/oauth2callback", config.full_hostname()),
+    )?;
 
     let (auth_url, csrf_token) = client
         .authorize_url(CsrfToken::new_random)
@@ -98,7 +107,10 @@ pub async fn oauth2_callback(
         ));
     }
     let oidc_config = config.openid_config.as_ref().unwrap();
-    let oauth_client = oauth_client(oidc_config.clone())?;
+    let oauth_client = oauth_client(
+        oidc_config.clone(),
+        format!("{}/auth/oauth2callback", config.full_hostname()),
+    )?;
 
     // Check the state
     if jar.get(STATE_COOKIE).is_none() || jar.get(STATE_COOKIE).unwrap().value() != query.state {

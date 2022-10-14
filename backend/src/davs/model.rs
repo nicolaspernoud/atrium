@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::{
     configuration::{config_or_error, Config, ConfigFile},
     users::AdminToken,
-    utils::{option_string_trim, string_trim, vec_trim_remove_empties},
+    utils::{is_default, option_string_trim, string_trim, vec_trim_remove_empties},
 };
 use axum::{extract::Path, response::IntoResponse, Extension, Json};
 use hyper::StatusCode;
@@ -17,20 +17,26 @@ pub struct Dav {
     pub host: String,
     #[serde(deserialize_with = "string_trim")]
     pub directory: String,
+    #[serde(default, skip_serializing_if = "is_default")]
     pub writable: bool,
     #[serde(deserialize_with = "string_trim")]
     pub name: String,
     pub icon: usize,
     pub color: usize,
+    #[serde(default, skip_serializing_if = "is_default")]
     pub secured: bool,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_default")]
     pub allow_symlinks: bool,
-    #[serde(deserialize_with = "vec_trim_remove_empties")]
+    #[serde(
+        default,
+        skip_serializing_if = "is_default",
+        deserialize_with = "vec_trim_remove_empties"
+    )]
     pub roles: Vec<String>,
     #[serde(
         default,
         deserialize_with = "option_string_trim",
-        skip_serializing_if = "Option::is_none"
+        skip_serializing_if = "is_default"
     )]
     pub passphrase: Option<String>,
     #[serde(skip)]

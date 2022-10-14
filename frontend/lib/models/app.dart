@@ -47,18 +47,20 @@ class AppModel implements Model {
     name = json['name'];
     icon = json['icon'];
     color = Color(json['color']);
-    isProxy = json['is_proxy'];
+    isProxy = json['is_proxy'] ?? false;
     host = json['host'];
     subdomains = json['subdomains'] != null
         ? List.castFrom<dynamic, String>(json['subdomains'])
         : [];
     target = json['target'];
-    secured = json['secured'];
-    login = json['login'];
-    password = json['password'];
-    openpath = json['openpath'];
-    roles = List.castFrom<dynamic, String>(json['roles']);
-    injectSecurityHeaders = json['inject_security_headers'];
+    secured = json['secured'] ?? false;
+    login = json['login'] ?? "";
+    password = json['password'] ?? "";
+    openpath = json['openpath'] ?? "";
+    roles = json['roles'] != null
+        ? List.castFrom<dynamic, String>(json['roles'])
+        : [];
+    injectSecurityHeaders = json['inject_security_headers'] ?? false;
   }
 
   Map<String, dynamic> toJson() {

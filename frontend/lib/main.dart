@@ -27,6 +27,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+        title: 'atrium',
         home: const HomePage(),
         localizationsDelegates: const [
           MyLocalizationsDelegate(),

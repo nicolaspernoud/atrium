@@ -35,14 +35,16 @@ class DavModel implements Model {
     id = json['id'];
     host = json['host'];
     directory = json['directory'];
-    writable = json['writable'];
+    writable = json['writable'] ?? false;
     name = json['name'];
     icon = json['icon'];
     color = Color(json['color']);
-    secured = json['secured'];
-    allowSymlinks = json['allow_symlinks'];
-    roles = List.castFrom<dynamic, String>(json['roles']);
-    passphrase = json['passphrase'];
+    secured = json['secured'] ?? false;
+    allowSymlinks = json['allow_symlinks'] ?? false;
+    roles = json['roles'] != null
+        ? List.castFrom<dynamic, String>(json['roles'])
+        : [];
+    passphrase = json['passphrase'] ?? "";
   }
 
   Map<String, dynamic> toJson() {

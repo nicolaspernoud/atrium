@@ -23,7 +23,7 @@ use tracing::error;
 use crate::{
     configuration::{config_or_error, Config, ConfigFile, HostType},
     users::{check_authorization, AdminToken, UserTokenWithoutXSRFCheck},
-    utils::{option_vec_trim_remove_empties, string_trim, vec_trim_remove_empties},
+    utils::{is_default, option_vec_trim_remove_empties, string_trim, vec_trim_remove_empties},
 };
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -33,24 +33,43 @@ pub struct App {
     pub name: String,
     pub icon: usize,
     pub color: usize,
+    #[serde(default, skip_serializing_if = "is_default")]
     pub is_proxy: bool,
     #[serde(deserialize_with = "string_trim")]
     pub host: String,
     #[serde(deserialize_with = "string_trim")]
     pub target: String,
+    #[serde(default, skip_serializing_if = "is_default")]
     pub secured: bool,
-    #[serde(deserialize_with = "string_trim")]
+    #[serde(
+        default,
+        skip_serializing_if = "is_default",
+        deserialize_with = "string_trim"
+    )]
     pub login: String,
-    #[serde(deserialize_with = "string_trim")]
+    #[serde(
+        default,
+        skip_serializing_if = "is_default",
+        deserialize_with = "string_trim"
+    )]
     pub password: String,
-    #[serde(deserialize_with = "string_trim")]
+    #[serde(
+        default,
+        skip_serializing_if = "is_default",
+        deserialize_with = "string_trim"
+    )]
     pub openpath: String,
-    #[serde(deserialize_with = "vec_trim_remove_empties")]
+    #[serde(
+        default,
+        skip_serializing_if = "is_default",
+        deserialize_with = "vec_trim_remove_empties"
+    )]
     pub roles: Vec<String>,
+    #[serde(default, skip_serializing_if = "is_default")]
     pub inject_security_headers: bool,
     #[serde(
         default,
-        skip_serializing_if = "Option::is_none",
+        skip_serializing_if = "is_default",
         deserialize_with = "option_vec_trim_remove_empties"
     )]
     pub subdomains: Option<Vec<String>>,

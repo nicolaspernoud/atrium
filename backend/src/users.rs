@@ -4,7 +4,7 @@ use crate::{
     davs::model::Dav,
     extractors::AuthBasic,
     logger::city_from_ip,
-    utils::{random_string, string_trim, vec_trim_remove_empties},
+    utils::{is_default, random_string, string_trim, vec_trim_remove_empties},
 };
 use argon2::{password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use axum::{
@@ -41,7 +41,11 @@ pub struct User {
         deserialize_with = "string_trim"
     )]
     pub password: String,
-    #[serde(deserialize_with = "vec_trim_remove_empties")]
+    #[serde(
+        default,
+        skip_serializing_if = "is_default",
+        deserialize_with = "vec_trim_remove_empties"
+    )]
     pub roles: Vec<String>,
 }
 

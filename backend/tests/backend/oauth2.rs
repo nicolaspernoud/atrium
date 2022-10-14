@@ -38,7 +38,6 @@ async fn log_with_oidc_wrong_state() {
         openid_config: Some(OpenIdConfig {
             client_id: "dummy".to_owned(),
             client_secret: "dummy".to_owned(),
-            redirect_url: "TO_BE_REPLACED".to_owned(),
             auth_url: format!("http://localhost:{mock_oauth2_port}/authorize_wrong_state"),
             token_url: format!("http://localhost:{mock_oauth2_port}/token"),
             userinfo_url: format!("http://localhost:{mock_oauth2_port}/userinfo"),
@@ -73,7 +72,6 @@ async fn log_with_oidc_as_admin() {
         openid_config: Some(OpenIdConfig {
             client_id: "dummy".to_owned(),
             client_secret: "dummy".to_owned(),
-            redirect_url: "TO_BE_REPLACED".to_owned(),
             auth_url: format!("http://localhost:{mock_oauth2_port}/authorize"),
             token_url: format!("http://localhost:{mock_oauth2_port}/token"),
             userinfo_url: format!("http://localhost:{mock_oauth2_port}/admininfo"),
