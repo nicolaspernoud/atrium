@@ -1,6 +1,7 @@
 import 'package:atrium/components/create_edit_app.dart';
 import 'package:atrium/models/api_provider.dart';
 import 'package:atrium/models/dav.dart';
+import 'package:atrium/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -18,6 +19,22 @@ class CreateEditDav extends StatefulWidget {
 
 class CreateEditDavState extends State<CreateEditDav> {
   final _formKey = GlobalKey<FormState>();
+  final _passController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _passController.text = widget.dav.passphrase ?? "";
+    _passController.addListener(() {
+      widget.dav.passphrase = _passController.text;
+    });
+  }
+
+  @override
+  void dispose() {
+    _passController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -166,12 +183,15 @@ class CreateEditDavState extends State<CreateEditDav> {
                         ],
                       ),
                       TextFormField(
-                        initialValue: widget.dav.passphrase,
+                        controller: _passController,
                         decoration: InputDecoration(
-                            labelText: tr(context, "passphrase")),
-                        onChanged: (value) {
-                          widget.dav.passphrase = value;
-                        },
+                            labelText: tr(context, "passphrase"),
+                            suffixIcon: IconButton(
+                                icon: const Icon(Icons.casino),
+                                onPressed: () {
+                                  _passController.text =
+                                      generateRandomString(48);
+                                })),
                       ),
                       TextFormField(
                         initialValue: widget.dav.roles.join(","),

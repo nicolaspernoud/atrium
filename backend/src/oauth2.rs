@@ -159,6 +159,7 @@ pub async fn oauth2_callback(
             .iter()
             .map(|e| e.trim_start_matches("CN=").to_owned())
             .collect(),
+        ..Default::default()
     };
     // Map admins_group to ADMINS_ROLE if not already present
     if oidc_config.admins_group.is_some()

@@ -32,11 +32,33 @@ pub static ADMINS_ROLE: &str = "ADMINS";
 pub static REDACTED: &str = "REDACTED";
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UserInfo {
+    #[serde(
+        skip_serializing_if = "is_default",
+        default,
+        deserialize_with = "string_trim"
+    )]
+    pub firstname: String,
+    #[serde(
+        skip_serializing_if = "is_default",
+        default,
+        deserialize_with = "string_trim"
+    )]
+    pub lastname: String,
+    #[serde(
+        skip_serializing_if = "is_default",
+        default,
+        deserialize_with = "string_trim"
+    )]
+    pub email: String,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct User {
     #[serde(deserialize_with = "string_trim")]
     pub login: String,
     #[serde(
-        skip_serializing_if = "String::is_empty",
+        skip_serializing_if = "is_default",
         default,
         deserialize_with = "string_trim"
     )]
@@ -47,6 +69,8 @@ pub struct User {
         deserialize_with = "vec_trim_remove_empties"
     )]
     pub roles: Vec<String>,
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub info: Option<UserInfo>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -64,6 +88,7 @@ pub struct UserToken {
     pub xsrf_token: String,
     pub share: Option<Share>,
     pub expires: i64,
+    pub info: Option<UserInfo>,
 }
 
 impl UserToken {
@@ -345,6 +370,7 @@ pub(crate) fn user_to_token(user: &User, config: &Config) -> UserToken {
         expires: (OffsetDateTime::now_utc()
             + Duration::days(config.session_duration_days.unwrap_or(1)))
         .unix_timestamp(),
+        info: user.info.clone(),
     };
     user_token
 }
@@ -449,6 +475,7 @@ pub async fn whoami(token: UserTokenWithoutXSRFCheck) -> Json<User> {
         login: token.0.login,
         password: REDACTED.to_owned(),
         roles: token.0.roles,
+        info: token.0.info,
     };
     Json(user)
 }
@@ -482,6 +509,7 @@ pub async fn get_share_token(
             xsrf_token: random_string(16),
             share: Some(share),
             expires: (OffsetDateTime::now_utc() + expires).unix_timestamp(),
+            info: None,
         };
         let encoded =
             serde_json::to_string(&user_token).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

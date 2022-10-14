@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'globals.dart';
 
@@ -17,3 +19,11 @@ List<Widget> logoutAction = <Widget>[
     },
   ),
 ];
+
+String generateRandomString(int length) {
+  final random = Random();
+  const availableChars =
+      'AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz1234567890';
+  return List.generate(length,
+      (index) => availableChars[random.nextInt(availableChars.length)]).join();
+}

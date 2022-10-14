@@ -83,6 +83,10 @@ users: # optional : users allowed to log in with local authentication, if not pr
     password: $argon2id$v=19$m=4096,t=3,p=1$QWsdpHrjCaPwy3IODegzNA$dqyioLh9ndJ3V7OoKpkCaczJmGNKjuG99F5hisd3bPs # required : hashed user password, do not add user in config file but use API or UI
     roles: # optional : users roles
       - ADMINS
+    info: # optional : additional information
+      firstname: Ad # optional
+      lastname: Min # optional
+      email: admin@atrium.io # optional
   - login: user
     password: $argon2id$v=19$m=4096,t=3,p=1$ZH9ZFCT6YjYQpxkNt3SQgQ$g3DQawMEWlU1rnMAserFAzUg3Lg2O80s8eH+PrvmUo0
     roles:

@@ -1,5 +1,6 @@
 import 'package:atrium/models/api_provider.dart';
 import 'package:atrium/models/user.dart';
+import 'package:atrium/utils.dart';
 import 'package:flutter/material.dart';
 
 import '../i18n.dart';
@@ -16,6 +17,23 @@ class CreateEditUser extends StatefulWidget {
 
 class CreateEditUserState extends State<CreateEditUser> {
   final _formKey = GlobalKey<FormState>();
+
+  final _passController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _passController.addListener(() {
+      widget.user.password = _passController.text;
+    });
+    widget.user.password = "";
+  }
+
+  @override
+  void dispose() {
+    _passController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -66,15 +84,18 @@ class CreateEditUserState extends State<CreateEditUser> {
                         },
                       ),
                       TextFormField(
-                        initialValue: "",
+                        controller: _passController,
                         decoration: InputDecoration(
                             labelText: tr(context, "password"),
+                            suffixIcon: IconButton(
+                                icon: const Icon(Icons.casino),
+                                onPressed: () {
+                                  _passController.text =
+                                      generateRandomString(24);
+                                }),
                             hintText: tr(context,
                                 "leave_empty_to_keep_current_password")),
                         validator: widget.isNew ? rejectEmpty : null,
-                        onChanged: (value) {
-                          widget.user.password = value;
-                        },
                       ),
                       TextFormField(
                         initialValue: widget.user.roles.join(","),
@@ -83,6 +104,30 @@ class CreateEditUserState extends State<CreateEditUser> {
                         validator: rejectEmpty,
                         onChanged: (value) {
                           widget.user.roles = value.split(",");
+                        },
+                      ),
+                      TextFormField(
+                        initialValue: widget.user.firstname,
+                        decoration: InputDecoration(
+                            labelText: tr(context, "firstname")),
+                        onChanged: (value) {
+                          widget.user.firstname = value;
+                        },
+                      ),
+                      TextFormField(
+                        initialValue: widget.user.lastname,
+                        decoration:
+                            InputDecoration(labelText: tr(context, "lastname")),
+                        onChanged: (value) {
+                          widget.user.lastname = value;
+                        },
+                      ),
+                      TextFormField(
+                        initialValue: widget.user.email,
+                        decoration:
+                            InputDecoration(labelText: tr(context, "email")),
+                        onChanged: (value) {
+                          widget.user.email = value;
                         },
                       ),
                       Padding(

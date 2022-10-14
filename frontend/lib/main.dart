@@ -99,12 +99,12 @@ class _HomePageState extends State<HomePage> {
                     ),
                     if (app.hasToken && app.isAdmin) ...[
                       BottomNavigationBarItem(
-                        icon: const Icon(Icons.group),
-                        label: tr(context, "users"),
-                      ),
-                      BottomNavigationBarItem(
                         icon: const Icon(Icons.monitor_heart),
                         label: tr(context, "system_information"),
+                      ),
+                      BottomNavigationBarItem(
+                        icon: const Icon(Icons.group),
+                        label: tr(context, "users"),
                       ),
                     ]
                   ],
@@ -119,8 +119,8 @@ class _HomePageState extends State<HomePage> {
               if (app.hasToken) ...[const AppsList(), const DavsList()] else
                 const WelcomeScreen(),
               if (app.hasToken && app.isAdmin) ...[
+                const SystemInfo(),
                 const UsersList(),
-                const SystemInfo()
               ]
             ],
           ),

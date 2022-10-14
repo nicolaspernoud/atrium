@@ -404,11 +404,13 @@ mod tests {
                     login: "admin".to_owned(),
                     password: "password".to_owned(),
                     roles: vec!["ADMINS".to_owned()],
+                    info: None
                 },
                 User {
                     login: "user".to_owned(),
                     password: "password".to_owned(),
                     roles: vec!["USERS".to_owned()],
+                    info: None
                 },
             ]
         };
