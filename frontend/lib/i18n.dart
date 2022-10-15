@@ -80,7 +80,7 @@ class MyLocalizations {
       "target": "Target",
       "uploads": "Uploads",
       "uptime": "Uptime",
-      "user_created": "User created",
+      "user_created": "User created or altered with success",
       "users": "Users",
       "close": "Close",
       "no_result_for": "No result for",
@@ -152,7 +152,7 @@ class MyLocalizations {
       "target": "Cible",
       "uploads": "Téléchargements",
       "uptime": "Temps de fonctionnement du serveur",
-      "user_created": "Utilisateur créé",
+      "user_created": "Utilisateur créé ou modifié avec succès",
       "users": "Utilisateurs",
     },
   };

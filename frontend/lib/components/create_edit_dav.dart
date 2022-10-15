@@ -197,7 +197,6 @@ class CreateEditDavState extends State<CreateEditDav> {
                         initialValue: widget.dav.roles.join(","),
                         decoration:
                             InputDecoration(labelText: tr(context, "roles")),
-                        validator: rejectEmpty,
                         onChanged: (value) {
                           widget.dav.roles = value.split(",");
                         },

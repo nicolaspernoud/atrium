@@ -10,7 +10,6 @@ use axum::{
     extract::{FromRequest, RequestParts},
     Extension, TypedHeader,
 };
-
 use hyper::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
@@ -65,6 +64,8 @@ pub struct Config {
     #[serde(default = "hostname", deserialize_with = "string_trim")]
     pub hostname: String,
     #[serde(default, skip_serializing_if = "is_default")]
+    pub domain: String,
+    #[serde(default, skip_serializing_if = "is_default")]
     pub debug_mode: bool,
     #[serde(default = "http_port")]
     pub http_port: u16,
@@ -116,9 +117,11 @@ impl Config {
     }
 
     pub async fn to_file_or_internal_server_error(
-        self,
+        mut self,
         filepath: &str,
     ) -> Result<(), (StatusCode, &'static str)> {
+        self.apps.sort_by(|a, b| a.id.partial_cmp(&b.id).unwrap());
+        self.davs.sort_by(|a, b| a.id.partial_cmp(&b.id).unwrap());
         self.to_file(filepath).await.map_err(|_| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -150,24 +153,21 @@ impl Config {
     }
 
     pub fn domains(&self) -> Vec<String> {
-        let mut domains = self
-            .apps
-            .iter()
-            .map(|app| format!("{}.{}", app.host.to_owned(), self.hostname))
+        let mut domains = filter_services(&self.apps, &self.hostname)
+            .map(|app| format!("{}.{}", trim_host(&app.host), self.hostname))
             .chain(
-                self.davs
-                    .iter()
-                    .map(|dav| format!("{}.{}", dav.host.to_owned(), self.hostname)),
+                filter_services(&self.davs, &self.hostname)
+                    .map(|dav| format!("{}.{}", trim_host(&dav.host), self.hostname)),
             )
             .collect::<Vec<String>>();
         domains.insert(0, self.hostname.to_owned());
         // Insert apps subdomains
-        for app in &self.apps {
+        for app in filter_services(&self.apps, &self.hostname) {
             for domain in app.subdomains.as_ref().unwrap_or(&Vec::new()) {
                 domains.push(format!(
                     "{}.{}.{}",
                     domain,
-                    app.host.to_owned(),
+                    trim_host(&app.host),
                     self.hostname
                 ));
             }
@@ -189,39 +189,44 @@ pub async fn load_config(
     if let Some(h) = std::env::var("MAIN_HOSTNAME").ok() {
         config.hostname = h
     }
+    if is_default(&config.domain) {
+        config.domain = config.hostname.clone()
+    };
     let port = if config.tls_mode.is_secure() {
         None
     } else {
         Some(config.http_port)
     };
-    let mut hashmap: ConfigMap = config
-        .apps
-        .iter()
+    let mut hashmap: ConfigMap = filter_services(&config.apps, &config.hostname)
         .map(|app| {
             (
-                format!("{}.{}", app.host.to_owned(), config.hostname),
+                format!("{}.{}", trim_host(&app.host), config.hostname),
                 app_to_host_type(&app, &config, port),
             )
         })
-        .chain(config.davs.iter().map(|dav| {
+        .chain(filter_services(&config.davs, &config.hostname).map(|dav| {
             let mut dav = dav.clone();
             dav.compute_key();
             (
-                format!("{}.{}", dav.host.to_owned(), config.hostname),
+                format!("{}.{}", trim_host(&dav.host), config.hostname),
                 HostType::Dav(dav),
             )
         }))
         .collect();
     // Insert apps subdomains
-    for app in &config.apps {
+    for app in filter_services(&config.apps, &config.hostname) {
         for domain in app.subdomains.as_ref().unwrap_or(&Vec::new()) {
             hashmap.insert(
-                format!("{}.{}.{}", domain, app.host.to_owned(), config.hostname),
+                format!("{}.{}.{}", domain, trim_host(&app.host), config.hostname),
                 app_to_host_type(&app, &config, port),
             );
         }
     }
     Ok((Arc::new(config), Arc::new(hashmap)))
+}
+
+pub(crate) fn trim_host(host: &str) -> String {
+    host.split_once(".").unwrap_or((host, "")).0.to_owned()
 }
 
 fn app_to_host_type(app: &App, config: &Config, port: Option<u16>) -> HostType {
@@ -244,6 +249,33 @@ pub async fn config_or_error(config_file: &str) -> Result<Config, (StatusCode, &
         )
     })?;
     Ok(config)
+}
+
+pub trait Service {
+    fn host(&self) -> &str;
+}
+
+impl Service for App {
+    fn host(&self) -> &str {
+        &self.host
+    }
+}
+
+impl Service for Dav {
+    fn host(&self) -> &str {
+        &self.host
+    }
+}
+
+fn filter_services<'a, T: Service + 'a>(
+    services: &'a Vec<T>,
+    hostname: &'a str,
+) -> impl Iterator<Item = &T> {
+    services.iter().filter(move |s| {
+        !s.host()
+            .trim_end_matches(&format!(".{}", hostname).to_owned())
+            .contains(".")
+    })
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -344,7 +376,7 @@ mod tests {
                     openpath: "".to_owned(),
                     roles: vec!["ADMINS".to_owned(), "USERS".to_owned()],
                     inject_security_headers: true,
-                    subdomains: None
+                    subdomains: None,
                 },
                 App {
                     id: 2,
@@ -360,7 +392,7 @@ mod tests {
                     openpath: "/javascript_simple.html".to_owned(),
                     roles: vec!["ADMINS".to_owned()],
                     inject_security_headers: true,
-                    subdomains: None
+                    subdomains: None,
                 },
             ]
         };
@@ -379,7 +411,7 @@ mod tests {
                     allow_symlinks: false,
                     roles: vec!["ADMINS".to_owned(),"USERS".to_owned()],
                     passphrase: Some("ABCD123".to_owned()),
-                    key: None
+                    key: None,
                 },
                 Dav {
                     id: 2,
@@ -393,7 +425,7 @@ mod tests {
                     allow_symlinks: true,
                     roles: vec!["USERS".to_owned()],
                     passphrase: None,
-                    key: None
+                    key: None,
                 },
             ]
         };
@@ -421,6 +453,7 @@ mod tests {
         // Arrange
         let config = Config {
             hostname: "atrium.io".to_owned(),
+            domain: "".to_owned(),
             debug_mode: false,
             http_port: 8080,
             tls_mode: TlsMode::No,

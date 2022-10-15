@@ -102,7 +102,7 @@ class _AppsListState extends State<AppsList> {
 
   Widget _buildListView(BuildContext context, List<AppModel> list) {
     return GridView.extent(
-        maxCrossAxisExtent: 200,
+        maxCrossAxisExtent: 250,
         padding: const EdgeInsets.all(8),
         mainAxisSpacing: 8,
         crossAxisSpacing: 8,
@@ -242,7 +242,7 @@ void _openAppInWebView(BuildContext context, AppModel app) {
   Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (context) {
-        var initialUrl = modelUrl(app);
+        var initialUrl = modelUrl(app) + app.openpath;
         return Scaffold(
             appBar: AppBar(
               title: Text(app.name),

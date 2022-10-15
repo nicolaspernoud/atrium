@@ -190,7 +190,6 @@ class CreateEditAppState extends State<CreateEditApp> {
                       initialValue: widget.app.roles.join(","),
                       decoration:
                           InputDecoration(labelText: tr(context, "roles")),
-                      validator: rejectEmpty,
                       onChanged: (value) {
                         widget.app.roles = value.split(",");
                       },

@@ -11,13 +11,18 @@ use http::{HeaderValue, Method};
 use crate::configuration::{Config, HostType};
 
 pub async fn cors_middleware<B>(req: Request<B>, next: Next<B>) -> Result<Response, StatusCode> {
-    let hostname = {
-        let cfg = req.extensions().get::<Arc<Config>>().unwrap();
-        let hostname: HeaderValue = cfg
-            .full_hostname()
+    let cfg = req.extensions().get::<Arc<Config>>().unwrap();
+    let origin = req.headers().get("origin").map(|o| o.to_owned());
+    let hostname = if origin.is_some() && {
+        let ref this = origin.as_ref().unwrap().to_str();
+        let f = |o: &str| o.contains(&cfg.domain);
+        matches!(this, Ok(x) if f(x))
+    } {
+        origin.unwrap()
+    } else {
+        cfg.full_hostname()
             .parse()
-            .expect("could not parse hostname : invalid format");
-        hostname
+            .expect("could not parse hostname : invalid format")
     };
     let mut resp = next.run(req).await;
     let headers = resp.headers_mut();
@@ -75,7 +80,7 @@ where
             format!(
                 "{s}://{h}:* {s}://*.{h}:*",
                 s = cfg.scheme(),
-                h = cfg.hostname,
+                h = cfg.domain,
             )
         };
         let mut resp = next.run(req).await;

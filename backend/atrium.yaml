@@ -1,4 +1,5 @@
 hostname: atrium.127.0.0.1.nip.io # required : fully qualified domain name of the application, can be overridden with the environment variable MAIN_HOSTNAME
+domain: 127.0.0.1.nip.io # optional : defaults to hostname, if set the CORS and CSP Headers will be set according to that domain
 debug_mode: true # optional, defaults to false : prints a lot of debug logs ; disable in production as it has a big performance impact
 http_port: 8080 # required, defaults to 8080 : http port to listen to if tls mode is not Auto
 tls_mode: No # required, defaults to No : use No for development/test http mode, Auto to generate Let's Encrypt certificates automatically (most common production usage) or ̀BehindProxy to use atrium behind a TLS offloading proxy
@@ -23,7 +24,7 @@ apps: # optional : applications served by atrium
     icon: 62783 # required : app icon reference
     color: 4292030255 # required : app color reference
     is_proxy: true # optional, defaults to false : if false, will serve target as a directory, if true will serve target as a reverse proxy
-    host: app1 # required : subdomain to serve the app from : for example it will respond at app1.atrium.127.0.0.1.nip.io with this configuration
+    host: app1 # required : subdomain to serve the app from : for example it will respond at app1.atrium.127.0.0.1.nip.io with this configuration, if a fully qualified name is entered it will be served only if it matches (subdomain_without_dots).(hostname) pattern, that can be useful in advanced use cases where on atrium instances on different subdomains share their configuration file
     target: localhost:8081 # required : target to serve, if is_proxy == false, will serve a directory, if is_proxy == true, will reverse proxy a server, defaulting to http, https can be specified
     secured: false # optional, defaults to false : if true the app can only be accessed by a logged in user
     login: admin # optional : if present, it will be used to forge a basic auth header to the proxied app

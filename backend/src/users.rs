@@ -1,6 +1,6 @@
 use crate::{
     apps::App,
-    configuration::{config_or_error, Config, ConfigFile, ConfigMap, HostType},
+    configuration::{config_or_error, trim_host, Config, ConfigFile, HostType},
     davs::model::Dav,
     extractors::AuthBasic,
     logger::city_from_ip,
@@ -308,6 +308,7 @@ pub(crate) fn create_user_cookie(
         .path("/")
         .same_site(axum_extra::extract::cookie::SameSite::Lax)
         .secure(config.tls_mode.is_secure())
+        .max_age(Duration::days(config.session_duration_days.unwrap_or(1)))
         .http_only(true)
         .finish();
     info!(
@@ -470,28 +471,33 @@ pub async fn list_services(
     ))
 }
 
-pub async fn whoami(token: UserTokenWithoutXSRFCheck) -> Json<User> {
+pub async fn whoami(token: UserToken) -> Json<User> {
     let user = User {
-        login: token.0.login,
+        login: token.login,
         password: REDACTED.to_owned(),
-        roles: token.0.roles,
-        info: token.0.info,
+        roles: token.roles,
+        info: token.info,
     };
     Json(user)
 }
 
 pub async fn get_share_token(
-    config_map: Extension<std::sync::Arc<ConfigMap>>,
+    Extension(config): Extension<Arc<Config>>,
     Json(share): Json<Share>,
     user: UserToken,
     jar: PrivateCookieJar,
 ) -> Result<PrivateCookieJar, StatusCode> {
-    // Get the host from the config map
-    let to_share = config_map
-        .get(&share.hostname)
+    // Get the dav from the config map
+    let to_share = config
+        .davs
+        .iter()
+        .find(|d| {
+            d.host == share.hostname
+                || format!("{}.{}", trim_host(&d.host), config.hostname) == share.hostname
+        })
         .ok_or(StatusCode::FORBIDDEN)?;
     // Check that the user is allowed to access the wanted share
-    if check_user_has_role(&user, to_share.roles()) {
+    if check_user_has_role(&user, &to_share.roles) {
         // Create a token with the required information
         let share_login = share
             .share_with

@@ -348,6 +348,7 @@ async fn redirect_test() {
 
     let config = atrium::configuration::Config {
         hostname: "atrium.io".to_owned(),
+        domain: "".to_owned(),
         debug_mode: false,
         tls_mode: TlsMode::No,
         letsencrypt_email: "foo@bar.com".to_owned(),

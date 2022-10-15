@@ -29,10 +29,12 @@ class UserModel {
     data['login'] = login;
     data['password'] = password;
     data['roles'] = roles;
-    data['info'] = <String, dynamic>{};
-    data['info']['firstname'] = firstname;
-    data['info']['lastname'] = lastname;
-    data['info']['email'] = email;
+    if (firstname != "" || lastname != "" || email != "") {
+      data['info'] = <String, dynamic>{};
+      data['info']['firstname'] = firstname;
+      data['info']['lastname'] = lastname;
+      data['info']['email'] = email;
+    }
     return data;
   }
 }

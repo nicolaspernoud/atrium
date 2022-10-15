@@ -181,6 +181,9 @@ class ApiProvider {
 }
 
 String modelUrl(Model mdl) {
+  if (mdl.host.contains(App().prefs.hostnameHost)) {
+    return "${App().prefs.hostnameScheme}://${mdl.host}${App().prefs.hostnamePort != null ? ":${App().prefs.hostnamePort}" : ""}";
+  }
   return "${App().prefs.hostnameScheme}://${mdl.host}.${App().prefs.hostnameHost}${App().prefs.hostnamePort != null ? ":${App().prefs.hostnamePort}" : ""}";
 }
 
