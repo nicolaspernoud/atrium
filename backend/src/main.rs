@@ -155,8 +155,9 @@ fn setup_logger(debug_mode: bool, log_to_file: bool) -> Vec<WorkerGuard> {
         .with_writer(non_blocking);
 
     let file_writer = if log_to_file {
-        let (non_blocking, guard) =
-            tracing_appender::non_blocking(tracing_appender::rolling::daily("./", "atrium.log"));
+        let (non_blocking, guard) = tracing_appender::non_blocking(
+            tracing_appender::rolling::daily("./logs/", "atrium.log"),
+        );
         guards.push(guard);
         let file_writer = fmt::Layer::new()
             .with_ansi(false)
