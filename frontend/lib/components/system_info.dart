@@ -67,6 +67,7 @@ class _SystemInfoState extends State<SystemInfo> {
                 Padding(
                   padding: const EdgeInsets.all(8.0),
                   child: Card(
+                    elevation: 2,
                     child: Padding(
                       padding: const EdgeInsets.all(10.0),
                       child: ListTile(
@@ -84,6 +85,7 @@ class _SystemInfoState extends State<SystemInfo> {
                 Padding(
                   padding: const EdgeInsets.all(8.0),
                   child: Card(
+                    elevation: 2,
                     child: Padding(
                       padding: const EdgeInsets.all(10.0),
                       child: ListTile(
@@ -101,6 +103,7 @@ class _SystemInfoState extends State<SystemInfo> {
                 Padding(
                   padding: const EdgeInsets.all(8.0),
                   child: Card(
+                    elevation: 2,
                     child: Padding(
                       padding: const EdgeInsets.all(10.0),
                       child: ListTile(

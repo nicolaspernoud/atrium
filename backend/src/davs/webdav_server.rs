@@ -666,9 +666,6 @@ impl WebdavServer {
     }
 
     fn extract_path(&self, wanted_path: &str, dav_path: &str) -> Option<PathBuf> {
-        if wanted_path.contains("..") {
-            return None;
-        }
         let decoded_path = decode_uri(&wanted_path[1..])?.into_owned();
         let stripped_path = Path::new(&decoded_path).components().collect::<PathBuf>();
         let self_path = Path::new(dav_path);
