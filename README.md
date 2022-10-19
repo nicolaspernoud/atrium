@@ -4,7 +4,7 @@ Atrium is a web server, reverse proxy and webdav server with user authentication
 
 Rust/Flutter version of Vestibule.
 
-## Configuration
+## Configuration
 
 See atrium.yaml for configuration options and examples.
 

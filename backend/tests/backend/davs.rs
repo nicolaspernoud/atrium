@@ -935,6 +935,38 @@ async fn allow_symlinks() -> Result<()> {
 }
 
 #[tokio::test]
+async fn try_to_hack_symlinks() -> Result<()> {
+    let app = TestApp::spawn(None).await;
+    std::fs::create_dir_all(format!("./data/{}/dir_symlink", app.id))?;
+    std::fs::write(
+        format!("./data/{}/dir_symlink/file1", app.id),
+        b"Lorem ipsum",
+    )?;
+    let srcdir = std::fs::canonicalize(std::path::PathBuf::from(format!(
+        "./data/{}/dir_symlink",
+        app.id
+    )))
+    .expect("couldn't canonicalize path");
+    symlink_dir(srcdir, format!("./data/{}/dirc", app.id)).expect("couldn't create symlink");
+    let resp = app
+        .client
+        .get(format!("http://files3.atrium.io:{}/../dirc", app.port))
+        .send()
+        .await?;
+    assert_eq!(resp.status(), 404);
+    let resp = app
+        .client
+        .get(format!(
+            "http://files3.atrium.io:{}/../dirc/file1",
+            app.port
+        ))
+        .send()
+        .await?;
+    assert_eq!(resp.status(), 404);
+    Ok(())
+}
+
+#[tokio::test]
 async fn secured_dav_test() {
     // Arrange
     let app = TestApp::spawn(None).await;

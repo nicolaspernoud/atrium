@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -32,7 +33,7 @@ class _TextEditorState extends State<TextEditor> {
   Future<void> getFileContent() async {
     var content = await widget.client.read(widget.file.path!);
     setState(() {
-      _editingController.text = String.fromCharCodes(content);
+      _editingController.text = utf8.decode(content);
     });
   }
 
@@ -48,8 +49,16 @@ class _TextEditorState extends State<TextEditor> {
       appBar: AppBar(
         title: Text(widget.file.name!),
       ),
-      body: Center(
+      body: Padding(
+        padding: const EdgeInsets.all(8.0),
         child: TextFormField(
+          decoration: const InputDecoration(
+            filled: true,
+            fillColor: Colors.white,
+            isDense: true,
+            border: InputBorder.none,
+            contentPadding: EdgeInsets.zero,
+          ),
           controller: _editingController,
           cursorColor: Colors.blue,
           maxLines: null,
@@ -61,8 +70,10 @@ class _TextEditorState extends State<TextEditor> {
               IconButton(
                   icon: const Icon(Icons.save),
                   onPressed: () {
-                    widget.client.write(widget.file.path!,
-                        Uint8List.fromList(_editingController.text.codeUnits));
+                    widget.client.write(
+                        widget.file.path!,
+                        Uint8List.fromList(
+                            utf8.encode(_editingController.text)));
                   })
             ]))
           : null,

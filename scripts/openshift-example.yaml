@@ -29,6 +29,7 @@ spec:
               mountPath: /app/data
               subPath: data
             - name: atrium-data
+              # Important : Create the file atrium.yaml in the volume before starting the deployment, so that a directory with the same name is not created instead !
               mountPath: /app/atrium.yaml
               subPath: atrium.yaml
 ---
