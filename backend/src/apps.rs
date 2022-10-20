@@ -18,7 +18,7 @@ use hyper_reverse_proxy::ReverseProxy;
 use hyper_trust_dns::{RustlsHttpsConnector, TrustDnsResolver};
 use serde::{Deserialize, Serialize};
 use std::{net::SocketAddr, sync::Arc};
-use tracing::error;
+use tracing::{debug, error};
 
 use crate::{
     configuration::{config_or_error, Config, ConfigFile, HostType},
@@ -236,7 +236,7 @@ pub async fn proxy_handler(
             response
         }
         Err(e) => {
-            error!("Proxy error: {:?}", e);
+            debug!("Proxy error: {:?}", e);
             Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
                 .body(Body::empty())

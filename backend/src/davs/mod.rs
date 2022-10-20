@@ -25,6 +25,14 @@ lazy_static::lazy_static! {
 
         ))
     };
+
+    static ref UNLOGGED_METHODS: [Method; 5] = [
+        Method::OPTIONS,
+        Method::HEAD,
+        Method::from_bytes(b"LOCK").unwrap(),
+        Method::from_bytes(b"UNLOCK").unwrap(),
+        Method::from_bytes(b"PROPFIND").unwrap(),
+    ];
 }
 
 pub async fn webdav_handler(
@@ -70,7 +78,7 @@ pub async fn webdav_handler(
 
     match WEBDAV_SERVER.clone().call(req, addr, &dav).await {
         Ok(response) => {
-            if method != Method::OPTIONS && method != Method::from_bytes(b"PROPFIND").unwrap() {
+            if !UNLOGGED_METHODS.contains(&method) {
                 tokio::spawn(async move {
                     info!(
                         "FILE ACCESS: {} \"{}{}\" by {} from {}",

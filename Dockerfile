@@ -51,7 +51,7 @@ RUN chown -Rf "${UID}":"${UID}" /myapp
 # Stage 2 : Frontend build #
 ############################
 
-FROM --platform=$BUILDPLATFORM cirrusci/flutter:3.3.0 as frontend-builder
+FROM --platform=$BUILDPLATFORM cirrusci/flutter:3.3.4 as frontend-builder
 WORKDIR /build
 COPY ./frontend .
 RUN flutter pub get
