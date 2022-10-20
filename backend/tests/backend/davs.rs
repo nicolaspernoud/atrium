@@ -254,6 +254,8 @@ async fn try_to_use_wrong_key_to_decrypt() -> Result<()> {
         .expect("failed to execute request");
 
     app.is_ready().await;
+    // That sleep should not be necessary as we await the server to be ready, but somehow it is...
+    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
 
     // Assert that the file cannot be retrieved
     let resp = app.client.get(&url).send().await?;

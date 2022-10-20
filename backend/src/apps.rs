@@ -93,15 +93,17 @@ impl AppWithUri {
         } else {
             Scheme::HTTPS
         };
-        let app_authority = if let Some(port) = port {
-            format!("{}.{}:{}", inner.host, domain, port)
-                .parse()
-                .expect("could not work out authority from app configuration")
+        let mut app_authority = if inner.host.contains(domain) {
+            inner.host.clone()
         } else {
             format!("{}.{}", inner.host, domain)
-                .parse()
-                .expect("could not work out authority from app configuration")
         };
+        if let Some(port) = port {
+            app_authority.push_str(&format!(":{}", port));
+        }
+        let app_authority = app_authority
+            .parse()
+            .expect("could not work out authority from app configuration");
         let forward_scheme = if inner.target.starts_with("https://") {
             Scheme::HTTPS
         } else {
