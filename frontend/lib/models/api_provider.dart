@@ -34,7 +34,6 @@ class ApiProvider {
 
   final BaseOptions options = BaseOptions(
     baseUrl: App().prefs.hostname,
-    connectTimeout: 15000,
     receiveTimeout: 13000,
   );
   static final ApiProvider _instance = ApiProvider._internal();

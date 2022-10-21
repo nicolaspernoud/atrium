@@ -45,7 +45,8 @@ pub async fn webdav_handler(
 ) -> Response<Body> {
     // Strings for logging
     let method = req.method().to_owned();
-    let uri_str = req.uri().to_string();
+    let uri_str = req.uri().path().to_owned();
+    let query_str = req.uri().query().unwrap_or_default().to_owned();
     let dav_host_str = dav.host().to_owned();
     let user_str = user
         .as_ref()
@@ -78,7 +79,7 @@ pub async fn webdav_handler(
 
     match WEBDAV_SERVER.clone().call(req, addr, &dav).await {
         Ok(response) => {
-            if !UNLOGGED_METHODS.contains(&method) {
+            if !UNLOGGED_METHODS.contains(&method) && query_str != "diskusage" {
                 tokio::spawn(async move {
                     info!(
                         "FILE ACCESS: {} \"{}{}\" by {} from {}",

@@ -33,7 +33,7 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
-  dio: ^4.0.6
+  dio: ^4.0.4
   file_picker: ^5.0.1
   filesize: ^2.0.1
   flutter_colorpicker: ^1.0.3

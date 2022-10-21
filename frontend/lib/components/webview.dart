@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:atrium/globals.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
@@ -34,9 +36,11 @@ class AppWebViewState extends State<AppWebView> {
         domain: Uri.parse(widget.initialUrl).host);
 
     return WebView(
-      initialCookies: [authCookie],
-      initialUrl: widget.initialUrl,
-      javascriptMode: JavascriptMode.unrestricted,
-    );
+        initialCookies: [authCookie],
+        initialUrl: widget.initialUrl,
+        javascriptMode: JavascriptMode.unrestricted,
+        gestureRecognizers: Platform.isAndroid
+            ? {Factory(() => EagerGestureRecognizer())}
+            : null);
   }
 }
