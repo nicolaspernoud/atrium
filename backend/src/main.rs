@@ -31,13 +31,13 @@ async fn run() -> Result<()> {
 
     if config.0.debug_mode {
         let mock1_listener =
-            std::net::TcpListener::bind(":::8081").expect("failed to bind to port");
+            std::net::TcpListener::bind("[::]:8081").expect("failed to bind to port");
         tokio::spawn(mock_proxied_server(mock1_listener));
         let mock2_listener =
-            std::net::TcpListener::bind(":::8082").expect("failed to bind to port");
+            std::net::TcpListener::bind("[::]:8082").expect("failed to bind to port");
         tokio::spawn(mock_proxied_server(mock2_listener));
         let mock_oauth2_listener =
-            std::net::TcpListener::bind(":::8090").expect("failed to bind to port");
+            std::net::TcpListener::bind("[::]:8090").expect("failed to bind to port");
         tokio::spawn(mock_oauth2_server(mock_oauth2_listener));
     }
 
@@ -97,14 +97,18 @@ async fn run() -> Result<()> {
                 }
             });
 
-            let addr = SocketAddr::from((std::net::Ipv6Addr::UNSPECIFIED, 443));
+            let addr = format!("[::]:{}", 443)
+                .parse::<std::net::SocketAddr>()
+                .unwrap();
             axum_server::bind(addr)
                 .acceptor(acceptor)
                 .handle(handle)
                 .serve(app)
                 .await?;
         } else {
-            let addr = SocketAddr::from((std::net::Ipv6Addr::UNSPECIFIED, server.port));
+            let addr = format!("[::]:{}", server.port)
+                .parse::<std::net::SocketAddr>()
+                .unwrap();
             axum_server::bind(addr).handle(handle).serve(app).await?;
         }
     }

@@ -31,7 +31,7 @@ async fn log_with_oidc_as_user() {
 async fn log_with_oidc_wrong_state() {
     // Arrange
     let mock_oauth2_listener =
-        std::net::TcpListener::bind(":::0").expect("failed to bind to random port");
+        std::net::TcpListener::bind("[::]:0").expect("failed to bind to random port");
     let mock_oauth2_port = mock_oauth2_listener.local_addr().unwrap().port();
     tokio::spawn(mock_oauth2_server(mock_oauth2_listener));
     let config = Config {
@@ -65,7 +65,7 @@ async fn log_with_oidc_wrong_state() {
 async fn log_with_oidc_as_admin() {
     // Arrange
     let mock_oauth2_listener =
-        std::net::TcpListener::bind(":::0").expect("failed to bind to random port");
+        std::net::TcpListener::bind("[::]:0").expect("failed to bind to random port");
     let mock_oauth2_port = mock_oauth2_listener.local_addr().unwrap().port();
     tokio::spawn(mock_oauth2_server(mock_oauth2_listener));
     let config = Config {

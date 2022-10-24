@@ -72,6 +72,7 @@ class _LoginDialogState extends State<LoginDialog> {
                 ),
               TextFormField(
                 initialValue: login,
+                autofillHints: const [AutofillHints.username],
                 decoration: InputDecoration(labelText: tr(context, "login")),
                 key: const Key("loginField"),
                 onChanged: (text) {
@@ -87,6 +88,7 @@ class _LoginDialogState extends State<LoginDialog> {
               TextFormField(
                 obscureText: _isObscure,
                 initialValue: password,
+                autofillHints: const [AutofillHints.password],
                 decoration: InputDecoration(
                     labelText: tr(context, "password"),
                     // this button is used to toggle the password visibility

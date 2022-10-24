@@ -282,13 +282,13 @@ async fn redirect_test() {
     let mut app = TestApp::spawn(None).await;
     // Spawn 3 targets with different redirect behaviors
     let fwdtoredirect_listener =
-        std::net::TcpListener::bind(":::0").expect("failed to bind to random port");
+        std::net::TcpListener::bind("[::]:0").expect("failed to bind to random port");
     let fwdtoredirect_port = fwdtoredirect_listener.local_addr().unwrap().port();
     let relativeredirect_listener =
-        std::net::TcpListener::bind(":::0").expect("failed to bind to random port");
+        std::net::TcpListener::bind("[::]:0").expect("failed to bind to random port");
     let relativeredirect_port = relativeredirect_listener.local_addr().unwrap().port();
     let absoluteredirect_listener =
-        std::net::TcpListener::bind(":::0").expect("failed to bind to random port");
+        std::net::TcpListener::bind("[::]:0").expect("failed to bind to random port");
     let absoluteredirect_port = absoluteredirect_listener.local_addr().unwrap().port();
     tokio::spawn(fwdtoredirect_server(fwdtoredirect_listener));
     tokio::spawn(relativeredirect_server(relativeredirect_listener, app.port));
