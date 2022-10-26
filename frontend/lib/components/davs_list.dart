@@ -4,6 +4,7 @@ import 'package:atrium/components/create_edit_dav.dart';
 import 'package:atrium/components/delete_dialog.dart';
 import 'package:atrium/components/explorer.dart';
 import 'package:atrium/components/login_dialog.dart';
+import 'package:atrium/components/sized_items_grid.dart';
 import 'package:atrium/globals.dart';
 import 'package:atrium/i18n.dart';
 import 'package:atrium/models/api_provider.dart';
@@ -65,7 +66,181 @@ class _DavsListState extends State<DavsList> {
                 if (snapshot.hasError) {
                   return Center(child: Text('Error: ${snapshot.error}'));
                 }
-                return _buildListView(context, snapshot.data ?? []);
+                var list = snapshot.data ?? [];
+                return SizedItemsGrid(
+                    itemBuilder: (context, index) {
+                      var dav = list[index];
+                      var diskusage = ApiProvider().getDiskInfo(dav);
+                      return Card(
+                        clipBehavior: Clip.antiAlias,
+                        margin: const EdgeInsets.all(8.0),
+                        elevation: 2,
+                        child: Container(
+                          decoration: BoxDecoration(
+                              border: Border(
+                                  left:
+                                      BorderSide(color: dav.color, width: 5))),
+                          child: InkWell(
+                            onTap: () {
+                              _openExplorer(context, dav);
+                            },
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Icon(
+                                    IconData(dav.icon,
+                                        fontFamily: 'MaterialIcons'),
+                                    color: dav.color,
+                                    size: 70,
+                                    shadows: const <Shadow>[
+                                      Shadow(
+                                          color: Colors.black87,
+                                          blurRadius: 1.0,
+                                          offset: Offset(1, 1))
+                                    ],
+                                  ),
+                                ),
+                                Column(
+                                  children: [
+                                    FutureBuilder<DiskInfo>(
+                                      future: diskusage,
+                                      builder: (BuildContext context,
+                                          AsyncSnapshot<DiskInfo> snapshot) {
+                                        Widget child;
+                                        if (snapshot.hasData) {
+                                          child = Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 12),
+                                            child: Column(children: [
+                                              LinearProgressIndicator(
+                                                value:
+                                                    snapshot.data?.spaceUsage,
+                                                color: colorFromPercent(
+                                                    snapshot.data?.spaceUsage),
+                                                backgroundColor:
+                                                    Colors.grey[350],
+                                              ),
+                                              Text(
+                                                snapshot.data!.usedSpaceLabel,
+                                                textAlign: TextAlign.right,
+                                              ),
+                                            ]),
+                                          );
+                                        } else {
+                                          child = const SizedBox(height: 20);
+                                        }
+                                        return AnimatedSwitcher(
+                                          duration:
+                                              const Duration(milliseconds: 250),
+                                          child: child,
+                                        );
+                                      },
+                                    ),
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.end,
+                                      children: [
+                                        Expanded(
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(12.0),
+                                            child: Text(
+                                              dav.name,
+                                              overflow: TextOverflow.fade,
+                                              style: const TextStyle(
+                                                  fontWeight: FontWeight.bold),
+                                            ),
+                                          ),
+                                        ),
+                                        if (App().isAdmin)
+                                          PopupMenuButton(
+                                              itemBuilder: (BuildContext
+                                                      context) =>
+                                                  <PopupMenuEntry>[
+                                                    PopupMenuItem(
+                                                        onTap: () {
+                                                          WidgetsBinding
+                                                              .instance
+                                                              .addPostFrameCallback(
+                                                                  (_) async {
+                                                            await Navigator.push(
+                                                                context,
+                                                                MaterialPageRoute(
+                                                                  builder: (context) =>
+                                                                      CreateEditDav(
+                                                                          dav:
+                                                                              dav,
+                                                                          isNew:
+                                                                              false),
+                                                                ));
+                                                            await _getData();
+                                                            setState(() {});
+                                                          });
+                                                        },
+                                                        child: Row(
+                                                          children: [
+                                                            const Padding(
+                                                              padding:
+                                                                  EdgeInsets
+                                                                      .all(8.0),
+                                                              child: Icon(
+                                                                  Icons.edit),
+                                                            ),
+                                                            Text(tr(context,
+                                                                "edit"))
+                                                          ],
+                                                        )),
+                                                    PopupMenuItem(
+                                                        onTap: () {
+                                                          WidgetsBinding
+                                                              .instance
+                                                              .addPostFrameCallback(
+                                                                  (_) async {
+                                                            var confirmed =
+                                                                await showDialog<
+                                                                    bool>(
+                                                              context: context,
+                                                              builder: (context) =>
+                                                                  DeleteDialog(
+                                                                      dav.name),
+                                                            );
+                                                            if (confirmed!) {
+                                                              await ApiProvider()
+                                                                  .deleteDav(
+                                                                      dav.id);
+                                                              await _getData();
+                                                              setState(() {});
+                                                            }
+                                                          });
+                                                        },
+                                                        child: Row(
+                                                          children: [
+                                                            const Padding(
+                                                              padding:
+                                                                  EdgeInsets
+                                                                      .all(8.0),
+                                                              child: Icon(Icons
+                                                                  .delete_forever),
+                                                            ),
+                                                            Text(tr(context,
+                                                                "delete"))
+                                                          ],
+                                                        )),
+                                                  ])
+                                      ],
+                                    )
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                    list: list);
             }
           }),
       floatingActionButton: App().isAdmin
@@ -92,184 +267,6 @@ class _DavsListState extends State<DavsList> {
 
   _getData() {
     davs = App().isAdmin ? ApiProvider().getDavs() : ApiProvider().listDavs();
-  }
-
-  Widget _buildListView(BuildContext context, List<DavModel> list) {
-    return ListView(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Wrap(
-              alignment: WrapAlignment.center,
-              children: list.map((dav) {
-                var diskusage = ApiProvider().getDiskInfo(dav);
-                return SizedBox(
-                  height: 175,
-                  width: 175,
-                  child: Card(
-                    clipBehavior: Clip.antiAlias,
-                    margin: const EdgeInsets.all(8.0),
-                    elevation: 2,
-                    child: Container(
-                      decoration: BoxDecoration(
-                          border: Border(
-                              left: BorderSide(color: dav.color, width: 5))),
-                      child: InkWell(
-                        onTap: () {
-                          _openExplorer(context, dav);
-                        },
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.all(8.0),
-                              child: Icon(
-                                IconData(dav.icon, fontFamily: 'MaterialIcons'),
-                                color: dav.color,
-                                size: 60,
-                                shadows: const <Shadow>[
-                                  Shadow(
-                                      color: Colors.black87,
-                                      blurRadius: 1.0,
-                                      offset: Offset(1, 1))
-                                ],
-                              ),
-                            ),
-                            Column(
-                              children: [
-                                FutureBuilder<DiskInfo>(
-                                  future: diskusage,
-                                  builder: (BuildContext context,
-                                      AsyncSnapshot<DiskInfo> snapshot) {
-                                    Widget child;
-                                    if (snapshot.hasData) {
-                                      child = Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 12),
-                                        child: Column(children: [
-                                          LinearProgressIndicator(
-                                            value: snapshot.data?.spaceUsage,
-                                            color: colorFromPercent(
-                                                snapshot.data?.spaceUsage),
-                                            backgroundColor: Colors.grey[350],
-                                          ),
-                                          Text(
-                                            snapshot.data!.usedSpaceLabel,
-                                            textAlign: TextAlign.right,
-                                          ),
-                                        ]),
-                                      );
-                                    } else {
-                                      child = const SizedBox(height: 20);
-                                    }
-                                    return AnimatedSwitcher(
-                                      duration:
-                                          const Duration(milliseconds: 250),
-                                      child: child,
-                                    );
-                                  },
-                                ),
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Expanded(
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(12.0),
-                                        child: Text(
-                                          dav.name,
-                                          overflow: TextOverflow.fade,
-                                          style: const TextStyle(
-                                              fontWeight: FontWeight.bold),
-                                        ),
-                                      ),
-                                    ),
-                                    if (App().isAdmin)
-                                      PopupMenuButton(
-                                          itemBuilder: (BuildContext context) =>
-                                              <PopupMenuEntry>[
-                                                PopupMenuItem(
-                                                    onTap: () {
-                                                      WidgetsBinding.instance
-                                                          .addPostFrameCallback(
-                                                              (_) async {
-                                                        await Navigator.push(
-                                                            context,
-                                                            MaterialPageRoute(
-                                                              builder: (context) =>
-                                                                  CreateEditDav(
-                                                                      dav: dav,
-                                                                      isNew:
-                                                                          false),
-                                                            ));
-                                                        await _getData();
-                                                        setState(() {});
-                                                      });
-                                                    },
-                                                    child: Row(
-                                                      children: [
-                                                        const Padding(
-                                                          padding:
-                                                              EdgeInsets.all(
-                                                                  8.0),
-                                                          child:
-                                                              Icon(Icons.edit),
-                                                        ),
-                                                        Text(
-                                                            tr(context, "edit"))
-                                                      ],
-                                                    )),
-                                                PopupMenuItem(
-                                                    onTap: () {
-                                                      WidgetsBinding.instance
-                                                          .addPostFrameCallback(
-                                                              (_) async {
-                                                        var confirmed =
-                                                            await showDialog<
-                                                                bool>(
-                                                          context: context,
-                                                          builder: (context) =>
-                                                              DeleteDialog(
-                                                                  dav.name),
-                                                        );
-                                                        if (confirmed!) {
-                                                          await ApiProvider()
-                                                              .deleteDav(
-                                                                  dav.id);
-                                                          await _getData();
-                                                          setState(() {});
-                                                        }
-                                                      });
-                                                    },
-                                                    child: Row(
-                                                      children: [
-                                                        const Padding(
-                                                          padding:
-                                                              EdgeInsets.all(
-                                                                  8.0),
-                                                          child: Icon(Icons
-                                                              .delete_forever),
-                                                        ),
-                                                        Text(tr(
-                                                            context, "delete"))
-                                                      ],
-                                                    )),
-                                              ])
-                                  ],
-                                )
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }).toList()),
-        )
-      ],
-    );
   }
 }
 
