@@ -48,6 +48,7 @@ class ExplorerState extends State<Explorer> {
   var _copyMoveStatus = CopyMoveStatus.none;
   var _copyMovePath = "";
   late bool readWrite;
+  late Future<List<File>> files;
 
   @override
   void initState() {
@@ -60,6 +61,7 @@ class ExplorerState extends State<Explorer> {
       password: pwd,
       debug: false,
     );
+    _getData();
   }
 
   @override
@@ -72,7 +74,7 @@ class ExplorerState extends State<Explorer> {
         title: Text(widget.name),
       ),
       body: FutureBuilder(
-          future: _getData(),
+          future: files,
           builder: (BuildContext context,
               AsyncSnapshot<List<webdav.File>> snapshot) {
             switch (snapshot.connectionState) {
@@ -192,8 +194,8 @@ class ExplorerState extends State<Explorer> {
     );
   }
 
-  Future<List<webdav.File>> _getData() {
-    return client.readDir(dirPath);
+  void _getData() {
+    files = client.readDir(dirPath);
   }
 
   Widget _buildListView(BuildContext context, List<webdav.File> list) {
@@ -210,6 +212,7 @@ class ExplorerState extends State<Explorer> {
       }
       return 0;
     });
+    final List idxList = Iterable<int>.generate(list.length).toList();
     return ListView(children: [
       if (dirPath != "/")
         ListTile(
@@ -223,7 +226,8 @@ class ExplorerState extends State<Explorer> {
             });
           },
         ),
-      ...list.map((file) {
+      ...idxList.map((idx) {
+        var file = list[idx];
         var mimeType = lookupMimeType(file.name!);
         return ListTile(
           leading: widgetFromFileType(file, mimeType),
@@ -351,7 +355,8 @@ class ExplorerState extends State<Explorer> {
                               if (confirmed!) {
                                 await client.removeAll(file.path!);
                                 setState(() {
-                                  _getData();
+                                  idxList.removeAt(idx);
+                                  list.removeAt(idx);
                                 });
                               }
                             });
@@ -387,7 +392,11 @@ class ExplorerState extends State<Explorer> {
                     context,
                     MaterialPageRoute(
                         builder: (context) => ImageViewer(
-                            client: client, url: widget.url, file: file)),
+                              client: client,
+                              url: widget.url,
+                              files: list,
+                              index: idx,
+                            )),
                   );
                 } else if (mimeType.contains("pdf")) {
                   Navigator.push(
