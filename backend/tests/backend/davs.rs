@@ -1065,10 +1065,13 @@ async fn secured_dav_basic_auth_and_token_test() {
     // Create a client without cookie store
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
-        .resolve("atrium.io", format!("[::1]:{}", app.port).parse().unwrap())
+        .resolve(
+            "atrium.io",
+            format!("127.0.0.1:{}", app.port).parse().unwrap(),
+        )
         .resolve(
             "secured-files.atrium.io",
-            format!("[::1]:{}", app.port).parse().unwrap(),
+            format!("127.0.0.1:{}", app.port).parse().unwrap(),
         )
         .cookie_store(false)
         .build()

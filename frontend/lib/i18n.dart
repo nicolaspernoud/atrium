@@ -137,7 +137,7 @@ class MyLocalizations {
       "pick_an_icon": "Choix de l'icône",
       "playback_speed": "Vitesse de lecture",
       "please_enter_some_text": "Merci d'entrer une chaîne de caractères",
-      "remove_dones": "Enlever les téléchargement réussis",
+      "remove_dones": "Masquer les téléchargement réussis",
       "rename": "Renommer",
       "retry": "Réessayer",
       "roles": "Rôles (séparés par des virgules)",

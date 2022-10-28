@@ -34,18 +34,18 @@ impl TestApp {
         let id = random_string(16);
         create_test_tree(&id).ok();
         let main_listener =
-            std::net::TcpListener::bind("[::]:0").expect("failed to bind to random port");
+            std::net::TcpListener::bind("127.0.0.1:0").expect("failed to bind to random port");
 
         let main_addr = (&main_listener).local_addr().unwrap();
         let main_port = main_addr.port();
         let mock1_listener =
-            std::net::TcpListener::bind("[::]:0").expect("failed to bind to random port");
+            std::net::TcpListener::bind("127.0.0.1:0").expect("failed to bind to random port");
         let mock1_port = mock1_listener.local_addr().unwrap().port();
         let mock2_listener =
-            std::net::TcpListener::bind("[::]:0").expect("failed to bind to random port");
+            std::net::TcpListener::bind("127.0.0.1:0").expect("failed to bind to random port");
         let mock2_port = mock2_listener.local_addr().unwrap().port();
         let mock_oauth2_listener =
-            std::net::TcpListener::bind("[::]:0").expect("failed to bind to random port");
+            std::net::TcpListener::bind("127.0.0.1:0").expect("failed to bind to random port");
         let mock_oauth2_port = mock_oauth2_listener.local_addr().unwrap().port();
 
         let mut config = config.unwrap_or(create_default_config(
