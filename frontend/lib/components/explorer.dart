@@ -380,7 +380,9 @@ class ExplorerState extends State<Explorer> {
               });
             } else {
               if (mimeType != null) {
-                if (mimeType.contains("text/") || mimeType.contains("json")) {
+                if (mimeType.contains("text/") ||
+                    mimeType.contains("json") ||
+                    mimeType.contains("x-sh")) {
                   Navigator.push(
                     context,
                     MaterialPageRoute(

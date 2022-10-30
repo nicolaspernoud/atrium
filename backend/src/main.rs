@@ -106,9 +106,13 @@ async fn run() -> Result<()> {
                 .serve(app)
                 .await?;
         } else {
-            let addr = format!("[::]:{}", server.port)
-                .parse::<std::net::SocketAddr>()
-                .unwrap();
+            let addr = if cfg!(windows) {
+                format!("0.0.0.0:{}", server.port)
+            } else {
+                format!("[::]:{}", server.port) // On linux bind to ipv6 binds to ipv4 as well
+            }
+            .parse::<std::net::SocketAddr>()
+            .unwrap();
             axum_server::bind(addr).handle(handle).serve(app).await?;
         }
     }

@@ -21,7 +21,6 @@ class ImageViewer extends StatefulWidget {
 }
 
 class _ImageViewerState extends State<ImageViewer> {
-  Future<Uint8List>? imgData;
   late int index;
   late File file;
 
@@ -63,8 +62,11 @@ class _ImageViewerState extends State<ImageViewer> {
                 builder:
                     (BuildContext context, AsyncSnapshot<Uint8List> snapshot) {
                   Widget child;
-                  if (snapshot.hasData) {
-                    child = Image.memory(snapshot.data!);
+                  if (snapshot.hasData &&
+                      snapshot.connectionState == ConnectionState.done) {
+                    child = Image.memory(
+                      snapshot.data!,
+                    );
                   } else if (snapshot.hasError) {
                     child = Padding(
                       padding: const EdgeInsets.only(top: 16),
@@ -77,7 +79,8 @@ class _ImageViewerState extends State<ImageViewer> {
                       child: CircularProgressIndicator(),
                     );
                   }
-                  return Center(
+                  return AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
                     child: child,
                   );
                 })),
@@ -86,9 +89,8 @@ class _ImageViewerState extends State<ImageViewer> {
   }
 
   void seekImage(bool forward) {
-    var i = index;
+    var i = forward ? index + 1 : index - 1;
     while (i >= 0 && i < widget.files.length) {
-      i = forward ? i + 1 : i - 1;
       if (lookupMimeType(widget.files[i].name!)?.contains("image") ?? false) {
         setState(() {
           index = i;
@@ -96,6 +98,7 @@ class _ImageViewerState extends State<ImageViewer> {
         });
         break;
       }
+      i = forward ? i + 1 : i - 1;
     }
   }
 }
