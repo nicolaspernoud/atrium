@@ -8,7 +8,7 @@ use anyhow::Result;
 use axum::{
     async_trait,
     extract::{FromRequest, RequestParts},
-    Extension, TypedHeader,
+    Extension,
 };
 use hyper::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -331,15 +331,15 @@ where
             .await
             .expect("`Config` extension is missing");
 
-        let host = TypedHeader::<headers::Host>::from_request(req)
+        let host = axum::extract::Host::from_request(req)
             .await
             .map_err(|_| StatusCode::NOT_FOUND)?;
 
-        let host = host.hostname();
+        let hostname = host.0.split_once(":").unwrap_or((&host.0, "")).0;
 
         // Work out where to target to
         let target = configmap
-            .get(host)
+            .get(hostname)
             .ok_or(())
             .map_err(|_| StatusCode::NOT_FOUND)?;
         let target = (*target).clone();

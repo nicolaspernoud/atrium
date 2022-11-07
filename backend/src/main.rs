@@ -82,10 +82,11 @@ async fn run() -> Result<()> {
                 .directory_lets_encrypt(true)
                 .cache(DirCache::new("./letsencrypt_cache"))
                 .state();
-            let rustls_config = ServerConfig::builder()
+            let mut rustls_config = ServerConfig::builder()
                 .with_safe_defaults()
                 .with_no_client_auth()
                 .with_cert_resolver(state.resolver());
+            rustls_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
             let acceptor = state.axum_acceptor(Arc::new(rustls_config));
 
             tokio::spawn(async move {

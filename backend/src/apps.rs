@@ -9,7 +9,7 @@ use axum::{
 };
 use base64ct::Encoding;
 use headers::HeaderValue;
-use http::header::AUTHORIZATION;
+use http::{header::AUTHORIZATION, Version};
 use hyper::{
     header::{HOST, LOCATION},
     Body, StatusCode, Uri,
@@ -150,6 +150,8 @@ pub async fn proxy_handler(
     Host(hostname): Host,
     mut req: Request<Body>,
 ) -> Response<Body> {
+    // Downgrade to HTTP/1.1 to be compatible with any website
+    *req.version_mut() = Version::HTTP_11;
     let domain = hostname.split(":").next().unwrap_or_default();
     if let Some(value) = check_authorization(&app, &user.map(|u| u.0), domain, req.uri().path()) {
         return value;
