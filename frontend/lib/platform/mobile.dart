@@ -32,7 +32,8 @@ class NotificationsPlugin {
         channelDescription: 'atrium-channel',
         importance: Importance.max,
         priority: Priority.high,
-        color: Colors.indigo);
+        color: Colors.indigo,
+        enableVibration: false);
     var platformChannelSpecifics =
         NotificationDetails(android: androidPlatformChannelSpecifics);
     await flip.show(0, title, message, platformChannelSpecifics,

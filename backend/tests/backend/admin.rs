@@ -197,7 +197,7 @@ const NEW_APP: &'static str = r##"
 {
     "id": 101,
     "name": "App 101",
-    "icon": 62783,
+    "icon": "app",
     "color": 4292030255,
     "is_proxy": true,
     "host": "app101",
@@ -399,7 +399,7 @@ const NEW_DAV: &'static str = r##"
     "directory": "./data/dir2",
     "writable": true,
     "name": "Files101",
-    "icon": 42,
+    "icon": "folder",
     "color": 4292030255,
     "secured": false,
     "allow_symlinks": false,

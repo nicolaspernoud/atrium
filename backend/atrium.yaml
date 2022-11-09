@@ -21,7 +21,7 @@ openid_config: # optional : allow login with OpenID Connect
 apps: # optional : applications served by atrium
   - id: 1 # required : app id
     name: App 1 # required : app name
-    icon: 62783 # required : app icon reference
+    icon: web_asset # required : app icon reference
     color: 4292030255 # required : app color reference
     is_proxy: true # optional, defaults to false : if false, will serve target as a directory, if true will serve target as a reverse proxy
     host: app1 # required : subdomain to serve the app from : for example it will respond at app1.atrium.127.0.0.1.nip.io with this configuration, if a fully qualified name is entered it will be served only if it matches (subdomain_without_dots).(hostname) pattern, that can be useful in advanced use cases where on atrium instances on different subdomains share their configuration file
@@ -37,7 +37,7 @@ apps: # optional : applications served by atrium
     subdomains: [app1-subdomain1, app1.subdomain2] # optional : subdomains that the app can be reached on : for example this app will respond to app1-subdomain1.app1.atrium.127.0.0.1.nip.io and app1.subdomain2.app1.atrium.127.0.0.1.nip.io in addition to app1.atrium.127.0.0.1.nip.io
   - id: 2
     name: App 2
-    icon: 62783
+    icon: web_asset
     color: 4292030255
     is_proxy: true
     host: app2
@@ -48,7 +48,7 @@ apps: # optional : applications served by atrium
       - USERS
   - id: 3
     name: App Static
-    icon: 62783
+    icon: web_asset
     color: 4292030255
     host: static-app
     target: tests/data
@@ -64,14 +64,14 @@ davs: # optional : webdav services served by atrium
     host: files1
     directory: ./data/dir1
     name: Files 1
-    icon: 983856
+    icon: folder
     color: 4292030255
   - id: 2 # required : dav id
     host: files2 # required : subdomain to serve the dav from : for example it will respond at files1.atrium.127.0.0.1.nip.io with this configuration
     directory: ./data/dir2 # required : directory to serve with webdav protocol
     writable: true # optional, defaults to false : if true the dav is writable
     name: Files 2 # required : dav name
-    icon: 983856 # required : dav icon reference
+    icon: folder # required : dav icon reference
     color: 4292030255 # required : dav color reference
     secured: true # optional, defaults to false : if true the dav can only be accessed by a logged in user
     allow_symlinks: false # optional, defaults to false : if true symlinks in the directory will be followed, use with caution

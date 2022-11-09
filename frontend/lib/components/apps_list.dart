@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:atrium/components/create_edit_app.dart';
 import 'package:atrium/components/delete_dialog.dart';
+import 'package:atrium/components/icons.dart';
 import 'package:atrium/components/sized_items_grid.dart';
 
 import 'package:atrium/components/login_dialog.dart';
@@ -91,8 +92,7 @@ class _AppsListState extends State<AppsList> {
                                 Padding(
                                   padding: const EdgeInsets.all(12.0),
                                   child: Icon(
-                                    IconData(app.icon,
-                                        fontFamily: 'MaterialIcons'),
+                                    roundedIcons[app.icon],
                                     color: app.color,
                                     size: 70,
                                     shadows: const <Shadow>[

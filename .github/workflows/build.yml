@@ -91,14 +91,14 @@ jobs:
       # - name: Run Tests
       #   run: flutter test
       - name: Build Android App
-        run: flutter build apk --no-tree-shake-icons
+        run: flutter build apk --split-per-abi
       - name: Release Apps
         uses: ncipollo/release-action@v1
         with:
           tag: ${{ env.APP_VERSION }}
           name: ${{ env.APP_VERSION }}
           token: ${{ secrets.GITHUB_TOKEN }}
-          artifacts: "frontend/build/app/outputs/flutter-apk/app.apk"
+          artifacts: "frontend/build/app/outputs/flutter-apk/*.apk"
       - name: Delete old releases
         uses: dev-drprasad/delete-older-releases@v0.2.0
         with:

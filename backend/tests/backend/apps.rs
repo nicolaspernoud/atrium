@@ -299,7 +299,7 @@ async fn redirect_test() {
         App {
             id: 1,
             name: "fwdtoredirect".to_owned(),
-            icon: 0xf53f,
+            icon: "web_asset".to_owned(),
             color: 4292030255,
             is_proxy: true,
             host: "fwdtoredirect".to_owned(),
@@ -315,7 +315,7 @@ async fn redirect_test() {
         App {
             id: 1,
             name: "relativeredirect".to_owned(),
-            icon: 0xf53f,
+            icon: "web_asset".to_owned(),
             color: 4292030255,
             is_proxy: true,
             host: "relativeredirect".to_owned(),
@@ -331,7 +331,7 @@ async fn redirect_test() {
         App {
             id: 1,
             name: "absoluteredirect".to_owned(),
-            icon: 0xf53f,
+            icon: "web_asset".to_owned(),
             color: 4292030255,
             is_proxy: true,
             host: "absoluteredirect".to_owned(),

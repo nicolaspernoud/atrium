@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:atrium/components/create_edit_dav.dart';
 import 'package:atrium/components/delete_dialog.dart';
 import 'package:atrium/components/explorer.dart';
+import 'package:atrium/components/icons.dart';
 import 'package:atrium/components/login_dialog.dart';
 import 'package:atrium/components/sized_items_grid.dart';
 import 'package:atrium/globals.dart';
@@ -90,8 +91,7 @@ class _DavsListState extends State<DavsList> {
                                 Padding(
                                   padding: const EdgeInsets.only(top: 8),
                                   child: Icon(
-                                    IconData(dav.icon,
-                                        fontFamily: 'MaterialIcons'),
+                                    roundedIcons[dav.icon],
                                     color: dav.color,
                                     size: 70,
                                     shadows: const <Shadow>[

@@ -1,3 +1,4 @@
+import 'package:atrium/components/icons.dart';
 import 'package:atrium/models/api_provider.dart';
 import 'package:atrium/models/app.dart';
 import 'package:flutter/material.dart';
@@ -89,9 +90,7 @@ class CreateEditAppState extends State<CreateEditApp> {
                               await pickIcon(context, widget.app);
                               setState(() {});
                             },
-                            icon: Icon(
-                                IconData(widget.app.icon,
-                                    fontFamily: 'MaterialIcons'),
+                            icon: Icon(roundedIcons[widget.app.icon],
                                 color: widget.app.color)),
                       ),
                     ),
@@ -251,11 +250,14 @@ pickIcon(BuildContext context, Model model) async {
       title: Text(tr(context, 'pick_an_icon')),
       searchHintText: tr(context, 'search'),
       noResultsText: tr(context, 'no_result_for'),
+      iconPackModes: [],
+      customIconPack: roundedIcons,
       closeChild: Text(
         tr(context, 'close'),
         textScaleFactor: 1.25,
       ));
-  model.icon = icon!.codePoint;
+  model.icon = roundedIcons.keys
+      .firstWhere((k) => roundedIcons[k] == icon, orElse: () => "");
   await showDialog(
     context: context,
     builder: (BuildContext context) {

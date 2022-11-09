@@ -31,7 +31,8 @@ pub struct App {
     pub id: usize,
     #[serde(deserialize_with = "string_trim")]
     pub name: String,
-    pub icon: usize,
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub icon: String,
     pub color: usize,
     #[serde(default, skip_serializing_if = "is_default")]
     pub is_proxy: bool,

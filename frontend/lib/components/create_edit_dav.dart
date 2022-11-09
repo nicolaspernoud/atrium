@@ -1,4 +1,5 @@
 import 'package:atrium/components/create_edit_app.dart';
+import 'package:atrium/components/icons.dart';
 import 'package:atrium/models/api_provider.dart';
 import 'package:atrium/models/dav.dart';
 import 'package:atrium/utils.dart';
@@ -107,9 +108,7 @@ class CreateEditDavState extends State<CreateEditDav> {
                                 await pickIcon(context, widget.dav);
                                 setState(() {});
                               },
-                              icon: Icon(
-                                  IconData(widget.dav.icon,
-                                      fontFamily: 'MaterialIcons'),
+                              icon: Icon(roundedIcons[widget.dav.icon],
                                   color: widget.dav.color)),
                         ),
                       ),

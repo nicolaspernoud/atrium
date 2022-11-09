@@ -3,14 +3,14 @@ import 'package:flutter/widgets.dart';
 abstract class Model {
   late String host;
   late Color color;
-  late int icon;
+  late String icon;
 }
 
 class AppModel implements Model {
   AppModel({
     required this.id,
     this.name = "",
-    this.icon = 63298,
+    this.icon = "web_asset",
     this.color = const Color(0xffd32f2f),
     this.isProxy = true,
     this.host = "",
@@ -27,7 +27,7 @@ class AppModel implements Model {
   late int id;
   late String name;
   @override
-  late int icon;
+  late String icon;
   @override
   late Color color;
   late bool isProxy;
@@ -45,7 +45,7 @@ class AppModel implements Model {
   AppModel.fromJson(Map<String, dynamic> json) {
     id = json['id'];
     name = json['name'];
-    icon = json['icon'];
+    icon = json['icon'] != "" ? json['icon'] : "web_asset";
     color = Color(json['color']);
     isProxy = json['is_proxy'] ?? false;
     host = json['host'];

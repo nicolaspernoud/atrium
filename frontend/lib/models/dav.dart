@@ -8,7 +8,7 @@ class DavModel implements Model {
     this.directory = "/tmp",
     this.writable = true,
     this.name = "",
-    this.icon = 63298,
+    this.icon = "folder",
     this.color = const Color(0xffd32f2f),
     this.secured = false,
     this.allowSymlinks = false,
@@ -23,7 +23,7 @@ class DavModel implements Model {
   late bool writable;
   late String name;
   @override
-  late int icon;
+  late String icon;
   @override
   late Color color;
   late bool secured;
@@ -37,7 +37,7 @@ class DavModel implements Model {
     directory = json['directory'];
     writable = json['writable'] ?? false;
     name = json['name'];
-    icon = json['icon'];
+    icon = json['icon'] != "" ? json['icon'] : "folder";
     color = Color(json['color']);
     secured = json['secured'] ?? false;
     allowSymlinks = json['allow_symlinks'] ?? false;
