@@ -1,4 +1,5 @@
 import 'package:atrium/components/delete_dialog.dart';
+import 'package:atrium/components/icons.dart';
 import 'package:atrium/components/image_viewer.dart';
 import 'package:atrium/components/media_player.dart';
 import 'package:atrium/components/pdf_viewer.dart';
@@ -9,6 +10,7 @@ import 'package:atrium/components/uploads.dart';
 import 'package:atrium/globals.dart';
 import 'package:atrium/i18n.dart';
 import 'package:atrium/models/api_provider.dart';
+import 'package:atrium/models/dav.dart';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:filesize/filesize.dart';
@@ -24,15 +26,13 @@ import 'package:webdav_client/webdav_client.dart';
 
 class Explorer extends StatefulWidget {
   late final String url;
-  late final String name;
+  late final DavModel dav;
   final bool readWrite;
   // ignore: prefer_const_constructors_in_immutables
-  Explorer(
-      {Key? key,
-      required this.url,
-      required this.name,
-      required this.readWrite})
-      : super(key: key);
+  Explorer({Key? key, required this.dav})
+      : url = modelUrl(dav),
+        readWrite = dav.writable,
+        super(key: key);
 
   @override
   ExplorerState createState() => ExplorerState();
@@ -71,7 +71,17 @@ class ExplorerState extends State<Explorer> {
     }
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.name),
+        backgroundColor: widget.dav.color,
+        title: Row(
+          children: [
+            Icon(
+              roundedIcons[widget.dav.icon],
+              size: 30,
+            ),
+            const SizedBox(width: 15),
+            Text(widget.dav.name),
+          ],
+        ),
       ),
       body: FutureBuilder(
           future: files,

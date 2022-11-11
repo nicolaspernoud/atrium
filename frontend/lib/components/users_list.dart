@@ -33,7 +33,16 @@ class _UsersListState extends State<UsersList> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(tr(context, "users")),
+        title: Row(
+          children: [
+            const Icon(
+              Icons.group,
+              size: 30,
+            ),
+            const SizedBox(width: 15),
+            Text(tr(context, "users")),
+          ],
+        ),
         actions: logoutAction,
       ),
       body: FutureBuilder(

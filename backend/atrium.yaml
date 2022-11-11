@@ -54,7 +54,7 @@ apps: # optional : applications served by atrium
     target: tests/data
   - id: 4
     name: OnlyOffice
-    icon: 59631
+    icon: document_scanner
     color: 4286141768
     is_proxy: true
     host: onlyoffice

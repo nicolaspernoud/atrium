@@ -38,7 +38,16 @@ class _SystemInfoState extends State<SystemInfo> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(tr(context, "system_information")),
+        title: Row(
+          children: [
+            const Icon(
+              Icons.monitor_heart,
+              size: 30,
+            ),
+            const SizedBox(width: 15),
+            Text(tr(context, "system_information")),
+          ],
+        ),
         actions: logoutAction,
       ),
       body: Padding(

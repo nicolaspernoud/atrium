@@ -42,7 +42,16 @@ class _AppsListState extends State<AppsList> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(tr(context, "apps")),
+        title: Row(
+          children: [
+            const Icon(
+              Icons.apps,
+              size: 30,
+            ),
+            const SizedBox(width: 15),
+            Text(tr(context, "apps")),
+          ],
+        ),
         actions: logoutAction,
       ),
       body: FutureBuilder(
@@ -252,7 +261,17 @@ void _openAppInWebView(BuildContext context, AppModel app) {
         var initialUrl = modelUrl(app) + app.openpath;
         return Scaffold(
             appBar: AppBar(
-              title: Text(app.name),
+              backgroundColor: app.color,
+              title: Row(
+                children: [
+                  Icon(
+                    roundedIcons[app.icon],
+                    size: 30,
+                  ),
+                  const SizedBox(width: 15),
+                  Text(app.name),
+                ],
+              ),
             ),
             body: AppWebView(
               initialUrl: initialUrl,

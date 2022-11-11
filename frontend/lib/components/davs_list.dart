@@ -40,7 +40,16 @@ class _DavsListState extends State<DavsList> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(tr(context, "files")),
+        title: Row(
+          children: [
+            const Icon(
+              Icons.folder_open,
+              size: 30,
+            ),
+            const SizedBox(width: 15),
+            Text(tr(context, "files")),
+          ],
+        ),
         actions: logoutAction,
       ),
       body: FutureBuilder(
@@ -274,11 +283,8 @@ void _openExplorer(BuildContext context, DavModel dav) {
   Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (context) {
-        String url = modelUrl(dav);
         return Explorer(
-          url: url,
-          name: dav.name,
-          readWrite: dav.writable,
+          dav: dav,
         );
       },
     ),
