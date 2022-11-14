@@ -142,9 +142,9 @@ impl WebdavServer {
         match method {
             Method::GET | Method::HEAD => {
                 if is_dir {
-                    if query.starts_with("q=") {
+                    if let Some(stripped) = query.strip_prefix("q=") {
                         if allow_search {
-                            let q = decode_uri(&query[2..]).unwrap_or_default();
+                            let q = decode_uri(stripped).unwrap_or_default();
                             self.handle_query_dir(
                                 path,
                                 &q,
@@ -223,7 +223,7 @@ impl WebdavServer {
                         status_forbid(&mut res);
                     } else if !is_miss {
                         status_method_not_allowed(&mut res);
-                    } else if !axum::body::HttpBody::data(&mut req).await.is_none() {
+                    } else if axum::body::HttpBody::data(&mut req).await.is_some() {
                         *res.status_mut() = StatusCode::UNSUPPORTED_MEDIA_TYPE;
                         *res.body_mut() = Body::from("Unsupported Media Type");
                     } else {
@@ -281,7 +281,7 @@ impl WebdavServer {
     ) -> BoxResult<()> {
         ensure_path_parent(path).await?;
 
-        let file = match DavFile::create(&path, key).await {
+        let file = match DavFile::create(path, key).await {
             Ok(v) => v,
             Err(_) => {
                 status_forbid(res);
@@ -459,7 +459,7 @@ impl WebdavServer {
             None
         };
 
-        if let Some(mime) = mime_guess::from_path(&path).first() {
+        if let Some(mime) = mime_guess::from_path(path).first() {
             res.headers_mut().typed_insert(ContentType::from(mime));
         } else {
             res.headers_mut().insert(
@@ -660,7 +660,7 @@ impl WebdavServer {
         let dest = headers.get("Destination")?.to_str().ok()?;
         let uri: Uri = dest.parse().ok()?;
         match self.extract_path(uri.path(), dav_path) {
-            Some(dest) => Some(Destination::new(dest, uri.to_string().ends_with("/")).await),
+            Some(dest) => Some(Destination::new(dest, uri.to_string().ends_with('/')).await),
             None => None,
         }
     }
@@ -690,7 +690,7 @@ impl WebdavServer {
                     base_path,
                     directory,
                     allow_symlinks,
-                    &key,
+                    key,
                 )
                 .await
             {
@@ -730,7 +730,7 @@ impl WebdavServer {
         let size = match path_type {
             PathType::Dir | PathType::SymlinkDir => None,
             PathType::File | PathType::SymlinkFile => Some(if let Some(_key) = key {
-                decrypted_size(meta.len().try_into()?).try_into()?
+                decrypted_size(meta.len())
             } else {
                 meta.len()
             }),
@@ -797,17 +797,20 @@ impl WebdavServer {
         }
 
         // see if we need to delete the destination first
-        if path.is_dir() && dest.exists() && dest.is_dir() && overwrite && depth != Depth::Zero {
-            if fs::remove_dir_all(dest.path()).await.is_err() {
-                *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-                return Ok(());
-            }
+        if path.is_dir()
+            && dest.exists()
+            && dest.is_dir()
+            && overwrite
+            && depth != Depth::Zero
+            && fs::remove_dir_all(dest.path()).await.is_err()
+        {
+            *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+            return Ok(());
         }
 
         // COPY or MOVE
         if method.as_str() == "COPY" {
-            self.do_copy(&path, dest.path(), dest.path(), dest.is_dir(), depth)
-                .await?;
+            Self::do_copy(path, dest.path(), dest.path(), dest.is_dir(), depth).await?;
             if overwrite && dest.exists() {
                 *res.status_mut() = StatusCode::NO_CONTENT;
             } else {
@@ -833,7 +836,6 @@ impl WebdavServer {
     }
 
     fn do_copy<'a>(
-        &'a self,
         source: &'a Path,
         topdest: &'a Path,
         dest: &'a Path,
@@ -861,10 +863,9 @@ impl WebdavServer {
             // if it's a file we can overwrite it.
             if meta.is_file() {
                 if dest_is_dir_or_to_be {
-                    let destfile = dest.join(source.file_name().ok_or(Error::new(
-                        io::ErrorKind::Other,
-                        "could not extract file name",
-                    ))?);
+                    let destfile = dest.join(source.file_name().ok_or_else(|| {
+                        Error::new(io::ErrorKind::Other, "could not extract file name")
+                    })?);
                     return match fs::copy(source, destfile).await {
                         Ok(_) => Ok(()),
                         Err(e) => {
@@ -904,14 +905,11 @@ impl WebdavServer {
                     Err(e) => return Err(e),
                 };
                 let name = dirent.file_name();
-                let nsrc = source.clone().join(&name);
-                let ndest = dest.clone().join(&name);
+                let nsrc = source.join(&name);
+                let ndest = dest.join(&name);
 
                 // recurse
-                if let Err(e) = self
-                    .do_copy(&nsrc, topdest, &ndest, meta.is_dir(), depth)
-                    .await
-                {
+                if let Err(e) = Self::do_copy(&nsrc, topdest, &ndest, meta.is_dir(), depth).await {
                     retval = Err(e);
                 }
             }
@@ -1176,9 +1174,9 @@ impl Destination {
                     }
                 }
                 if meta.is_file() {
-                    return Destination::ExistingFile(dest);
+                    Destination::ExistingFile(dest)
                 } else {
-                    return Destination::ExistingDir(dest);
+                    Destination::ExistingDir(dest)
                 }
             }
             Err(_) => {

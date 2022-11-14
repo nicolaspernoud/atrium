@@ -62,10 +62,10 @@ fn corresponding_disk_info(
     mut disksinfo: Vec<DiskInfo>,
     path: PathBuf,
 ) -> Result<DiskInfo, &'static str> {
-    disksinfo.sort_by(|a, b| (*b).mount_point.partial_cmp(&(*a).mount_point).unwrap());
+    disksinfo.sort_by(|a, b| b.mount_point.partial_cmp(&a.mount_point).unwrap());
     disksinfo
         .into_iter()
-        .filter(|disk| {
+        .find(|disk| {
             path.starts_with(&disk.mount_point)
                 || if cfg!(windows) {
                     path.starts_with(format!(
@@ -76,7 +76,6 @@ fn corresponding_disk_info(
                     false
                 }
         })
-        .nth(0)
         .ok_or("no disks found")
 }
 

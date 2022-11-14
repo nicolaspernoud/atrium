@@ -36,7 +36,7 @@ impl TestApp {
         let main_listener =
             std::net::TcpListener::bind("127.0.0.1:0").expect("failed to bind to random port");
 
-        let main_addr = (&main_listener).local_addr().unwrap();
+        let main_addr = (main_listener).local_addr().unwrap();
         let main_port = main_addr.port();
         let mock1_listener =
             std::net::TcpListener::bind("127.0.0.1:0").expect("failed to bind to random port");
@@ -48,13 +48,9 @@ impl TestApp {
             std::net::TcpListener::bind("127.0.0.1:0").expect("failed to bind to random port");
         let mock_oauth2_port = mock_oauth2_listener.local_addr().unwrap().port();
 
-        let mut config = config.unwrap_or(create_default_config(
-            &id,
-            &main_port,
-            &mock1_port,
-            &mock2_port,
-            &mock_oauth2_port,
-        ));
+        let mut config = config.unwrap_or_else(|| {
+            create_default_config(&id, &main_port, &mock1_port, &mock2_port, &mock_oauth2_port)
+        });
 
         if config.hostname.is_empty() {
             config.hostname = "atrium.io".to_owned();
@@ -115,10 +111,10 @@ impl TestApp {
             .unwrap();
 
         let mut test_app = TestApp {
-            client: client,
-            id: id,
+            client,
+            id,
             port: main_port,
-            server_started: server_started,
+            server_started,
         };
 
         test_app.is_ready().await;
@@ -313,9 +309,9 @@ pub fn create_default_config(
         http_port: *main_port,
         cookie_key: None,
         log_to_file: false,
-        apps: apps,
-        davs: davs,
-        users: users,
+        apps,
+        davs,
+        users,
         session_duration_days: None,
         onlyoffice_config: Some(OnlyOfficeConfig {
             title: Some("AtriumOffice".to_owned()),
@@ -334,15 +330,15 @@ pub fn create_default_config(
 }
 
 fn create_test_tree(base: &str) -> Result<()> {
-    for dir in vec!["dir1", "dir2", "dir3"] {
+    for dir in &["dir1", "dir2", "dir3"] {
         fs::create_dir_all(format!("./data/{base}/{dir}/dira"))?;
         fs::create_dir_all(format!("./data/{base}/{dir}/dirb"))?;
         fs::create_dir_all(format!("./data/{base}/{dir}/dira/subdira"))?;
     }
     // Create files only for non encrypted davs
-    for dir in vec!["dir1", "dir3"] {
-        for subdir in vec!["dira", "dirb", "dira/subdira"] {
-            for file in vec!["file1", "file2"] {
+    for dir in ["dir1", "dir3"] {
+        for subdir in ["dira", "dirb", "dira/subdira"] {
+            for file in ["file1", "file2"] {
                 fs::OpenOptions::new()
                     .write(true)
                     .create_new(true)

@@ -8,8 +8,8 @@ use axum::{
 };
 use maxminddb::{geoip2, Reader};
 
-const UNKNOWN_CITY: &'static str = "unknown city";
-const UNKNOWN_COUNTRY: &'static str = "unknown country";
+const UNKNOWN_CITY: &str = "unknown city";
+const UNKNOWN_COUNTRY: &str = "unknown country";
 
 pub fn city_from_ip(addr: SocketAddr, reader: Arc<Option<Reader<Vec<u8>>>>) -> String {
     let location = if addr.ip().is_loopback() {

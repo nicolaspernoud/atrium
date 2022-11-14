@@ -137,7 +137,7 @@ impl Server {
         }
 
         Ok(Server {
-            router: router,
+            router,
             port: http_port,
         })
     }

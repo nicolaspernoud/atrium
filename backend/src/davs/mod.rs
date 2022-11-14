@@ -51,9 +51,9 @@ pub async fn webdav_handler(
     let user_str = user
         .as_ref()
         .map(|u| u.login.to_owned())
-        .unwrap_or("unknown user".to_owned());
+        .unwrap_or_else(|| "unknown user".to_owned());
 
-    let domain = hostname.split(":").next().unwrap_or_default();
+    let domain = hostname.split(':').next().unwrap_or_default();
 
     if method != Method::OPTIONS {
         if let Some(access_denied_resp) = check_authorization(&dav, &user, domain, req.uri().path())

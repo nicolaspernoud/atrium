@@ -208,7 +208,7 @@ async fn use_share_token_test() {
         .expect("failed to execute request");
     assert_eq!(response.status(), StatusCode::OK);
     let share_token = response.text().await.unwrap();
-    let share_token = share_token.split("=").collect::<Vec<_>>()[1];
+    let share_token = share_token.split('=').collect::<Vec<_>>()[1];
 
     // Create a client without cookie store
     let client = reqwest::Client::builder()

@@ -14,7 +14,7 @@ pub async fn cors_middleware<B>(req: Request<B>, next: Next<B>) -> Result<Respon
     let cfg = req.extensions().get::<Arc<Config>>().unwrap();
     let origin = req.headers().get("origin").map(|o| o.to_owned());
     let hostname = if origin.is_some() && {
-        let ref this = origin.as_ref().unwrap().to_str();
+        let this = &origin.as_ref().unwrap().to_str();
         let f = |o: &str| o.contains(&cfg.domain);
         matches!(this, Ok(x) if f(x))
     } {
@@ -95,13 +95,12 @@ fn inject_security_headers_internal(resp: &mut Response, source: &str) -> Result
     let headers = resp.headers_mut();
     match headers
         .get("Content-Security-Policy")
-        .map(|h| h.to_str().ok())
-        .flatten()
+        .and_then(|h| h.to_str().ok())
         .map(|h| h.to_owned())
     {
         // If it exists, alter it to inject the atrium main hostname in authorized frame ancestors
         Some(csp) => {
-            if csp.contains(&"frame-ancestors") {
+            if csp.contains("frame-ancestors") {
                 headers.insert(
                     "Content-Security-Policy",
                     HeaderValue::from_str(&csp.replacen(

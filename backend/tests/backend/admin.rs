@@ -193,7 +193,7 @@ async fn users_api_for_admin_user_test() {
     assert!(!response.text().await.unwrap().contains(r#"nicolas"#));
 }
 
-const NEW_APP: &'static str = r##"
+const NEW_APP: &str = r##"
 {
     "id": 101,
     "name": "App 101",
@@ -392,7 +392,7 @@ async fn apps_api_for_admin_user_test() {
     assert!(!response.text().await.unwrap().contains(r#""id":101"#));
 }
 
-const NEW_DAV: &'static str = r##"
+const NEW_DAV: &str = r##"
 {
     "id": 201,
     "host": "files101",

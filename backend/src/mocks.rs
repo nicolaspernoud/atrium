@@ -70,7 +70,7 @@ async fn well_known_openid() -> impl IntoResponse {
 			"token_endpoint": "http://localhost:8090/token",
 			"userinfo_endpoint": "http://localhost:8090/userinfo"
 		  }"#,
-    );
+    )
 }
 
 #[derive(Deserialize)]

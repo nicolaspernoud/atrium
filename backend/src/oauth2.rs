@@ -19,7 +19,7 @@ use crate::{
     users::{create_user_cookie, user_to_token, User, ADMINS_ROLE},
 };
 
-const STATE_COOKIE: &'static str = "ATRIUM_OAUTH2_STATE";
+const STATE_COOKIE: &str = "ATRIUM_OAUTH2_STATE";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -47,12 +47,12 @@ fn oauth_client(
     config: OpenIdConfig,
     redirect_url: String,
 ) -> Result<BasicClient, (StatusCode, &'static str)> {
-    Ok(oauth_client_internal(config, redirect_url).map_err(|_| {
+    oauth_client_internal(config, redirect_url).map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             "could not parse OpenID configuration",
         )
-    })?)
+    })
 }
 
 pub async fn oauth2_login(

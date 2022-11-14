@@ -23,7 +23,7 @@ fn invalid() -> headers::Error {
 }
 
 /// Depth: header.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Depth {
     Zero,
     One,
@@ -61,7 +61,7 @@ impl Header for Depth {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Overwrite(pub bool);
 
 impl Header for Overwrite {

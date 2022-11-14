@@ -31,7 +31,7 @@ static WWWAUTHENTICATE: HeaderName = HeaderName::from_static("www-authenticate")
 pub static ADMINS_ROLE: &str = "ADMINS";
 pub static REDACTED: &str = "REDACTED";
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UserInfo {
     #[serde(
         skip_serializing_if = "is_default",
@@ -53,7 +53,7 @@ pub struct UserInfo {
     pub email: String,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct User {
     #[serde(deserialize_with = "string_trim")]
     pub login: String,
@@ -73,7 +73,7 @@ pub struct User {
     pub info: Option<UserInfo>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Share {
     pub hostname: String,
     pub path: String,
@@ -81,7 +81,7 @@ pub struct Share {
     pub share_for_days: Option<i64>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UserToken {
     pub login: String,
     pub roles: Vec<String>,
@@ -144,22 +144,22 @@ where
 
         // OR Try to get user_token from the query
         if let Some(password) = req.uri().query().map(|q| {
-            let split = q.splitn(2, "=").collect::<Vec<_>>();
+            let split = q.splitn(2, '=').collect::<Vec<_>>();
             if split.len() > 1 {
                 return split[1];
             }
-            &""
+            ""
         }) {
-            let res = cookie_from_password(COOKIE_NAME, &jar, &password);
+            let res = cookie_from_password(COOKIE_NAME, &jar, password);
             if res.is_ok() {
                 return res;
             } else {
-                return cookie_from_password(SHARE_TOKEN, &jar, &password);
+                return cookie_from_password(SHARE_TOKEN, &jar, password);
             }
         }
 
         // OR Try to get user_token from basic auth headers
-        if let Some(AuthBasic((login, Some(password)))) = AuthBasic::from_request(req).await.ok() {
+        if let Ok(AuthBasic((login, Some(password)))) = AuthBasic::from_request(req).await {
             match cookie_from_password(COOKIE_NAME, &jar, &password) {
                 Ok(token) => return Ok(token),
                 Err(_) => {
@@ -172,7 +172,7 @@ where
                         .get()
                         .expect("Could not find socket address");
                     return match authenticate_local_user(
-                        &config,
+                        config,
                         LocalAuth { login, password },
                         (*reader).clone(),
                         addr.0,
@@ -230,7 +230,7 @@ where
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UserTokenWithoutXSRFCheck(pub UserToken);
 
 #[async_trait]
@@ -299,7 +299,7 @@ pub(crate) fn create_user_cookie(
     let encoded = serde_json::to_string(user_token)
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "could not encode user"))?;
     let domain = hostname
-        .split(":")
+        .split(':')
         .next()
         .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "could not find domain"))?
         .to_owned();
@@ -363,7 +363,7 @@ pub fn authenticate_local_user(
 }
 
 pub(crate) fn user_to_token(user: &User, config: &Config) -> UserToken {
-    let user_token = UserToken {
+    UserToken {
         login: user.login.to_owned(),
         roles: user.roles.to_owned(),
         xsrf_token: random_string(16),
@@ -372,8 +372,7 @@ pub(crate) fn user_to_token(user: &User, config: &Config) -> UserToken {
             + Duration::days(config.session_duration_days.unwrap_or(1)))
         .unix_timestamp(),
         info: user.info.clone(),
-    };
-    user_token
+    }
 }
 
 pub async fn get_users(
@@ -511,7 +510,7 @@ pub async fn get_share_token(
             .unwrap_or(Duration::seconds(2));
         let user_token = UserToken {
             login: share_login,
-            roles: user.roles.to_owned(),
+            roles: user.roles,
             xsrf_token: random_string(16),
             share: Some(share),
             expires: (OffsetDateTime::now_utc() + expires).unix_timestamp(),
@@ -556,7 +555,7 @@ fn hash_password(payload: &mut User) -> Result<(), argon2::password_hash::Error>
     Ok(())
 }
 
-pub fn check_user_has_role(user: &UserToken, roles: &Vec<String>) -> bool {
+pub fn check_user_has_role(user: &UserToken, roles: &[String]) -> bool {
     for user_role in user.roles.iter() {
         for role in roles.iter() {
             if user_role == role {
@@ -564,7 +563,7 @@ pub fn check_user_has_role(user: &UserToken, roles: &Vec<String>) -> bool {
             }
         }
     }
-    return false;
+    false
 }
 
 pub fn check_user_has_role_or_forbid(
@@ -646,9 +645,11 @@ mod check_user_has_role_or_forbid_tests {
     #[test]
     fn test_no_user() {
         let user = &None;
-        let mut app: App = App::default();
-        app.target = "www.example.com".to_string(); // to prevent failing when parsing url
-        app.roles = vec!["role1".to_string(), "role2".to_string()];
+        let app: App = App {
+            target: "www.example.com".to_string(), // to prevent failing when parsing url
+            roles: vec!["role1".to_string(), "role2".to_string()],
+            ..Default::default()
+        };
         let app = AppWithUri::from_app_domain_and_http_port(app, "atrium.io", None);
         let target = HostType::ReverseApp(app);
         assert!(check_user_has_role_or_forbid(user, &target, "", "").is_some());
@@ -656,11 +657,15 @@ mod check_user_has_role_or_forbid_tests {
 
     #[test]
     fn test_user_has_all_roles() {
-        let mut user = UserToken::default();
-        user.roles = vec!["role1".to_string(), "role2".to_string()];
-        let mut app: App = App::default();
-        app.target = "www.example.com".to_string(); // to prevent failing when parsing url
-        app.roles = vec!["role1".to_string(), "role2".to_string()];
+        let user = UserToken {
+            roles: vec!["role1".to_string(), "role2".to_string()],
+            ..Default::default()
+        };
+        let app: App = App {
+            target: "www.example.com".to_string(), // to prevent failing when parsing url
+            roles: vec!["role1".to_string(), "role2".to_string()],
+            ..Default::default()
+        };
         let app = AppWithUri::from_app_domain_and_http_port(app, "atrium.io", None);
         let target = HostType::ReverseApp(app);
         assert!(check_user_has_role_or_forbid(&Some(user), &target, "", "").is_none());
@@ -668,11 +673,15 @@ mod check_user_has_role_or_forbid_tests {
 
     #[test]
     fn test_user_has_one_role() {
-        let mut user = UserToken::default();
-        user.roles = vec!["role1".to_string()];
-        let mut app: App = App::default();
-        app.target = "www.example.com".to_string(); // to prevent failing when parsing url
-        app.roles = vec!["role1".to_string(), "role2".to_string()];
+        let user = UserToken {
+            roles: vec!["role1".to_string()],
+            ..Default::default()
+        };
+        let app: App = App {
+            target: "www.example.com".to_string(), // to prevent failing when parsing url
+            roles: vec!["role1".to_string(), "role2".to_string()],
+            ..Default::default()
+        };
         let app = AppWithUri::from_app_domain_and_http_port(app, "atrium.io", None);
         let target = HostType::ReverseApp(app);
         assert!(check_user_has_role_or_forbid(&Some(user), &target, "", "").is_none());
@@ -680,11 +689,15 @@ mod check_user_has_role_or_forbid_tests {
 
     #[test]
     fn test_user_has_no_role() {
-        let mut user = UserToken::default();
-        user.roles = vec!["role3".to_string(), "role4".to_string()];
-        let mut app: App = App::default();
-        app.target = "www.example.com".to_string(); // to prevent failing when parsing url
-        app.roles = vec!["role1".to_string(), "role2".to_string()];
+        let user = UserToken {
+            roles: vec!["role3".to_string(), "role4".to_string()],
+            ..Default::default()
+        };
+        let app: App = App {
+            target: "www.example.com".to_string(), // to prevent failing when parsing url
+            roles: vec!["role1".to_string(), "role2".to_string()],
+            ..Default::default()
+        };
         let app = AppWithUri::from_app_domain_and_http_port(app, "atrium.io", None);
         let target = HostType::ReverseApp(app);
         assert!(check_user_has_role_or_forbid(&Some(user), &target, "", "").is_some());
@@ -693,9 +706,11 @@ mod check_user_has_role_or_forbid_tests {
     #[test]
     fn test_user_roles_are_empty() {
         let user = UserToken::default();
-        let mut app: App = App::default();
-        app.target = "www.example.com".to_string(); // to prevent failing when parsing url
-        app.roles = vec!["role1".to_string(), "role2".to_string()];
+        let app = App {
+            target: "www.example.com".to_string(), // to prevent failing when parsing url
+            roles: vec!["role1".to_string(), "role2".to_string()],
+            ..Default::default()
+        };
         let app = AppWithUri::from_app_domain_and_http_port(app, "atrium.io", None);
         let target = HostType::ReverseApp(app);
         assert!(check_user_has_role_or_forbid(&Some(user), &target, "", "").is_some());
@@ -703,10 +718,14 @@ mod check_user_has_role_or_forbid_tests {
 
     #[test]
     fn test_allowed_roles_are_empty() {
-        let mut user = UserToken::default();
-        user.roles = vec!["role1".to_string(), "role2".to_string()];
-        let mut app: App = App::default();
-        app.target = "www.example.com".to_string(); // to prevent failing when parsing url
+        let user = UserToken {
+            roles: vec!["role1".to_string(), "role2".to_string()],
+            ..Default::default()
+        };
+        let app = App {
+            target: "www.example.com".to_string(), // to prevent failing when parsing url
+            ..Default::default()
+        };
         let app = AppWithUri::from_app_domain_and_http_port(app, "atrium.io", None);
         let target = HostType::ReverseApp(app);
         assert!(check_user_has_role_or_forbid(&Some(user), &target, "", "").is_some());
@@ -715,8 +734,10 @@ mod check_user_has_role_or_forbid_tests {
     #[test]
     fn test_all_roles_are_empty() {
         let user = UserToken::default();
-        let mut app: App = App::default();
-        app.target = "www.example.com".to_string(); // to prevent failing when parsing url
+        let app = App {
+            target: "www.example.com".to_string(), // to prevent failing when parsing url
+            ..Default::default()
+        };
         let app = AppWithUri::from_app_domain_and_http_port(app, "atrium.io", None);
         let target = HostType::ReverseApp(app);
         assert!(check_user_has_role_or_forbid(&Some(user), &target, "", "").is_some());

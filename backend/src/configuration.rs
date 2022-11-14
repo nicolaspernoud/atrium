@@ -22,7 +22,7 @@ fn hostname() -> String {
     "atrium.io".to_owned()
 }
 
-#[derive(Deserialize, Serialize, Debug, Default, PartialEq, Clone)]
+#[derive(Deserialize, Serialize, Debug, Default, PartialEq, Eq, Clone)]
 pub struct OnlyOfficeConfig {
     #[serde(default, skip_serializing_if = "is_default")]
     pub title: Option<String>,
@@ -30,7 +30,7 @@ pub struct OnlyOfficeConfig {
     pub jwt_secret: String,
 }
 
-#[derive(Deserialize, Serialize, Debug, Default, PartialEq, Clone)]
+#[derive(Deserialize, Serialize, Debug, Default, PartialEq, Eq, Clone)]
 pub struct OpenIdConfig {
     pub client_id: String,
     pub client_secret: String,
@@ -41,7 +41,7 @@ pub struct OpenIdConfig {
     pub admins_group: Option<String>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Default, PartialEq, Clone)]
+#[derive(Deserialize, Serialize, Debug, Default, PartialEq, Eq, Clone)]
 pub enum TlsMode {
     #[default]
     No,
@@ -59,7 +59,7 @@ impl TlsMode {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Default, PartialEq, Clone)]
+#[derive(Deserialize, Serialize, Debug, Default, PartialEq, Eq, Clone)]
 pub struct Config {
     #[serde(default = "hostname", deserialize_with = "string_trim")]
     pub hostname: String,
@@ -186,7 +186,7 @@ pub async fn load_config(
         config.to_file(config_file).await?;
     }
     // Allow overriding the hostname with env variable
-    if let Some(h) = std::env::var("MAIN_HOSTNAME").ok() {
+    if let Ok(h) = std::env::var("MAIN_HOSTNAME") {
         config.hostname = h
     }
     if is_default(&config.domain) {
@@ -201,7 +201,7 @@ pub async fn load_config(
         .map(|app| {
             (
                 format!("{}.{}", trim_host(&app.host), config.hostname),
-                app_to_host_type(&app, &config, port),
+                app_to_host_type(app, &config, port),
             )
         })
         .chain(filter_services(&config.davs, &config.hostname).map(|dav| {
@@ -218,7 +218,7 @@ pub async fn load_config(
         for domain in app.subdomains.as_ref().unwrap_or(&Vec::new()) {
             hashmap.insert(
                 format!("{}.{}.{}", domain, trim_host(&app.host), config.hostname),
-                app_to_host_type(&app, &config, port),
+                app_to_host_type(app, &config, port),
             );
         }
     }
@@ -226,7 +226,7 @@ pub async fn load_config(
 }
 
 pub(crate) fn trim_host(host: &str) -> String {
-    host.split_once(".").unwrap_or((host, "")).0.to_owned()
+    host.split_once('.').unwrap_or((host, "")).0.to_owned()
 }
 
 fn app_to_host_type(app: &App, config: &Config, port: Option<u16>) -> HostType {
@@ -242,7 +242,7 @@ fn app_to_host_type(app: &App, config: &Config, port: Option<u16>) -> HostType {
 }
 
 pub async fn config_or_error(config_file: &str) -> Result<Config, (StatusCode, &'static str)> {
-    let config = Config::from_file(&config_file).await.map_err(|_| {
+    let config = Config::from_file(config_file).await.map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             "could not read config file",
@@ -268,17 +268,17 @@ impl Service for Dav {
 }
 
 fn filter_services<'a, T: Service + 'a>(
-    services: &'a Vec<T>,
+    services: &'a [T],
     hostname: &'a str,
-) -> impl Iterator<Item = &T> {
+) -> impl Iterator<Item = &'a T> {
     services.iter().filter(move |s| {
         !s.host()
-            .trim_end_matches(&format!(".{}", hostname).to_owned())
-            .contains(".")
+            .trim_end_matches(&format!(".{}", hostname))
+            .contains('.')
     })
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum HostType {
     StaticApp(App),
     ReverseApp(AppWithUri),
@@ -335,7 +335,7 @@ where
             .await
             .map_err(|_| StatusCode::NOT_FOUND)?;
 
-        let hostname = host.0.split_once(":").unwrap_or((&host.0, "")).0;
+        let hostname = host.0.split_once(':').unwrap_or((&host.0, "")).0;
 
         // Work out where to target to
         let target = configmap

@@ -10,7 +10,7 @@ use hyper::StatusCode;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Dav {
     pub id: usize,
     #[serde(deserialize_with = "string_trim")]

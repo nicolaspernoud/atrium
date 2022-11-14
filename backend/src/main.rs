@@ -14,7 +14,7 @@ use tracing::{error, info};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{fmt, fmt::time::OffsetTime, prelude::*};
 
-pub const CONFIG_FILE: &'static str = "atrium.yaml";
+pub const CONFIG_FILE: &str = "atrium.yaml";
 
 fn main() -> Result<()> {
     // We need to work out the local time offset before entering multi-threaded context

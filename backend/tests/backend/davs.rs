@@ -115,8 +115,7 @@ async fn put_and_get_file(
 
 fn file_to_body(file: File) -> reqwest::Body {
     let stream = tokio_util::codec::FramedRead::new(file, tokio_util::codec::BytesCodec::new());
-    let body = reqwest::Body::wrap_stream(stream);
-    body
+    reqwest::Body::wrap_stream(stream)
 }
 
 fn create_big_binary_file(path: &str) {
@@ -146,7 +145,7 @@ async fn get_correct_range() -> Result<()> {
     let cases = vec!["files1", "files2"];
 
     for case in cases.iter() {
-        let file = File::open(format!("tests/data/lorem.txt")).await?;
+        let file = File::open("tests/data/lorem.txt").await?;
         // Act : send the file
         let resp = app
             .client
@@ -540,7 +539,7 @@ async fn propfind_dir() -> Result<()> {
     assert!(body.contains("<D:href>/dira/</D:href>"));
     assert!(body.contains("<D:displayname>dira</D:displayname>"));
     assert!(body.contains("<D:getcontentlength>0</D:getcontentlength>"));
-    for f in vec!["file1", "file2"] {
+    for f in ["file1", "file2"] {
         assert!(body.contains(&format!("<D:href>/dira/{}</D:href>", encode_uri(f))));
         assert!(body.contains(&format!(
             "<D:displayname>{}</D:displayname>",
@@ -1089,8 +1088,8 @@ async fn secured_dav_basic_auth_and_token_test() {
     // Get the token from the cookie
     let token = response.headers().get("set-cookie").unwrap();
     let token = token.to_str().unwrap().to_owned();
-    let token = token.split(";").collect::<Vec<_>>()[0]
-        .split("=")
+    let token = token.split(';').collect::<Vec<_>>()[0]
+        .split('=')
         .collect::<Vec<_>>()[1];
     let bauth = format!("dummy:{token}");
 

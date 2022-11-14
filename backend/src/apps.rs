@@ -26,7 +26,7 @@ use crate::{
     utils::{is_default, option_vec_trim_remove_empties, string_trim, vec_trim_remove_empties},
 };
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct App {
     pub id: usize,
     #[serde(deserialize_with = "string_trim")]
@@ -76,7 +76,7 @@ pub struct App {
     pub subdomains: Option<Vec<String>>,
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct AppWithUri {
     pub inner: App,
     pub app_scheme: Scheme,
@@ -153,7 +153,7 @@ pub async fn proxy_handler(
 ) -> Response<Body> {
     // Downgrade to HTTP/1.1 to be compatible with any website
     *req.version_mut() = Version::HTTP_11;
-    let domain = hostname.split(":").next().unwrap_or_default();
+    let domain = hostname.split(':').next().unwrap_or_default();
     if let Some(value) = check_authorization(&app, &user.map(|u| u.0), domain, req.uri().path()) {
         return value;
     }
@@ -176,22 +176,22 @@ pub async fn proxy_handler(
         *uri = Uri::from_parts(parts).unwrap();
         req.headers_mut().insert(
             HOST,
-            HeaderValue::from_str(&app.forward_authority.to_string()).unwrap(),
+            HeaderValue::from_str(app.forward_authority.as_ref()).unwrap(),
         );
     } else {
         // else we inform the app that we are proxying to it
         req.headers_mut().insert(
             "X-Forwarded-Host",
-            HeaderValue::from_str(&app.app_authority.to_string()).unwrap(),
+            HeaderValue::from_str(app.app_authority.as_ref()).unwrap(),
         );
         req.headers_mut().insert(
             "X-Forwarded-Proto",
-            HeaderValue::from_str(&app.app_scheme.to_string()).unwrap(),
+            HeaderValue::from_str(app.app_scheme.as_ref()).unwrap(),
         );
     }
 
     // If the app contains basic auth information, forge a basic auth header
-    if app.inner.login != "" && app.inner.password != "" {
+    if !app.inner.login.is_empty() && !app.inner.password.is_empty() {
         let bauth = format!("{}:{}", app.inner.login, app.inner.password);
         req.headers_mut().insert(
             AUTHORIZATION,
@@ -213,7 +213,7 @@ pub async fn proxy_handler(
             if let Some(location) = response.headers().get("location") {
                 // parse location as an url
                 let location_uri: Uri =
-                    match location.to_str().unwrap().trim_start_matches(".").parse() {
+                    match location.to_str().unwrap().trim_start_matches('.').parse() {
                         Ok(uri) => uri,
                         Err(e) => {
                             error!("Proxy uri parse error : {:?}", e);
