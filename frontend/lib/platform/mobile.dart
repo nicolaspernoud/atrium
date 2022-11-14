@@ -43,19 +43,17 @@ class NotificationsPlugin {
   Future showProgressNotification(String title, String body, int progressId,
       int currentProgress, int maxProgress) async {
     final AndroidNotificationDetails androidNotificationDetails =
-        AndroidNotificationDetails(
-      'progress channel',
-      'progress channel',
-      channelDescription: 'progress channel description',
-      channelShowBadge: false,
-      importance: Importance.max,
-      priority: Priority.high,
-      onlyAlertOnce: true,
-      showProgress: true,
-      maxProgress: maxProgress,
-      progress: currentProgress,
-      playSound: false,
-    );
+        AndroidNotificationDetails('progress channel', 'progress channel',
+            channelDescription: 'progress channel description',
+            channelShowBadge: false,
+            importance: Importance.max,
+            priority: Priority.high,
+            onlyAlertOnce: true,
+            showProgress: true,
+            maxProgress: maxProgress,
+            progress: currentProgress,
+            playSound: false,
+            enableVibration: false);
     final NotificationDetails notificationDetails =
         NotificationDetails(android: androidNotificationDetails);
     await flip.show(progressId, title, body, notificationDetails,

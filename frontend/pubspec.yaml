@@ -34,15 +34,15 @@ dependencies:
     sdk: flutter
 
   dio: ^4.0.4
-  file_picker: ^5.0.1
+  file_picker: ^5.2.2
   filesize: ^2.0.1
   flutter_colorpicker: ^1.0.3
-  flutter_iconpicker: ^3.2.1
-  flutter_local_notifications: ^11.0.0
+  flutter_iconpicker: ^3.2.2
+  flutter_local_notifications: ^12.0.3
   mime: ^1.0.2
   path_provider: ^2.0.11
-  pdfx: ^2.2.0
-  provider: ^6.0.3
+  pdfx: ^2.3.0
+  provider: ^6.0.4
   shared_preferences: ^2.0.15
   url_launcher: ^6.1.5
   video_player: ^2.4.7

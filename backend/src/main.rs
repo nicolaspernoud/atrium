@@ -7,7 +7,7 @@ use atrium::{
 use axum_server::Handle;
 use rustls::ServerConfig;
 use rustls_acme::{caches::DirCache, AcmeConfig};
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{fs::File, net::SocketAddr, sync::Arc, time::Duration};
 use tokio::{signal, sync::broadcast};
 use tokio_stream::StreamExt;
 use tracing::{error, info};
@@ -18,8 +18,14 @@ pub const CONFIG_FILE: &'static str = "atrium.yaml";
 
 fn main() -> Result<()> {
     // We need to work out the local time offset before entering multi-threaded context
-    let file = std::fs::File::open(CONFIG_FILE).expect("configuration file not found");
-    let cfg: Config = serde_yaml::from_reader(file).expect("failed to parse configuration file");
+    let cfg: Config = match File::open(CONFIG_FILE) {
+        Ok(file) => serde_yaml::from_reader(file).expect("failed to parse configuration file"),
+        Err(_) => {
+            println!("Configuration file not found, trying to create default configuration file.");
+            File::create(CONFIG_FILE).expect("could not create default configuration file");
+            Config::default()
+        }
+    };
     let _log_guards = setup_logger(cfg.debug_mode, cfg.log_to_file);
     run()
 }
