@@ -30,10 +30,6 @@ Your DNS configuration should be as below :
 
 ## TODO
 
-### Backend
-
-- [ ] Move OnlyOffice JWT to backend
-
 ### Frontend
 
 - [ ] Improve upload (refresh on each upload ending, better view)

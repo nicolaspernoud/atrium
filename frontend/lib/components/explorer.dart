@@ -432,7 +432,7 @@ class ExplorerState extends State<Explorer> {
                       'file': '${widget.url}${file.path}',
                       'mtime': file.mTime!.toIso8601String(),
                       'user': App().prefs.username,
-                      'token': shareToken!
+                      'share_token': shareToken!
                     }),
                   );
                   launchUrl(launchUri);

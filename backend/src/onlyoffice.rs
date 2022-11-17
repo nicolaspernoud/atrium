@@ -1,18 +1,70 @@
+use crate::configuration::Config;
+use crate::utils::{is_default, raw_query_pairs};
 use axum::extract::RawQuery;
 use axum::response::IntoResponse;
 use axum::{response::Html, Extension, Json};
 use http::{header, StatusCode};
+use jsonwebtoken::{encode, EncodingKey, Header};
 use reqwest::Body;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
 use tokio::fs::{self};
 
-use crate::configuration::Config;
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OnlyOfficeConfiguration<'a> {
+    pub document: Document<'a>,
+    pub editor_config: EditorConfig<'a>,
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub token: &'a str,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Document<'a> {
+    pub file_type: &'a str,
+    pub key: &'a str,
+    pub title: &'a str,
+    pub url: &'a str,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditorConfig<'a> {
+    pub lang: &'a str,
+    pub callback_url: &'a str,
+    pub customization: Customization,
+    pub user: OOUser<'a>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Customization {
+    pub autosave: bool,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OOUser<'a> {
+    pub id: &'a str,
+    pub name: &'a str,
+}
+
+const QUERY_ERROR: (http::StatusCode, &str) =
+    (StatusCode::INTERNAL_SERVER_ERROR, "query is malformed");
 
 // onlyoffice_page opens the main onlyoffice  window
 pub async fn onlyoffice_page(
     Extension(config): Extension<Arc<Config>>,
+    RawQuery(query): RawQuery,
 ) -> Result<Html<String>, (StatusCode, &'static str)> {
+    let ooq = raw_query_pairs(query.as_ref().map(|x| &**x))?;
+    let file = ooq.get("file").ok_or(QUERY_ERROR)?;
+    let share_token = ooq.get("share_token").ok_or(QUERY_ERROR)?;
+    let mtime = ooq.get("mtime").ok_or(QUERY_ERROR)?;
+    let oo_user = ooq.get("user").ok_or(QUERY_ERROR)?;
+
     if let Some(server) = &config
         .onlyoffice_config
         .as_ref()
@@ -34,18 +86,78 @@ pub async fn onlyoffice_page(
             .as_ref()
             .unwrap_or(&"AtriumOffice".to_owned())
             .to_owned();
+        let path = std::path::Path::new(file);
+        let extension = path
+            .extension()
+            .unwrap_or_default()
+            .to_str()
+            .unwrap_or_default();
+        let filename = urlencoding::decode(
+            path.file_stem()
+                .unwrap_or_default()
+                .to_str()
+                .unwrap_or_default(),
+        )
+        .map_err(|_| QUERY_ERROR)?;
+        let url = format!("{}?token={}", file, share_token);
+
+        let mut hasher = Sha256::new();
+        hasher.update(format!("{}{}", file, mtime));
+        let key: String = format!("{:X}", hasher.finalize());
+
+        let mut ooconf = OnlyOfficeConfiguration {
+            document: Document {
+                file_type: extension,
+                key: &key,
+                title: &filename,
+                url: &url,
+            },
+            editor_config: EditorConfig {
+                lang: "fr-FR",
+                callback_url: &format!("{}/onlyoffice/save?{}", &config.full_hostname(), url),
+                customization: Customization { autosave: false },
+                user: OOUser {
+                    id: oo_user,
+                    name: oo_user,
+                },
+            },
+            token: "",
+        };
+
+        let j = serde_json::to_string(&ooconf).map_err(ooconf_to_json_error)?;
+
+        let token = encode(
+            &Header::default(),
+            &j,
+            &EncodingKey::from_secret(
+                &config
+                    .onlyoffice_config
+                    .as_ref()
+                    .unwrap()
+                    .jwt_secret
+                    .as_ref(),
+            ),
+        )
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "couldn't sign JWT"))?;
+
+        ooconf.token = &token;
+        let j = serde_json::to_string(&ooconf).map_err(ooconf_to_json_error)?;
+
         let response = template
             .replace("{{.Title}}", &title)
             .replace("{{.OnlyOfficeServer}}", server)
-            .replace("{{.Hostname}}", &config.full_hostname())
-            .replace(
-                "{{.JwtSecret}}",
-                &config.onlyoffice_config.as_ref().unwrap().jwt_secret,
-            );
+            .replace("{{.OnlyOfficeConfiguration}}", &j);
         Ok(Html(response))
     } else {
         Ok(Html("OnlyOffice is not fully configured !".to_owned()))
     }
+}
+
+fn ooconf_to_json_error(_: serde_json::Error) -> (StatusCode, &'static str) {
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "couldn't create OnlyOffice configuration json",
+    )
 }
 
 #[derive(Default, Debug, Serialize, Deserialize)]

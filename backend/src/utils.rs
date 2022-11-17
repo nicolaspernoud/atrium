@@ -1,3 +1,4 @@
+use http::StatusCode;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 
 pub fn random_string(size: usize) -> std::string::String {
@@ -63,10 +64,31 @@ pub(crate) fn is_default<T: Default + PartialEq>(t: &T) -> bool {
     t == &T::default()
 }
 
+const QUERY_ERROR: (StatusCode, &str) = (StatusCode::INTERNAL_SERVER_ERROR, "query is empty");
+
+pub fn raw_query_pairs<'a>(
+    query: Option<&'a str>,
+) -> Result<std::collections::HashMap<&'a str, &'a str>, (StatusCode, &'static str)> {
+    let query = query.ok_or(QUERY_ERROR)?;
+    if query.is_empty() {
+        return Err(QUERY_ERROR);
+    }
+    let mut ooq = std::collections::HashMap::new();
+    let query: Vec<&str> = query.split('&').collect();
+    for keyvalue in query {
+        let kv: Vec<&str> = keyvalue.split('=').collect();
+        if kv.len() >= 2 && kv[1] != "" {
+            ooq.insert(kv[0], kv[1]);
+        }
+    }
+    Ok(ooq)
+}
+
 #[cfg(test)]
 mod tests {
     use crate::utils::{
-        option_string_trim, option_vec_trim_remove_empties, string_trim, vec_trim_remove_empties,
+        option_string_trim, option_vec_trim_remove_empties, raw_query_pairs, string_trim,
+        vec_trim_remove_empties,
     };
     use serde::Deserialize;
 
@@ -135,5 +157,35 @@ mod tests {
         let json = r#"{}"#;
         let foo = serde_json::from_str::<Foo>(json).unwrap();
         assert!(foo.names.is_none());
+    }
+
+    #[test]
+    fn test_query_pairs_ok() {
+        let query = Some("a=1&b=2&c=3");
+        let qp = raw_query_pairs(query).unwrap();
+        assert_eq!(qp.get("a").unwrap(), &"1");
+        assert_eq!(qp.get("c").unwrap(), &"3");
+    }
+
+    #[test]
+    fn test_query_pairs_none() {
+        let query = None;
+        let qp = raw_query_pairs(query);
+        assert!(qp.is_err());
+    }
+
+    #[test]
+    fn test_query_pairs_empty() {
+        let query = Some("");
+        let qp = raw_query_pairs(query);
+        assert!(qp.is_err());
+    }
+
+    #[test]
+    fn test_query_pairs_empty_value() {
+        let query = Some("a=1&b=2&c=");
+        let qp = raw_query_pairs(query).unwrap();
+        assert_eq!(qp.get("a").unwrap(), &"1");
+        assert!(qp.get("c").is_none());
     }
 }

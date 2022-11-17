@@ -1,5 +1,6 @@
 use atrium::{apps::App, configuration::TlsMode};
 use axum::{response::Redirect, routing::get, Router};
+use http::StatusCode;
 use hyper::header::LOCATION;
 use tracing::info;
 
@@ -465,17 +466,25 @@ pub async fn absoluteredirect_server(listener: TcpListener) {
 async fn onlyoffice_page_test() {
     // Arrange
     let app = TestApp::spawn(None).await;
-
-    // Act
+    // Act (empty query must give error)
     let response = app
         .client
         .get(format!("http://atrium.io:{}/onlyoffice", app.port))
         .send()
         .await
         .expect("failed to execute request");
-
-    // Assert
-    assert!(response.status().is_success());
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    // Act
+    let response = app
+        .client
+        .get(format!(
+            "http://atrium.io:{}/onlyoffice?file=file&mtime=01&user=test&share_token=token",
+            app.port
+        ))
+        .send()
+        .await
+        .expect("failed to execute request");
+    assert_eq!(response.status(), StatusCode::OK);
     let txt = response.text().await.unwrap();
     assert!(txt.contains("onlyoffice/onlyoffice.js"));
     assert!(txt.contains("AtriumOffice"));

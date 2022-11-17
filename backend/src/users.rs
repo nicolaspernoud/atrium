@@ -4,7 +4,7 @@ use crate::{
     davs::model::Dav,
     extractors::AuthBasic,
     logger::city_from_ip,
-    utils::{is_default, random_string, string_trim, vec_trim_remove_empties},
+    utils::{is_default, random_string, raw_query_pairs, string_trim, vec_trim_remove_empties},
 };
 use argon2::{password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use axum::{
@@ -143,13 +143,10 @@ where
         }
 
         // OR Try to get user_token from the query
-        if let Some(password) = req.uri().query().map(|q| {
-            let split = q.splitn(2, '=').collect::<Vec<_>>();
-            if split.len() > 1 {
-                return split[1];
-            }
-            ""
-        }) {
+        if let Some(Some(password)) = raw_query_pairs(req.uri().query())
+            .ok()
+            .map(|hm| hm.get("token").map(|v| v.to_owned()))
+        {
             let res = cookie_from_password(COOKIE_NAME, &jar, password);
             if res.is_ok() {
                 return res;
