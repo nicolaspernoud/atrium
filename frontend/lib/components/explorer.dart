@@ -18,11 +18,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mime/mime.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:webdav_client/webdav_client.dart' as webdav;
 import 'package:atrium/platform/mobile.dart'
     if (dart.library.html) 'package:atrium/platform/web.dart';
 import 'package:webdav_client/webdav_client.dart';
+import 'package:atrium/components/webview.dart'
+    if (dart.library.html) 'package:atrium/components/iframe_webview.dart';
 
 class Explorer extends StatefulWidget {
   late final String url;
@@ -435,7 +436,13 @@ class ExplorerState extends State<Explorer> {
                       'share_token': shareToken!
                     }),
                   );
-                  launchUrl(launchUri);
+                  if (!mounted) return;
+                  Navigator.of(context)
+                      .push(MaterialPageRoute<void>(builder: (context) {
+                    return Scaffold(
+                        appBar: AppBar(toolbarHeight: 0.0),
+                        body: AppWebView(initialUrl: launchUri.toString()));
+                  }));
                 } else if (mimeType.contains("video/") ||
                     mimeType.contains("audio/")) {
                   String uri = '${widget.url}${escapePath(file.path!)}';
