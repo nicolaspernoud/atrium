@@ -1,6 +1,6 @@
 import 'dart:typed_data';
+import 'package:atrium/components/explorer.dart';
 import 'package:flutter/material.dart';
-import 'package:mime/mime.dart';
 import 'package:webdav_client/webdav_client.dart';
 
 class ImageViewer extends StatefulWidget {
@@ -91,7 +91,7 @@ class _ImageViewerState extends State<ImageViewer> {
   void seekImage(bool forward) {
     var i = forward ? index + 1 : index - 1;
     while (i >= 0 && i < widget.files.length) {
-      if (lookupMimeType(widget.files[i].name!)?.contains("image") ?? false) {
+      if (fileType(widget.files[i]) == FileType.image) {
         setState(() {
           index = i;
           file = widget.files[index];

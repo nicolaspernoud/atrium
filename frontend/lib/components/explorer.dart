@@ -16,7 +16,6 @@ import 'package:file_picker/file_picker.dart';
 import 'package:filesize/filesize.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:mime/mime.dart';
 import 'package:provider/provider.dart';
 import 'package:webdav_client/webdav_client.dart' as webdav;
 import 'package:atrium/platform/mobile.dart'
@@ -103,9 +102,8 @@ class ExplorerState extends State<Explorer> {
       bottomNavigationBar: BottomAppBar(
           child: Row(children: [
         IconButton(
-            icon: const Icon(Icons.home),
+            icon: const Icon(Icons.refresh),
             onPressed: () {
-              dirPath = "/";
               setState(() {
                 _getData();
               });
@@ -239,9 +237,9 @@ class ExplorerState extends State<Explorer> {
         ),
       ...idxList.map((idx) {
         var file = list[idx];
-        var mimeType = lookupMimeType(file.name!);
+        var type = fileType(file);
         return ListTile(
-          leading: widgetFromFileType(file, mimeType),
+          leading: widgetFromFileType(file, type),
           title: Text(file.name ?? ''),
           subtitle: Text(formatTime(file.mTime) +
               ((file.size != null && file.size! > 0)
@@ -390,75 +388,69 @@ class ExplorerState extends State<Explorer> {
                 _getData();
               });
             } else {
-              if (mimeType != null) {
-                if (mimeType.contains("text/") ||
-                    mimeType.contains("json") ||
-                    mimeType.contains("x-sh")) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => TextEditor(
-                            client: client, file: file, readWrite: readWrite)),
-                  );
-                } else if (mimeType.contains("image")) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => ImageViewer(
-                              client: client,
-                              url: widget.url,
-                              files: list,
-                              index: idx,
-                            )),
-                  );
-                } else if (mimeType.contains("pdf")) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => PdfViewer(
-                            client: client, url: widget.url, file: file)),
-                  );
-                } else if (mimeType.contains("openxmlformats") ||
-                    mimeType.contains("opendocument")) {
-                  // Get a share token for this document
+              if (type == FileType.text) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => TextEditor(
+                          client: client, file: file, readWrite: readWrite)),
+                );
+              } else if (type == FileType.image) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => ImageViewer(
+                            client: client,
+                            url: widget.url,
+                            files: list,
+                            index: idx,
+                          )),
+                );
+              } else if (type == FileType.pdf) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => PdfViewer(
+                          client: client, url: widget.url, file: file)),
+                );
+              } else if (type == FileType.document) {
+                // Get a share token for this document
+                var shareToken = await ApiProvider().getShareToken(
+                    widget.url.split("://")[1].split(":")[0], file.path!,
+                    shareWith: "external_editor", shareForDays: 1);
+                final Uri launchUri = Uri(
+                  scheme: App().prefs.hostnameScheme,
+                  host: App().prefs.hostnameHost,
+                  port: App().prefs.hostnamePort,
+                  path: 'onlyoffice',
+                  query: joinQueryParameters(<String, String>{
+                    'file': '${widget.url}${file.path}',
+                    'mtime': file.mTime!.toIso8601String(),
+                    'user': App().prefs.username,
+                    'share_token': shareToken!
+                  }),
+                );
+                if (!mounted) return;
+                Navigator.of(context)
+                    .push(MaterialPageRoute<void>(builder: (context) {
+                  return Scaffold(
+                      appBar: AppBar(toolbarHeight: 0.0),
+                      body: AppWebView(initialUrl: launchUri.toString()));
+                }));
+              } else if (type == FileType.media) {
+                String uri = '${widget.url}${escapePath(file.path!)}';
+                if (kIsWeb) {
                   var shareToken = await ApiProvider().getShareToken(
                       widget.url.split("://")[1].split(":")[0], file.path!,
-                      shareWith: "external_editor", shareForDays: 1);
-                  final Uri launchUri = Uri(
-                    scheme: App().prefs.hostnameScheme,
-                    host: App().prefs.hostnameHost,
-                    port: App().prefs.hostnamePort,
-                    path: 'onlyoffice',
-                    query: joinQueryParameters(<String, String>{
-                      'file': '${widget.url}${file.path}',
-                      'mtime': file.mTime!.toIso8601String(),
-                      'user': App().prefs.username,
-                      'share_token': shareToken!
-                    }),
-                  );
-                  if (!mounted) return;
-                  Navigator.of(context)
-                      .push(MaterialPageRoute<void>(builder: (context) {
-                    return Scaffold(
-                        appBar: AppBar(toolbarHeight: 0.0),
-                        body: AppWebView(initialUrl: launchUri.toString()));
-                  }));
-                } else if (mimeType.contains("video/") ||
-                    mimeType.contains("audio/")) {
-                  String uri = '${widget.url}${escapePath(file.path!)}';
-                  if (kIsWeb) {
-                    var shareToken = await ApiProvider().getShareToken(
-                        widget.url.split("://")[1].split(":")[0], file.path!,
-                        shareWith: "media_player", shareForDays: 1);
-                    uri = '$uri?token=$shareToken';
-                  }
-                  if (!mounted) return;
-                  Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (context) =>
-                              MediaPlayer(uri: uri, file: file)));
+                      shareWith: "media_player", shareForDays: 1);
+                  uri = '$uri?token=$shareToken';
                 }
+                if (!mounted) return;
+                Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) =>
+                            MediaPlayer(uri: uri, file: file)));
               }
             }
           },
@@ -467,37 +459,47 @@ class ExplorerState extends State<Explorer> {
     ]);
   }
 
-  Widget widgetFromFileType(File file, String? mimeType) {
+  Widget widgetFromFileType(File file, FileType type) {
     if (file.isDir != null && file.isDir!) {
       return const Icon(Icons.folder, size: 30);
     }
-    if (mimeType != null && mimeType.contains("image")) {
-      return SizedBox(
-        width: 30,
-        height: 30,
-        child: FutureBuilder<Uint8List>(
-            future: client
-                .read(file.path!)
-                .then((value) => Uint8List.fromList(value)),
-            builder: (BuildContext context, AsyncSnapshot<Uint8List> snapshot) {
-              Widget child;
-              if (snapshot.hasData) {
-                child = Image.memory(snapshot.data!);
-              } else if (snapshot.hasError) {
-                child = Padding(
-                  padding: const EdgeInsets.only(top: 16),
-                  child: Text('Error: ${snapshot.error}'),
+    switch (type) {
+      case FileType.document:
+        return const Icon(Icons.article, size: 30);
+      case FileType.image:
+        return SizedBox(
+          width: 30,
+          height: 30,
+          child: FutureBuilder<Uint8List>(
+              future: client
+                  .read(file.path!)
+                  .then((value) => Uint8List.fromList(value)),
+              builder:
+                  (BuildContext context, AsyncSnapshot<Uint8List> snapshot) {
+                Widget child;
+                if (snapshot.hasData) {
+                  child = Image.memory(snapshot.data!);
+                } else if (snapshot.hasError) {
+                  child = Padding(
+                    padding: const EdgeInsets.only(top: 16),
+                    child: Text('Error: ${snapshot.error}'),
+                  );
+                } else {
+                  child = const CircularProgressIndicator();
+                }
+                return Center(
+                  child: child,
                 );
-              } else {
-                child = const CircularProgressIndicator();
-              }
-              return Center(
-                child: child,
-              );
-            }),
-      );
-    } else {
-      return const Icon(Icons.file_present_rounded, size: 30);
+              }),
+        );
+      case FileType.media:
+        return const Icon(Icons.play_circle, size: 30);
+      case FileType.pdf:
+        return const Icon(Icons.picture_as_pdf, size: 30);
+      case FileType.text:
+        return const Icon(Icons.description, size: 30);
+      default:
+        return const Icon(Icons.file_present_rounded, size: 30);
     }
   }
 }
@@ -511,4 +513,39 @@ String? joinQueryParameters(Map<String, String> params) {
   return params.entries
       .map((MapEntry<String, String> e) => '${e.key}=${e.value}')
       .join('&');
+}
+
+enum FileType { text, document, image, media, pdf, other }
+
+FileType fileType(File? file) {
+  if (file == null || file.name == null) return FileType.other;
+  var ext = file.name!.split(".").last;
+
+  if (ext == "pdf") return FileType.pdf;
+  if (["txt", "md", "csv", "sh", "nfo", "log", "json", "yml", "srt", "py"]
+      .contains(ext)) return FileType.text;
+  if (["docx", "doc", "odt", "xlsx", "xls", "ods", "pptx", "ppt", "opd"]
+      .contains(ext)) return FileType.document;
+  if ([
+    "jpg",
+    "jpeg",
+    "jfif",
+    "pjpeg",
+    "pjp",
+    "png",
+    "gif",
+    "svg",
+    "apng",
+    "avif",
+    "webp",
+    "bmp",
+    "ico",
+    "tif",
+    "tiff",
+    "cur"
+  ].contains(ext)) return FileType.image;
+  if (["mp3", "wav", "ogg", "mp4", "avi", "mkv", "m4v", "webm"].contains(ext)) {
+    return FileType.media;
+  }
+  return FileType.other;
 }
