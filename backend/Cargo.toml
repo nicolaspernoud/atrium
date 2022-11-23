@@ -11,56 +11,53 @@ path = "src/main.rs"
 name = "atrium"
 
 [dependencies]
-anyhow = "1.0"
-argon2 = "0.4"
-async_zip = "0.0.9"
+anyhow = { default-features = false, version = "1.0" }
+argon2 = { features = ["alloc", "password-hash"], default-features = false, version = "0.4" }
+async_zip = { features = ["deflate"], default-features = false, version = "0.0.9" }
 async-stream = "0.3"
 async-walkdir = "0.2"
-axum = { version="0.5", features = ["headers","http2"] }
-axum-extra = { version = "0.3", features = ["cookie-private"] }
+axum = { version="0.5", features = ["query", "json", "http2"], default-features = false }
+axum-extra = { version = "0.3", features = ["cookie-private"], default-features = false }
 axum-server = "0.4.0"
 base64ct = { version = "1.5", features = ["alloc"]}
-chacha20poly1305 = { version = "0.10", features = ["stream"] }
-chrono = "0.4"
+chacha20poly1305 = { version = "0.10", features = ["stream"], default-features = false }
+chrono = { default-features = false, version = "0.4" }
 filetime = "0.2"
-futures = "0.3"
-futures-util = "0.3"
+futures = { default-features = false, version = "0.3" }
+futures-util = { default-features = false, version = "0.3" }
 headers = "0.3"
-hyper = { version = "0.14", features = ["client"] }
+hyper = { version = "0.14", default-features = false }
 hyper-reverse-proxy = { git = "https://github.com/nicolaspernoud/hyper-reverse-proxy", branch = "master" }
-hyper-trust-dns = { version = "0.5", default-features = false, features = [
-  "rustls-http2",
-  "dns-over-https-rustls",
-  "rustls-webpki",
-] }
+#hyper-reverse-proxy = { path = "../../hyper-reverse-proxy" }
+hyper-trust-dns = { version = "0.5", default-features = false, features = ["dns-over-https-rustls", "rustls-http2", "rustls-webpki"] }
 http = "0.2"
 jsonwebtoken = {version = "8", default-features = false }
 lazy_static = "1.4.0"
 maxminddb = "0.23"
-mime_guess = "2.0"
-oauth2 = "4.1"
-percent-encoding = "2.1"
-rand= "0.8"
-reqwest = { version = "0.11", default-features = false, features = ["stream", "rustls-tls", "json"] }
-rustls = "0.20.6"
-rustls-acme = { git = "https://github.com/FlorianUekermann/rustls-acme.git", features = ["axum"]}
-serde = { version = "1", features = ["derive"] }
-serde_json = "1.0"
+mime_guess = { default-features = false, version = "2.0" }
+oauth2 = { features = ["rustls-tls"], default-features = false, version = "4.1" }
+percent-encoding = { default-features = false, version = "2.1" }
+rand= { default-features = false, version = "0.8" }
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls","stream"] }
+rustls = { default-features = false, version = "0.20.6" }
+rustls-acme = { git = "https://github.com/FlorianUekermann/rustls-acme.git", features = ["axum"], default-features = false }
+serde = { version = "1", default-features = false }
+serde_json = { default-features = false, version = "1.0" }
 serde_yaml = "0.9"
-sha2 = "0.10"
-sysinfo = "0.26"
-time = "0.3"
-tokio = { version = "1.20", features = ["full"] }
-tokio-stream = { version="0.1", features = ["net"] }
-tokio-util = { version = "0.7",  features = ["io-util", "compat"] }
-tower = "0.4"
-tower-http = { version = "0.3.0", features = ["fs"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "local-time"] }
+sha2 = { default-features = false, version = "0.10" }
+sysinfo = { default-features = false, version = "0.26" }
+time = { default-features = false, version = "0.3" }
+tokio = { version = "1.20", features = ["full"], default-features = false }
+tokio-stream = { version="0.1", default-features = false }
+tokio-util = { version = "0.7",  features = ["compat"], default-features = false }
+tower = { default-features = false, version = "0.4" }
+tower-http = { version = "0.3.0", features = ["fs"], default-features = false }
+tracing = { default-features = false, version = "0.1" }
+tracing-subscriber = { version = "0.3", features = ["local-time", "ansi", "env-filter"], default-features = false }
 tracing-appender = "0.2"
 trim-in-place = "0.1.7"
 urlencoding = "2.1"
-uuid = { version = "1.1", features = ["v4", "fast-rng"] }
+uuid = { version = "1.1", features = ["fast-rng", "v4"], default-features = false }
 xml-rs = "0.8"
 
 
@@ -72,3 +69,4 @@ inherits = "release"
 strip = true
 lto = true
 codegen-units = 1
+panic = "abort"
