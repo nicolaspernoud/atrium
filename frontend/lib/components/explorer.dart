@@ -24,6 +24,8 @@ import 'package:webdav_client/webdav_client.dart';
 import 'package:atrium/components/webview.dart'
     if (dart.library.html) 'package:atrium/components/iframe_webview.dart';
 
+enum SortBy { names, dates }
+
 class Explorer extends StatefulWidget {
   late final String url;
   late final DavModel dav;
@@ -49,6 +51,7 @@ class ExplorerState extends State<Explorer> {
   var _copyMovePath = "";
   late bool readWrite;
   late Future<List<File>> files;
+  var sortBy = SortBy.names;
 
   @override
   void initState() {
@@ -82,6 +85,7 @@ class ExplorerState extends State<Explorer> {
             Text(widget.dav.name),
           ],
         ),
+        actions: sortMenu,
       ),
       body: FutureBuilder(
           future: files,
@@ -208,19 +212,24 @@ class ExplorerState extends State<Explorer> {
   }
 
   Widget _buildListView(BuildContext context, List<webdav.File> list) {
-    // Sort : folders first and then alphabetically
-    list.sort((a, b) {
-      if (a.isDir! && !(b.isDir!)) {
-        return -1;
-      }
-      if (!(a.isDir!) && (b.isDir!)) {
-        return 1;
-      }
-      if (a.name != null && b.name != null) {
-        return a.name!.compareTo(b.name!);
-      }
-      return 0;
-    });
+    if (sortBy == SortBy.names) {
+      // Sort : folders first and then alphabetically
+      list.sort((a, b) {
+        if (a.isDir! && !(b.isDir!)) {
+          return -1;
+        }
+        if (!(a.isDir!) && (b.isDir!)) {
+          return 1;
+        }
+        if (a.name != null && b.name != null) {
+          return a.name!.compareTo(b.name!);
+        }
+        return 0;
+      });
+    } else {
+      list.sort((a, b) => b.mTime!.compareTo(a.mTime!));
+    }
+
     final List idxList = Iterable<int>.generate(list.length).toList();
     return ListView(children: [
       if (dirPath != "/")
@@ -501,6 +510,47 @@ class ExplorerState extends State<Explorer> {
       default:
         return const Icon(Icons.file_present_rounded, size: 30);
     }
+  }
+
+  List<Widget> get sortMenu {
+    return <Widget>[
+      PopupMenuButton<SortBy>(
+          icon: const Icon(Icons.sort),
+          onSelected: (SortBy item) {
+            setState(() {
+              sortBy = item;
+            });
+          },
+          itemBuilder: (BuildContext context) => <PopupMenuEntry<SortBy>>[
+                PopupMenuItem<SortBy>(
+                    value: SortBy.names,
+                    child: Row(
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.all(8.0),
+                          child: Icon(
+                              color: Color.fromARGB(255, 140, 140, 140),
+                              Icons.sort_by_alpha),
+                        ),
+                        Text(tr(context, "names"))
+                      ],
+                    )),
+                PopupMenuItem<SortBy>(
+                  value: SortBy.dates,
+                  child: Row(
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: Icon(
+                            color: Color.fromARGB(255, 140, 140, 140),
+                            Icons.sort),
+                      ),
+                      Text(tr(context, "dates"))
+                    ],
+                  ),
+                ),
+              ]),
+    ];
   }
 }
 
