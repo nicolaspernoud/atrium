@@ -1,5 +1,6 @@
 import 'package:atrium/models/app.dart';
 import 'package:atrium/models/dav.dart';
+import 'package:atrium/models/pathitem.dart';
 import 'package:atrium/models/sysinfo.dart';
 import 'package:atrium/models/user.dart';
 import 'package:atrium/platform/mobile.dart'
@@ -171,6 +172,16 @@ class ApiProvider {
   Future<DiskInfo> getDiskInfo(DavModel dav) async {
     final response = await _dio.get('${modelUrl(dav)}?diskusage');
     return DiskInfo.fromJson(response.data);
+  }
+
+  Future<List<PathItem>> searchDav(DavModel dav, String query) async {
+    final response = await _dio.get('${modelUrl(dav)}?q=$query');
+    var pathItemArray = response.data;
+    var pathItems = <PathItem>[];
+    for (var user in pathItemArray) {
+      pathItems.add(PathItem.fromJson(user));
+    }
+    return pathItems;
   }
 
   Future<SysInfo> getSysInfo() async {

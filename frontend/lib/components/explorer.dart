@@ -11,6 +11,7 @@ import 'package:atrium/globals.dart';
 import 'package:atrium/i18n.dart';
 import 'package:atrium/models/api_provider.dart';
 import 'package:atrium/models/dav.dart';
+import 'package:atrium/models/pathitem.dart';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:filesize/filesize.dart';
@@ -23,6 +24,7 @@ import 'package:atrium/platform/mobile.dart'
 import 'package:webdav_client/webdav_client.dart';
 import 'package:atrium/components/webview.dart'
     if (dart.library.html) 'package:atrium/components/iframe_webview.dart';
+import 'package:path/path.dart' as p;
 
 enum SortBy { names, dates }
 
@@ -52,6 +54,8 @@ class ExplorerState extends State<Explorer> {
   late bool readWrite;
   late Future<List<File>> files;
   var sortBy = SortBy.names;
+  var foundFile = "";
+  final foundKey = GlobalKey();
 
   @override
   void initState() {
@@ -85,7 +89,7 @@ class ExplorerState extends State<Explorer> {
             Text(widget.dav.name),
           ],
         ),
-        actions: sortMenu,
+        actions: explorerActions,
       ),
       body: FutureBuilder(
           future: files,
@@ -231,7 +235,9 @@ class ExplorerState extends State<Explorer> {
     }
 
     final List idxList = Iterable<int>.generate(list.length).toList();
-    return ListView(children: [
+
+    return SingleChildScrollView(
+        child: Column(children: [
       if (dirPath != "/")
         ListTile(
           leading: const Icon(Icons.reply),
@@ -247,8 +253,19 @@ class ExplorerState extends State<Explorer> {
       ...idxList.map((idx) {
         var file = list[idx];
         var type = fileType(file);
+        var isFound = file.path! == foundFile;
+
+        // If we found a file before building this view, we scroll to that file
+        if (isFound) {
+          WidgetsBinding.instance.addPostFrameCallback(
+              (_) => Scrollable.ensureVisible(foundKey.currentContext!));
+          foundFile = "";
+        }
+
         return ListTile(
+          key: isFound ? foundKey : null,
           leading: widgetFromFileType(file, type),
+          tileColor: isFound ? Colors.grey[400] : null,
           title: Text(file.name ?? ''),
           subtitle: Text(formatTime(file.mTime) +
               ((file.size != null && file.size! > 0)
@@ -465,7 +482,7 @@ class ExplorerState extends State<Explorer> {
           },
         );
       })
-    ]);
+    ]));
   }
 
   Widget widgetFromFileType(File file, FileType type) {
@@ -512,8 +529,19 @@ class ExplorerState extends State<Explorer> {
     }
   }
 
-  List<Widget> get sortMenu {
+  List<Widget> get explorerActions {
     return <Widget>[
+      IconButton(
+          onPressed: () async {
+            String result = await showSearch(
+                context: context, delegate: ExplorerSearchDelegate(widget.dav));
+            dirPath = p.dirname(result);
+            foundFile = result;
+            setState(() {
+              _getData();
+            });
+          },
+          icon: const Icon(Icons.search)),
       PopupMenuButton<SortBy>(
           icon: const Icon(Icons.sort),
           onSelected: (SortBy item) {
@@ -551,6 +579,80 @@ class ExplorerState extends State<Explorer> {
                 ),
               ]),
     ];
+  }
+}
+
+class ExplorerSearchDelegate extends SearchDelegate {
+  DavModel dav;
+  ExplorerSearchDelegate(this.dav);
+
+  @override
+  List<Widget>? buildActions(BuildContext context) => [
+        IconButton(
+            onPressed: () {
+              query = '';
+            },
+            icon: const Icon(Icons.clear))
+      ];
+
+  @override
+  Widget? buildLeading(BuildContext context) => IconButton(
+      onPressed: () => close(context, null),
+      icon: const Icon(Icons.arrow_back));
+
+  @override
+  Widget buildSuggestions(BuildContext context) {
+    if (query.length < 3) {
+      return Center(child: Text(tr(context, "at_least_3_chars")));
+    }
+    return FutureBuilder<List<PathItem>>(
+      future: ApiProvider().searchDav(dav, query).then(
+            (value) => value
+                .where((element) =>
+                    element.name.toLowerCase().contains(query.toLowerCase()))
+                .toList(),
+          ),
+      builder: (BuildContext context, AsyncSnapshot<List<PathItem>> snapshot) {
+        Widget child;
+        if (snapshot.hasData) {
+          child = ListView.builder(
+              itemCount: snapshot.data!.length,
+              itemBuilder: (context, index) {
+                final suggestion = snapshot.data![index];
+                return ListTile(
+                    leading: Icon(
+                        suggestion.pathType == PathType.dir
+                            ? Icons.folder
+                            : Icons.file_present_rounded,
+                        size: 30),
+                    title: Text(suggestion.name),
+                    onTap: () {
+                      close(context,
+                          "/${suggestion.name}${suggestion.pathType == PathType.dir ? "/" : ""}");
+                    });
+              });
+        } else if (snapshot.hasError) {
+          child = Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: Text('Error: ${snapshot.error}'),
+          );
+        } else {
+          child = const SizedBox(
+            width: 60,
+            height: 60,
+            child: CircularProgressIndicator(),
+          );
+        }
+        return Center(
+          child: child,
+        );
+      },
+    );
+  }
+
+  @override
+  Widget buildResults(BuildContext context) {
+    throw UnimplementedError();
   }
 }
 

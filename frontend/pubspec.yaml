@@ -48,6 +48,7 @@ dependencies:
   webdav_client: ^1.1.7
   webview_flutter: ^3.0.4
   webview_cookie_manager: ^2.0.6
+  path: ^1.8.2
 
 dev_dependencies:
   flutter_test:

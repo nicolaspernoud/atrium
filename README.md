@@ -27,11 +27,3 @@ Your DNS configuration should be as below :
 |your.hostname|A|Your machine IPv4|
 |your.hostname|AAAA|Your machine IPv6|
 |\*.your.hostname|CNAME|your.hostname|
-
-## TODO
-
-### Frontend
-
-- [ ] Improve upload (refresh on each upload ending, better view)
-- [ ] Use research file capability
-- [ ] Error handling (fix uncaught exceptions)
