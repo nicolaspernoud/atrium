@@ -1,24 +1,24 @@
 use crate::{
     apps::App,
-    configuration::{config_or_error, trim_host, Config, ConfigFile, HostType},
+    appstate::{ConfigFile, ConfigState, OptionalMaxMindReader},
+    configuration::{config_or_error, trim_host, Config, HostType},
     davs::model::Dav,
-    extractors::AuthBasic,
+    headers::XSRFToken,
     logger::city_from_ip,
     utils::{is_default, random_string, raw_query_pairs, string_trim, vec_trim_remove_empties},
 };
 use argon2::{password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use axum::{
     async_trait,
-    extract::{ConnectInfo, FromRequest, Host, Path, RequestParts},
+    extract::{ConnectInfo, FromRef, FromRequestParts, Host, Path, RawQuery, State},
     middleware::Next,
     response::{IntoResponse, Response},
-    Extension, Json,
+    Extension, Json, RequestPartsExt, TypedHeader,
 };
-use axum_extra::extract::{cookie::Cookie, PrivateCookieJar};
-use headers::HeaderName;
-use http::{Request, StatusCode};
+use axum_extra::extract::cookie::{Cookie, Key, PrivateCookieJar};
+use headers::{authorization::Basic, Authorization, HeaderName};
+use http::{header::CONTENT_LENGTH, request::Parts, HeaderValue, Request, StatusCode};
 use hyper::Body;
-use maxminddb::Reader;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use std::{net::SocketAddr, sync::Arc};
@@ -113,28 +113,28 @@ impl UserToken {
 }
 
 #[async_trait]
-impl<B> FromRequest<B> for UserToken
+impl<S> FromRequestParts<S> for UserToken
 where
-    B: Send,
+    S: Send + Sync,
+    Key: FromRef<S>,
+    ConfigState: FromRef<S>,
+    OptionalMaxMindReader: FromRef<S>,
 {
     type Rejection = (StatusCode, &'static str);
-    async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
-        let jar: PrivateCookieJar = PrivateCookieJar::from_request(req)
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let jar = PrivateCookieJar::from_request_parts(parts, state)
             .await
             .expect("Could not find cookie jar");
 
         // Get the serialized user_token from the cookie jar, and check the xsrf token
         if let Some(cookie) = jar.get(COOKIE_NAME) {
-            if let Some(xsrf_token) = req.headers().get("xsrf-token") {
+            if let Ok(TypedHeader(XSRFToken(xsrf_token))) =
+                TypedHeader::<XSRFToken>::from_request_parts(parts, state).await
+            {
                 // Deserialize the user_token and return him/her
                 let serialized_user_token = cookie.value();
                 let user_token = UserToken::from_json(serialized_user_token)?;
-                let xsrf_token = xsrf_token.to_str().map_err(|_| {
-                    (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "could not decode xsrf token",
-                    )
-                })?;
+
                 if user_token.xsrf_token != xsrf_token {
                     return Err((StatusCode::FORBIDDEN, "xsrf token doesn't match"));
                 }
@@ -143,35 +143,42 @@ where
         }
 
         // OR Try to get user_token from the query
-        if let Some(Some(password)) = raw_query_pairs(req.uri().query())
-            .ok()
-            .map(|hm| hm.get("token").map(|v| v.to_owned()))
-        {
-            let res = cookie_from_password(COOKIE_NAME, &jar, password);
-            if res.is_ok() {
-                return res;
-            } else {
-                return cookie_from_password(SHARE_TOKEN, &jar, password);
+        if let Ok(query) = RawQuery::from_request_parts(parts, state).await {
+            if let Some(Some(password)) = raw_query_pairs(query.0.as_deref())
+                .ok()
+                .map(|hm| hm.get("token").map(|v| v.to_owned()))
+            {
+                let res = cookie_from_password(COOKIE_NAME, &jar, password);
+                if res.is_ok() {
+                    return res;
+                } else {
+                    return cookie_from_password(SHARE_TOKEN, &jar, password);
+                }
             }
         }
 
         // OR Try to get user_token from basic auth headers
-        if let Ok(AuthBasic((login, Some(password)))) = AuthBasic::from_request(req).await {
-            match cookie_from_password(COOKIE_NAME, &jar, &password) {
+
+        if let Ok(TypedHeader(Authorization(basic))) =
+            TypedHeader::<Authorization<Basic>>::from_request_parts(parts, state).await
+        {
+            match cookie_from_password(COOKIE_NAME, &jar, basic.password()) {
                 Ok(token) => return Ok(token),
                 Err(_) => {
-                    let config: &Arc<Config> =
-                        req.extensions().get().expect("Could not find config");
-                    let reader: &Arc<Option<Reader<Vec<u8>>>> =
-                        req.extensions().get().expect("Could not find reader");
-                    let addr: &ConnectInfo<SocketAddr> = req
-                        .extensions()
-                        .get()
+                    let config = ConfigState::from_ref(state);
+                    let reader = OptionalMaxMindReader::from_ref(state);
+
+                    let Extension(addr) = parts
+                        .extract::<Extension<ConnectInfo<SocketAddr>>>()
+                        .await
                         .expect("Could not find socket address");
                     return match authenticate_local_user(
-                        config,
-                        LocalAuth { login, password },
-                        (*reader).clone(),
+                        &config,
+                        LocalAuth {
+                            login: basic.username().to_string(),
+                            password: basic.password().to_string(),
+                        },
+                        reader,
                         addr.0,
                     ) {
                         Ok(user) => Ok(user.1),
@@ -213,13 +220,16 @@ fn cookie_from_password(
 pub struct AdminToken(UserToken);
 
 #[async_trait]
-impl<B> FromRequest<B> for AdminToken
+impl<S> FromRequestParts<S> for AdminToken
 where
-    B: Send,
+    S: Send + Sync,
+    Key: FromRef<S>,
+    ConfigState: FromRef<S>,
+    OptionalMaxMindReader: FromRef<S>,
 {
     type Rejection = (StatusCode, &'static str);
-    async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
-        let user = UserToken::from_request(req).await?;
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let user = UserToken::from_request_parts(parts, state).await?;
         if !user.roles.contains(&ADMINS_ROLE.to_owned()) {
             return Err((StatusCode::UNAUTHORIZED, "user is not in admin group"));
         }
@@ -231,13 +241,14 @@ where
 pub struct UserTokenWithoutXSRFCheck(pub UserToken);
 
 #[async_trait]
-impl<B> FromRequest<B> for UserTokenWithoutXSRFCheck
+impl<S> FromRequestParts<S> for UserTokenWithoutXSRFCheck
 where
-    B: Send,
+    S: Send + Sync,
+    Key: FromRef<S>,
 {
     type Rejection = (StatusCode, &'static str);
-    async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
-        let jar: PrivateCookieJar = PrivateCookieJar::from_request(req)
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let jar: PrivateCookieJar = PrivateCookieJar::from_request_parts(parts, state)
             .await
             .expect("Could not find cookie jar");
 
@@ -265,15 +276,15 @@ pub struct AuthResponse {
 }
 
 pub async fn local_auth(
-    Extension(reader): Extension<Arc<Option<Reader<Vec<u8>>>>>,
+    State(reader): State<OptionalMaxMindReader>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     jar: PrivateCookieJar,
-    Extension(config): Extension<Arc<Config>>,
+    State(config): State<ConfigState>,
     Host(hostname): Host,
     Json(payload): Json<LocalAuth>,
 ) -> Result<(PrivateCookieJar, Json<AuthResponse>), (StatusCode, &'static str)> {
     // Find the user in configuration
-    let (user, user_token) = authenticate_local_user(&config, payload, reader.clone(), addr)?;
+    let (user, user_token) = authenticate_local_user(&config, payload, Arc::clone(&reader), addr)?;
     let cookie = create_user_cookie(&user_token, hostname, &config, addr, reader, user)?;
 
     Ok((
@@ -288,9 +299,9 @@ pub async fn local_auth(
 pub(crate) fn create_user_cookie(
     user_token: &UserToken,
     hostname: String,
-    config: &Arc<Config>,
+    config: &Config,
     addr: SocketAddr,
-    reader: Arc<Option<Reader<Vec<u8>>>>,
+    reader: OptionalMaxMindReader,
     user: &User,
 ) -> Result<Cookie<'static>, (StatusCode, &'static str)> {
     let encoded = serde_json::to_string(user_token)
@@ -319,7 +330,7 @@ pub(crate) fn create_user_cookie(
 pub fn authenticate_local_user(
     config: &Config,
     payload: LocalAuth,
-    reader: Arc<Option<Reader<Vec<u8>>>>,
+    reader: OptionalMaxMindReader,
     addr: SocketAddr,
 ) -> Result<(&User, UserToken), (StatusCode, &'static str)> {
     let user = config
@@ -331,7 +342,7 @@ pub fn authenticate_local_user(
             info!(
                 "AUTHENTICATION ERROR for {} from {} : user does not exist",
                 payload.login,
-                city_from_ip(addr, reader.clone())
+                city_from_ip(addr, Arc::clone(&reader))
             );
             (e, "user does not exist")
         })?;
@@ -349,7 +360,7 @@ pub fn authenticate_local_user(
             info!(
                 "AUTHENTICATION ERROR for {} from {} : password does not match",
                 user.login,
-                city_from_ip(addr, reader.clone())
+                city_from_ip(addr, reader)
             );
             (StatusCode::UNAUTHORIZED, "user is not authorized")
         })?;
@@ -373,7 +384,7 @@ pub(crate) fn user_to_token(user: &User, config: &Config) -> UserToken {
 }
 
 pub async fn get_users(
-    Extension(config_file): Extension<ConfigFile>,
+    State(config_file): State<ConfigFile>,
     _admin: AdminToken,
 ) -> Result<Json<Vec<User>>, (StatusCode, &'static str)> {
     let config = config_or_error(&config_file).await?;
@@ -382,13 +393,13 @@ pub async fn get_users(
 }
 
 pub async fn delete_user(
-    config_file: Extension<ConfigFile>,
+    State(config_file): State<ConfigFile>,
     _admin: AdminToken,
-    Path(user_login): Path<(String, String)>,
+    Path(user_login): Path<String>,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
     let mut config = config_or_error(&config_file).await?;
     // Find the user
-    if let Some(pos) = config.users.iter().position(|u| u.login == user_login.1) {
+    if let Some(pos) = config.users.iter().position(|u| u.login == user_login) {
         // It is an existing user, delete it
         config.users.remove(pos);
     } else {
@@ -404,8 +415,8 @@ pub async fn delete_user(
 }
 
 pub async fn add_user(
-    config_file: Extension<ConfigFile>,
-    Extension(config): Extension<Arc<Config>>,
+    State(config_file): State<ConfigFile>,
+    State(config): State<ConfigState>,
     _admin: AdminToken,
     Json(mut payload): Json<User>,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
@@ -439,7 +450,7 @@ pub async fn add_user(
 }
 
 pub async fn list_services(
-    config: Extension<std::sync::Arc<Config>>,
+    State(config): State<ConfigState>,
     user: UserToken,
 ) -> Json<(Vec<App>, Vec<Dav>)> {
     Json((
@@ -478,10 +489,10 @@ pub async fn whoami(token: UserToken) -> Json<User> {
 }
 
 pub async fn get_share_token(
-    Extension(config): Extension<Arc<Config>>,
-    Json(share): Json<Share>,
+    State(config): State<ConfigState>,
     user: UserToken,
     jar: PrivateCookieJar,
+    Json(share): Json<Share>,
 ) -> Result<PrivateCookieJar, StatusCode> {
     // Get the dav from the config map
     let to_share = config
@@ -528,7 +539,7 @@ pub async fn cookie_to_body<B>(
     next: Next<B>,
 ) -> Result<impl IntoResponse, StatusCode> {
     let res = next.run(req).await;
-    let (parts, _) = res.into_parts();
+    let (mut parts, _) = res.into_parts();
     if parts.status == StatusCode::OK {
         let cookie = parts
             .headers
@@ -536,6 +547,9 @@ pub async fn cookie_to_body<B>(
             .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?
             .as_bytes()
             .to_owned();
+        parts
+            .headers
+            .insert(CONTENT_LENGTH, HeaderValue::from(cookie.len()));
         let res = Response::from_parts(parts, Body::from(cookie));
         Ok(res)
     } else {

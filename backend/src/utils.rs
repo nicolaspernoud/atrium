@@ -77,7 +77,7 @@ pub fn raw_query_pairs<'a>(
     let query: Vec<&str> = query.split('&').collect();
     for keyvalue in query {
         let kv: Vec<&str> = keyvalue.split('=').collect();
-        if kv.len() >= 2 && kv[1] != "" {
+        if kv.len() >= 2 && !kv[1].is_empty() {
             ooq.insert(kv[0], kv[1]);
         }
     }

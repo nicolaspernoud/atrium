@@ -27,3 +27,15 @@ Your DNS configuration should be as below :
 |your.hostname|A|Your machine IPv4|
 |your.hostname|AAAA|Your machine IPv6|
 |\*.your.hostname|CNAME|your.hostname|
+
+## Development
+
+### Update main from development and set development to follow main
+
+```bash
+git checkout main
+git merge development --squash
+# Alter commit message and commit
+git checkout development
+git reset --hard main
+```

@@ -21,7 +21,7 @@ async fn secured_proxy_test() {
         .expect("failed to execute request");
 
     // Assert that is impossible
-    assert!(response.status() == 401);
+    assert_eq!(response.status(), 401);
     assert_eq!(response.text().await.unwrap(), "");
 
     // Log as normal user
@@ -85,7 +85,7 @@ async fn proxy_test() {
         .expect("failed to execute request");
 
     // Assert
-    assert!(response.status().is_success());
+    assert_eq!(response.status(), 200);
     assert!(response.headers().contains_key("Content-Security-Policy"));
     assert!(response
         .text()
@@ -102,7 +102,7 @@ async fn proxy_test() {
         .expect("failed to execute request");
 
     // Assert
-    assert!(response.status().is_success());
+    assert_eq!(response.status(), 200);
     assert!(!response.headers().contains_key("Content-Security-Policy"));
     assert!(response
         .text()

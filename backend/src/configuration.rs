@@ -1,5 +1,6 @@
 use crate::{
     apps::{App, AppWithUri},
+    appstate::{ConfigMap, ConfigState},
     davs::model::Dav,
     users::User,
     utils::{is_default, option_string_trim, string_trim},
@@ -7,9 +8,9 @@ use crate::{
 use anyhow::Result;
 use axum::{
     async_trait,
-    extract::{FromRequest, RequestParts},
-    Extension,
+    extract::{FromRef, FromRequestParts},
 };
+use http::request::Parts;
 use hyper::StatusCode;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
@@ -99,10 +100,6 @@ pub struct Config {
     pub users: Vec<User>,
 }
 
-pub type ConfigMap = HashMap<String, HostType>;
-
-pub type ConfigFile = String;
-
 impl Config {
     pub async fn from_file(filepath: &str) -> Result<Self> {
         let data = tokio::fs::read_to_string(filepath).await?;
@@ -176,9 +173,7 @@ impl Config {
     }
 }
 
-pub async fn load_config(
-    config_file: &str,
-) -> Result<(Arc<Config>, Arc<ConfigMap>), anyhow::Error> {
+pub async fn load_config(config_file: &str) -> Result<(ConfigState, ConfigMap), anyhow::Error> {
     let mut config = Config::from_file(config_file).await?;
     // if the cookie encryption key is not present, generate it and store it
     if config.cookie_key.is_none() {
@@ -197,7 +192,7 @@ pub async fn load_config(
     } else {
         Some(config.http_port)
     };
-    let mut hashmap: ConfigMap = filter_services(&config.apps, &config.hostname)
+    let mut hashmap: HashMap<String, HostType> = filter_services(&config.apps, &config.hostname)
         .map(|app| {
             (
                 format!("{}.{}", trim_host(&app.host), config.hostname),
@@ -320,18 +315,17 @@ impl HostType {
 }
 
 #[async_trait]
-impl<B> FromRequest<B> for HostType
+impl<S> FromRequestParts<S> for HostType
 where
-    B: Send,
+    S: Send + Sync,
+    ConfigMap: FromRef<S>,
 {
     type Rejection = StatusCode;
 
-    async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
-        let Extension(configmap) = Extension::<Arc<HashMap<String, HostType>>>::from_request(req)
-            .await
-            .expect("`Config` extension is missing");
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let configmap = ConfigMap::from_ref(state);
 
-        let host = axum::extract::Host::from_request(req)
+        let host = axum::extract::Host::from_request_parts(parts, state)
             .await
             .map_err(|_| StatusCode::NOT_FOUND)?;
 

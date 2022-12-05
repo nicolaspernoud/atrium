@@ -1,11 +1,11 @@
 use axum::{
-    extract::{ConnectInfo, Host, Path},
+    extract::{ConnectInfo, Host, Path, State},
     http::{
         uri::{Authority, Scheme},
         Request, Response,
     },
     response::IntoResponse,
-    Extension, Json,
+    Json,
 };
 use base64ct::Encoding;
 use headers::HeaderValue;
@@ -17,11 +17,12 @@ use hyper::{
 use hyper_reverse_proxy::ReverseProxy;
 use hyper_trust_dns::{RustlsHttpsConnector, TrustDnsResolver};
 use serde::{Deserialize, Serialize};
-use std::{net::SocketAddr, sync::Arc};
+use std::net::SocketAddr;
 use tracing::{debug, error};
 
 use crate::{
-    configuration::{config_or_error, Config, ConfigFile, HostType},
+    appstate::{ConfigFile, ConfigState},
+    configuration::{config_or_error, HostType},
     users::{check_authorization, AdminToken, UserTokenWithoutXSRFCheck},
     utils::{is_default, option_vec_trim_remove_empties, string_trim, vec_trim_remove_empties},
 };
@@ -251,7 +252,7 @@ pub async fn proxy_handler(
 }
 
 pub async fn get_apps(
-    Extension(config_file): Extension<ConfigFile>,
+    State(config_file): State<ConfigFile>,
     _admin: AdminToken,
 ) -> Result<Json<Vec<App>>, (StatusCode, &'static str)> {
     let config = config_or_error(&config_file).await?;
@@ -260,13 +261,13 @@ pub async fn get_apps(
 }
 
 pub async fn delete_app(
-    Extension(config_file): Extension<ConfigFile>,
+    State(config_file): State<ConfigFile>,
     _admin: AdminToken,
-    Path(app_id): Path<(String, usize)>,
+    Path(app_id): Path<usize>,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
     let mut config = config_or_error(&config_file).await?;
     // Find the app
-    if let Some(pos) = config.apps.iter().position(|a| a.id == app_id.1) {
+    if let Some(pos) = config.apps.iter().position(|a| a.id == app_id) {
         // It is an existing app, delete it
         config.apps.remove(pos);
     } else {
@@ -282,8 +283,8 @@ pub async fn delete_app(
 }
 
 pub async fn add_app(
-    config_file: Extension<ConfigFile>,
-    Extension(config): Extension<Arc<Config>>,
+    State(config_file): State<ConfigFile>,
+    State(config): State<ConfigState>,
     _admin: AdminToken,
     Json(payload): Json<App>,
 ) -> Result<(StatusCode, &'static str), (StatusCode, &'static str)> {

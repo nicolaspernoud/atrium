@@ -1,11 +1,14 @@
-use std::sync::Arc;
-
 use crate::{
-    configuration::{config_or_error, Config, ConfigFile},
+    appstate::{ConfigFile, ConfigState},
+    configuration::{config_or_error},
     users::AdminToken,
     utils::{is_default, option_string_trim, string_trim, vec_trim_remove_empties},
 };
-use axum::{extract::Path, response::IntoResponse, Extension, Json};
+use axum::{
+    extract::{Path, State},
+    response::IntoResponse,
+    Json,
+};
 use hyper::StatusCode;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -56,7 +59,7 @@ impl Dav {
 }
 
 pub async fn get_davs(
-    Extension(config_file): Extension<ConfigFile>,
+    State(config_file): State<ConfigFile>,
     _admin: AdminToken,
 ) -> Result<Json<Vec<Dav>>, (StatusCode, &'static str)> {
     let config = config_or_error(&config_file).await?;
@@ -65,13 +68,13 @@ pub async fn get_davs(
 }
 
 pub async fn delete_dav(
-    config_file: Extension<ConfigFile>,
+    State(config_file): State<ConfigFile>,
     _admin: AdminToken,
-    Path(dav_id): Path<(String, usize)>,
+    Path(dav_id): Path<usize>,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
     let mut config = config_or_error(&config_file).await?;
     // Find the dav
-    if let Some(pos) = config.davs.iter().position(|d| d.id == dav_id.1) {
+    if let Some(pos) = config.davs.iter().position(|d| d.id == dav_id) {
         // It is an existing dav, delete it
         config.davs.remove(pos);
     } else {
@@ -87,8 +90,8 @@ pub async fn delete_dav(
 }
 
 pub async fn add_dav(
-    config_file: Extension<ConfigFile>,
-    Extension(config): Extension<Arc<Config>>,
+    State(config_file): State<ConfigFile>,
+    State(config): State<ConfigState>,
     _admin: AdminToken,
     Json(payload): Json<Dav>,
 ) -> Result<(StatusCode, &'static str), (StatusCode, &'static str)> {

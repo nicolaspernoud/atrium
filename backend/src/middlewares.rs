@@ -1,17 +1,20 @@
-use std::sync::Arc;
-
 use axum::{
-    extract::{FromRequest, RequestParts},
+    extract::State,
     http::{Request, StatusCode},
     middleware::Next,
     response::Response,
 };
 use http::{HeaderValue, Method};
+use crate::{
+    appstate::ConfigState,
+    configuration::{HostType},
+};
 
-use crate::configuration::{Config, HostType};
-
-pub async fn cors_middleware<B>(req: Request<B>, next: Next<B>) -> Result<Response, StatusCode> {
-    let cfg = req.extensions().get::<Arc<Config>>().unwrap();
+pub async fn cors_middleware<B>(
+    State(cfg): State<ConfigState>,
+    req: Request<B>,
+    next: Next<B>,
+) -> Result<Response, StatusCode> {
     let origin = req.headers().get("origin").map(|o| o.to_owned());
     let hostname = if origin.is_some() && {
         let this = &origin.as_ref().unwrap().to_str();
@@ -61,22 +64,19 @@ fn allow_methods_headers_credentials(headers: &mut http::HeaderMap) {
 }
 
 pub async fn inject_security_headers<B>(
+    State(cfg): State<ConfigState>,
+    host_type: Option<HostType>,
     req: Request<B>,
     next: Next<B>,
 ) -> Result<Response, StatusCode>
 where
     B: std::marker::Send,
 {
-    let mut parts = RequestParts::new(req);
-    let inject = HostType::from_request(&mut parts)
-        .await
-        .ok()
+    let inject = host_type
         .map(|app| app.inject_security_headers())
         .unwrap_or(true);
-    let req = parts.try_into_request().unwrap();
     if inject {
         let source = {
-            let cfg = req.extensions().get::<Arc<Config>>().unwrap();
             format!(
                 "{s}://{h}:* {s}://*.{h}:*",
                 s = cfg.scheme(),

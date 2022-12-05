@@ -4,18 +4,18 @@ pub mod model;
 pub(crate) mod webdav_server;
 
 use crate::{
+    appstate::OptionalMaxMindReader,
     configuration::HostType,
     logger::city_from_ip,
     users::{check_authorization, UserToken},
 };
 use axum::{
-    extract::{ConnectInfo, Host},
+    extract::{ConnectInfo, Host, State},
     http::{Request, Response},
-    Extension,
 };
 use http::Method;
 use hyper::{Body, StatusCode};
-use maxminddb::Reader;
+
 use std::{net::SocketAddr, sync::Arc};
 use tracing::info;
 
@@ -36,7 +36,7 @@ lazy_static::lazy_static! {
 }
 
 pub async fn webdav_handler(
-    Extension(reader): Extension<Arc<Option<Reader<Vec<u8>>>>>,
+    State(reader): State<OptionalMaxMindReader>,
     user: Option<UserToken>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     dav: HostType,

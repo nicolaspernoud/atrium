@@ -1,17 +1,16 @@
-use crate::configuration::Config;
+use crate::appstate::ConfigState;
 use crate::utils::{is_default, raw_query_pairs};
-use axum::extract::RawQuery;
+use axum::extract::{RawQuery, State};
 use axum::response::IntoResponse;
-use axum::{response::Html, Extension, Json};
+use axum::{response::Html, Json};
 use http::{header, StatusCode};
 use jsonwebtoken::{encode, EncodingKey, Header};
 use reqwest::Body;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::sync::Arc;
 use tokio::fs::{self};
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OnlyOfficeConfiguration<'a> {
     pub document: Document<'a>,
@@ -20,7 +19,7 @@ pub struct OnlyOfficeConfiguration<'a> {
     pub token: &'a str,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Document<'a> {
     pub file_type: &'a str,
@@ -29,7 +28,7 @@ pub struct Document<'a> {
     pub url: &'a str,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EditorConfig<'a> {
     pub lang: &'a str,
@@ -38,13 +37,13 @@ pub struct EditorConfig<'a> {
     pub user: OOUser<'a>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Customization {
     pub autosave: bool,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OOUser<'a> {
     pub id: &'a str,
@@ -56,10 +55,10 @@ const QUERY_ERROR: (http::StatusCode, &str) =
 
 // onlyoffice_page opens the main onlyoffice  window
 pub async fn onlyoffice_page(
-    Extension(config): Extension<Arc<Config>>,
+    State(config): State<ConfigState>,
     RawQuery(query): RawQuery,
 ) -> Result<Html<String>, (StatusCode, &'static str)> {
-    let ooq = raw_query_pairs(query.as_ref().map(|x| &**x))?;
+    let ooq = raw_query_pairs(query.as_deref())?;
     let file = ooq.get("file").ok_or(QUERY_ERROR)?;
     let share_token = ooq.get("share_token").ok_or(QUERY_ERROR)?;
     let mtime = ooq.get("mtime").ok_or(QUERY_ERROR)?;
@@ -130,7 +129,7 @@ pub async fn onlyoffice_page(
             &Header::default(),
             &j,
             &EncodingKey::from_secret(
-                &config
+                config
                     .onlyoffice_config
                     .as_ref()
                     .unwrap()
@@ -170,8 +169,8 @@ pub struct OnlyOfficeCallback {
 // onlyoffice_callback is the callback function wanted by onlyoffice to allow saving a document
 // the body provides information on where to get the altered document, and the query provides information on where to put it
 pub async fn onlyoffice_callback(
-    Json(payload): Json<OnlyOfficeCallback>,
     RawQuery(query): RawQuery,
+    Json(payload): Json<OnlyOfficeCallback>,
 ) -> Result<impl IntoResponse, (StatusCode, &'static str)> {
     // Case of document closed after editing
     if payload.status == 2 && payload.url.is_some() && query.is_some() {

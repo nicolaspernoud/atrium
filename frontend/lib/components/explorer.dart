@@ -17,7 +17,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:filesize/filesize.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:webdav_client/webdav_client.dart' as webdav;
 import 'package:atrium/platform/mobile.dart'
     if (dart.library.html) 'package:atrium/platform/web.dart';
@@ -55,7 +57,10 @@ class ExplorerState extends State<Explorer> {
   late Future<List<File>> files;
   var sortBy = SortBy.names;
   var foundFile = "";
-  final foundKey = GlobalKey();
+
+  final ItemScrollController itemScrollController = ItemScrollController();
+  final ItemPositionsListener itemPositionsListener =
+      ItemPositionsListener.create();
 
   @override
   void initState() {
@@ -234,97 +239,77 @@ class ExplorerState extends State<Explorer> {
       list.sort((a, b) => b.mTime!.compareTo(a.mTime!));
     }
 
-    final List idxList = Iterable<int>.generate(list.length).toList();
+    if (dirPath != "/") list.insert(0, File());
 
-    return SingleChildScrollView(
-        child: Column(children: [
-      if (dirPath != "/")
-        ListTile(
-          leading: const Icon(Icons.reply),
-          title: const Text(".."),
-          onTap: () {
-            dirPath = dirPath.substring(0, dirPath.length - 1);
-            dirPath = dirPath.substring(0, dirPath.lastIndexOf("/") + 1);
-            setState(() {
-              _getData();
-            });
-          },
-        ),
-      ...idxList.map((idx) {
-        var file = list[idx];
-        var type = fileType(file);
-        var isFound = file.path! == foundFile;
+    for (var i = 1; i < list.length; i++) {
+      // If we found a file before building this view, we scroll to that file
+      if (list[i].path! == foundFile) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          itemScrollController.jumpTo(
+            index: i,
+          );
+        });
+      }
+    }
 
-        // If we found a file before building this view, we scroll to that file
-        if (isFound) {
-          WidgetsBinding.instance.addPostFrameCallback(
-              (_) => Scrollable.ensureVisible(foundKey.currentContext!));
-          foundFile = "";
-        }
+    return ScrollablePositionedList.builder(
+      itemCount: list.length,
+      itemBuilder: (context, index) {
+        if (dirPath != "/" && index == 0) {
+          return ListTile(
+            leading: const Icon(Icons.reply),
+            title: const Text(".."),
+            onTap: () {
+              dirPath = dirPath.substring(0, dirPath.length - 1);
+              dirPath = dirPath.substring(0, dirPath.lastIndexOf("/") + 1);
+              setState(() {
+                _getData();
+              });
+            },
+          );
+        } else {
+          var file = list[index];
+          var type = fileType(file);
 
-        return ListTile(
-          key: isFound ? foundKey : null,
-          leading: widgetFromFileType(file, type),
-          tileColor: isFound ? Colors.grey[400] : null,
-          title: Text(file.name ?? ''),
-          subtitle: Text(formatTime(file.mTime) +
-              ((file.size != null && file.size! > 0)
-                  ? " - ${filesize(file.size, 0)}"
-                  : "")),
-          trailing: PopupMenuButton(
-              itemBuilder: (BuildContext context) => <PopupMenuEntry>[
-                    PopupMenuItem(
-                        onTap: () =>
-                            download(widget.url, client, file, context),
-                        child: Row(
-                          children: [
-                            const Padding(
-                              padding: EdgeInsets.all(8.0),
-                              child: Icon(Icons.download),
-                            ),
-                            Text(tr(context, "download"))
-                          ],
-                        )),
-                    PopupMenuItem(
-                        onTap: () {
-                          WidgetsBinding.instance
-                              .addPostFrameCallback((_) async {
-                            await showDialog(
-                                context: context,
-                                builder: (context) =>
-                                    ShareDialog(widget.url, file));
-                          });
-                        },
-                        child: Row(
-                          children: [
-                            const Padding(
-                              padding: EdgeInsets.all(8.0),
-                              child: Icon(Icons.share),
-                            ),
-                            Text(tr(context, "share"))
-                          ],
-                        )),
-                    if (readWrite) ...[
+          return ListTile(
+            leading: widgetFromFileType(file, type),
+            tileColor: file.path! == foundFile ? Colors.grey[400] : null,
+            title: Text(file.name ?? ''),
+            subtitle: Text(formatTime(file.mTime) +
+                ((file.size != null && file.size! > 0)
+                    ? " - ${filesize(file.size, 0)}"
+                    : "")),
+            trailing: PopupMenuButton(
+                itemBuilder: (BuildContext context) => <PopupMenuEntry>[
+                      PopupMenuItem(
+                          onTap: () =>
+                              download(widget.url, client, file, context),
+                          child: Row(
+                            children: [
+                              const Padding(
+                                padding: EdgeInsets.all(8.0),
+                                child: Icon(Icons.download),
+                              ),
+                              Text(tr(context, "download"))
+                            ],
+                          )),
                       PopupMenuItem(
                           onTap: () {
                             WidgetsBinding.instance
                                 .addPostFrameCallback((_) async {
-                              String? val = await showDialog<String>(
-                                context: context,
-                                builder: (context) => RenameDialog(file.name!),
-                              );
-                              if (val != null && file.path != null) {
-                                var newPath = file.path!;
-                                newPath = newPath.endsWith("/")
-                                    ? newPath.substring(0, newPath.length - 1)
-                                    : newPath;
-                                newPath =
-                                    "${newPath.substring(0, newPath.lastIndexOf('/'))}/$val";
-                                newPath = file.isDir! ? "$newPath/" : newPath;
-                                await client.rename(file.path!, newPath, true);
-                                setState(() {
-                                  _getData();
-                                });
+                              if (!widget.dav.secured) {
+                                Clipboard.setData(ClipboardData(
+                                    text:
+                                        '${widget.url}${escapePath(file.path!)}'));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                        content: Text(
+                                            tr(context, "share_url_copied"))));
+                              } else {
+                                await showDialog(
+                                    context: context,
+                                    builder: (context) =>
+                                        ShareDialog(widget.url, file));
                               }
                             });
                           },
@@ -332,157 +317,195 @@ class ExplorerState extends State<Explorer> {
                             children: [
                               const Padding(
                                 padding: EdgeInsets.all(8.0),
-                                child: Icon(Icons.drive_file_rename_outline),
+                                child: Icon(Icons.share),
                               ),
-                              Text(tr(context, "rename"))
+                              Text(tr(context, "share"))
                             ],
                           )),
-                      PopupMenuItem(
-                          onTap: (() {
-                            setState(() {
-                              _copyMoveStatus = CopyMoveStatus.copy;
-                              _copyMovePath = file.path!;
-                            });
-                          }),
-                          child: Row(
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.all(8.0),
-                                child: Icon(Icons.copy,
-                                    color: _copyMovePath == file.path! &&
-                                            _copyMoveStatus ==
-                                                CopyMoveStatus.copy
-                                        ? Colors.blueAccent
-                                        : null),
-                              ),
-                              Text(tr(context, "copy"))
-                            ],
-                          )),
-                      PopupMenuItem(
-                          onTap: (() {
-                            setState(() {
-                              _copyMoveStatus = CopyMoveStatus.move;
-                              _copyMovePath = file.path!;
-                            });
-                          }),
-                          child: Row(
-                            children: [
-                              Padding(
-                                padding: const EdgeInsets.all(8.0),
-                                child: Icon(Icons.cut,
-                                    color: _copyMovePath == file.path! &&
-                                            _copyMoveStatus ==
-                                                CopyMoveStatus.move
-                                        ? Colors.blueAccent
-                                        : null),
-                              ),
-                              Text(tr(context, "cut"))
-                            ],
-                          )),
-                      PopupMenuItem(
-                          onTap: () async {
-                            WidgetsBinding.instance
-                                .addPostFrameCallback((_) async {
-                              var confirmed = await showDialog<bool>(
-                                context: context,
-                                builder: (context) => DeleteDialog(file.name!),
-                              );
-                              if (confirmed!) {
-                                await client.removeAll(file.path!);
-                                setState(() {
-                                  idxList.removeAt(idx);
-                                  list.removeAt(idx);
-                                });
-                              }
-                            });
-                          },
-                          child: Row(
-                            children: [
-                              const Padding(
-                                padding: EdgeInsets.all(8.0),
-                                child: Icon(Icons.delete),
-                              ),
-                              Text(tr(context, "delete"))
-                            ],
-                          ))
-                    ]
-                  ]),
-          onTap: () async {
-            if (file.isDir!) {
-              dirPath = file.path!;
-              setState(() {
-                _getData();
-              });
-            } else {
-              if (type == FileType.text) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => TextEditor(
-                          client: client, file: file, readWrite: readWrite)),
-                );
-              } else if (type == FileType.image) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => ImageViewer(
-                            client: client,
-                            url: widget.url,
-                            files: list,
-                            index: idx,
-                          )),
-                );
-              } else if (type == FileType.pdf) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => PdfViewer(
-                          client: client, url: widget.url, file: file)),
-                );
-              } else if (type == FileType.document) {
-                // Get a share token for this document
-                var shareToken = await ApiProvider().getShareToken(
-                    widget.url.split("://")[1].split(":")[0], file.path!,
-                    shareWith: "external_editor", shareForDays: 1);
-                final Uri launchUri = Uri(
-                  scheme: App().prefs.hostnameScheme,
-                  host: App().prefs.hostnameHost,
-                  port: App().prefs.hostnamePort,
-                  path: 'onlyoffice',
-                  query: joinQueryParameters(<String, String>{
-                    'file': '${widget.url}${file.path}',
-                    'mtime': file.mTime!.toIso8601String(),
-                    'user': App().prefs.username,
-                    'share_token': shareToken!
-                  }),
-                );
-                if (!mounted) return;
-                Navigator.of(context)
-                    .push(MaterialPageRoute<void>(builder: (context) {
-                  return Scaffold(
-                      appBar: AppBar(toolbarHeight: 0.0),
-                      body: AppWebView(initialUrl: launchUri.toString()));
-                }));
-              } else if (type == FileType.media) {
-                String uri = '${widget.url}${escapePath(file.path!)}';
-                if (kIsWeb) {
-                  var shareToken = await ApiProvider().getShareToken(
-                      widget.url.split("://")[1].split(":")[0], file.path!,
-                      shareWith: "media_player", shareForDays: 1);
-                  uri = '$uri?token=$shareToken';
-                }
-                if (!mounted) return;
-                Navigator.push(
+                      if (readWrite) ...[
+                        PopupMenuItem(
+                            onTap: () {
+                              WidgetsBinding.instance
+                                  .addPostFrameCallback((_) async {
+                                String? val = await showDialog<String>(
+                                  context: context,
+                                  builder: (context) =>
+                                      RenameDialog(file.name!),
+                                );
+                                if (val != null && file.path != null) {
+                                  var newPath = file.path!;
+                                  newPath = newPath.endsWith("/")
+                                      ? newPath.substring(0, newPath.length - 1)
+                                      : newPath;
+                                  newPath =
+                                      "${newPath.substring(0, newPath.lastIndexOf('/'))}/$val";
+                                  newPath = file.isDir! ? "$newPath/" : newPath;
+                                  await client.rename(
+                                      file.path!, newPath, true);
+                                  setState(() {
+                                    _getData();
+                                  });
+                                }
+                              });
+                            },
+                            child: Row(
+                              children: [
+                                const Padding(
+                                  padding: EdgeInsets.all(8.0),
+                                  child: Icon(Icons.drive_file_rename_outline),
+                                ),
+                                Text(tr(context, "rename"))
+                              ],
+                            )),
+                        PopupMenuItem(
+                            onTap: (() {
+                              setState(() {
+                                _copyMoveStatus = CopyMoveStatus.copy;
+                                _copyMovePath = file.path!;
+                              });
+                            }),
+                            child: Row(
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.all(8.0),
+                                  child: Icon(Icons.copy,
+                                      color: _copyMovePath == file.path! &&
+                                              _copyMoveStatus ==
+                                                  CopyMoveStatus.copy
+                                          ? Colors.blueAccent
+                                          : null),
+                                ),
+                                Text(tr(context, "copy"))
+                              ],
+                            )),
+                        PopupMenuItem(
+                            onTap: (() {
+                              setState(() {
+                                _copyMoveStatus = CopyMoveStatus.move;
+                                _copyMovePath = file.path!;
+                              });
+                            }),
+                            child: Row(
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.all(8.0),
+                                  child: Icon(Icons.cut,
+                                      color: _copyMovePath == file.path! &&
+                                              _copyMoveStatus ==
+                                                  CopyMoveStatus.move
+                                          ? Colors.blueAccent
+                                          : null),
+                                ),
+                                Text(tr(context, "cut"))
+                              ],
+                            )),
+                        PopupMenuItem(
+                            onTap: () async {
+                              WidgetsBinding.instance
+                                  .addPostFrameCallback((_) async {
+                                var confirmed = await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) =>
+                                      DeleteDialog(file.name!),
+                                );
+                                if (confirmed!) {
+                                  await client.removeAll(file.path!);
+                                  setState(() {
+                                    list.removeAt(index);
+                                  });
+                                }
+                              });
+                            },
+                            child: Row(
+                              children: [
+                                const Padding(
+                                  padding: EdgeInsets.all(8.0),
+                                  child: Icon(Icons.delete),
+                                ),
+                                Text(tr(context, "delete"))
+                              ],
+                            ))
+                      ]
+                    ]),
+            onTap: () async {
+              if (file.isDir!) {
+                dirPath = file.path!;
+                setState(() {
+                  _getData();
+                });
+              } else {
+                if (type == FileType.text) {
+                  Navigator.push(
                     context,
                     MaterialPageRoute(
-                        builder: (context) =>
-                            MediaPlayer(uri: uri, file: file)));
+                        builder: (context) => TextEditor(
+                            client: client, file: file, readWrite: readWrite)),
+                  );
+                } else if (type == FileType.image) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => ImageViewer(
+                              client: client,
+                              url: widget.url,
+                              files: list,
+                              index: index,
+                            )),
+                  );
+                } else if (type == FileType.pdf) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) => PdfViewer(
+                            client: client, url: widget.url, file: file)),
+                  );
+                } else if (type == FileType.document) {
+                  // Get a share token for this document
+                  var shareToken = await ApiProvider().getShareToken(
+                      widget.url.split("://")[1].split(":")[0], file.path!,
+                      shareWith: "external_editor", shareForDays: 1);
+                  final Uri launchUri = Uri(
+                    scheme: App().prefs.hostnameScheme,
+                    host: App().prefs.hostnameHost,
+                    port: App().prefs.hostnamePort,
+                    path: 'onlyoffice',
+                    query: joinQueryParameters(<String, String>{
+                      'file': '${widget.url}${file.path}',
+                      'mtime': file.mTime!.toIso8601String(),
+                      'user': App().prefs.username,
+                      'share_token': shareToken!
+                    }),
+                  );
+                  if (!mounted) return;
+                  Navigator.of(context)
+                      .push(MaterialPageRoute<void>(builder: (context) {
+                    return Scaffold(
+                        appBar: AppBar(toolbarHeight: 0.0),
+                        body: AppWebView(initialUrl: launchUri.toString()));
+                  }));
+                } else if (type == FileType.media) {
+                  String uri = '${widget.url}${escapePath(file.path!)}';
+                  if (kIsWeb) {
+                    var shareToken = await ApiProvider().getShareToken(
+                        widget.url.split("://")[1].split(":")[0], file.path!,
+                        shareWith: "media_player", shareForDays: 1);
+                    uri = '$uri?token=$shareToken';
+                  }
+                  if (!mounted) return;
+                  Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (context) =>
+                              MediaPlayer(uri: uri, file: file)));
+                }
               }
-            }
-          },
-        );
-      })
-    ]));
+            },
+          );
+        }
+      },
+      itemScrollController: itemScrollController,
+      itemPositionsListener: itemPositionsListener,
+    );
   }
 
   Widget widgetFromFileType(File file, FileType type) {
@@ -504,7 +527,9 @@ class ExplorerState extends State<Explorer> {
                   (BuildContext context, AsyncSnapshot<Uint8List> snapshot) {
                 Widget child;
                 if (snapshot.hasData) {
-                  child = Image.memory(snapshot.data!);
+                  child = Image(
+                      image:
+                          ResizeImage(MemoryImage(snapshot.data!), width: 30));
                 } else if (snapshot.hasError) {
                   child = Padding(
                     padding: const EdgeInsets.only(top: 16),

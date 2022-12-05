@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::net::SocketAddr;
 
 use axum::{
     body::{Body, Bytes},
@@ -6,12 +6,14 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
-use maxminddb::{geoip2, Reader};
+use maxminddb::geoip2;
+
+use crate::appstate::OptionalMaxMindReader;
 
 const UNKNOWN_CITY: &str = "unknown city";
 const UNKNOWN_COUNTRY: &str = "unknown country";
 
-pub fn city_from_ip(addr: SocketAddr, reader: Arc<Option<Reader<Vec<u8>>>>) -> String {
+pub fn city_from_ip(addr: SocketAddr, reader: OptionalMaxMindReader) -> String {
     let location = if addr.ip().is_loopback() {
         "localhost".to_owned()
     } else if addr.is_ipv4() && addr.ip().to_string().starts_with("192.168.") {

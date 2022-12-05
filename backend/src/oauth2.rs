@@ -1,23 +1,20 @@
-use std::{net::SocketAddr, sync::Arc};
-
+use crate::{
+    appstate::{ConfigState, OptionalMaxMindReader},
+    configuration::OpenIdConfig,
+    users::{create_user_cookie, user_to_token, User, ADMINS_ROLE},
+};
 use axum::{
-    extract::{ConnectInfo, Host, Query},
+    extract::{ConnectInfo, Host, Query, State},
     response::{IntoResponse, Redirect},
-    Extension,
 };
 use axum_extra::extract::{cookie::Cookie, CookieJar, PrivateCookieJar};
 use http::StatusCode;
-use maxminddb::Reader;
 use oauth2::{
     basic::BasicClient, reqwest::async_http_client, AuthUrl, AuthorizationCode, ClientId,
     ClientSecret, CsrfToken, RedirectUrl, Scope, TokenResponse, TokenUrl,
 };
 use serde::Deserialize;
-
-use crate::{
-    configuration::{Config, OpenIdConfig},
-    users::{create_user_cookie, user_to_token, User, ADMINS_ROLE},
-};
+use std::net::SocketAddr;
 
 const STATE_COOKIE: &str = "ATRIUM_OAUTH2_STATE";
 
@@ -56,7 +53,7 @@ fn oauth_client(
 }
 
 pub async fn oauth2_login(
-    Extension(config): Extension<Arc<Config>>,
+    State(config): State<ConfigState>,
     jar: CookieJar,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
     if config.openid_config.is_none() {
@@ -93,11 +90,11 @@ pub struct AuthRequest {
 
 pub async fn oauth2_callback(
     Query(query): Query<AuthRequest>,
-    Extension(reader): Extension<Arc<Option<Reader<Vec<u8>>>>>,
+    State(reader): State<OptionalMaxMindReader>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     jar: CookieJar,
     private_jar: PrivateCookieJar,
-    Extension(config): Extension<Arc<Config>>,
+    State(config): State<ConfigState>,
     Host(hostname): Host,
 ) -> Result<(PrivateCookieJar, Redirect), (StatusCode, &'static str)> {
     if config.openid_config.is_none() {

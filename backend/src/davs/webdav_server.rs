@@ -62,7 +62,7 @@ pub type Request = hyper::Request<Body>;
 pub type Response = hyper::Response<Body>;
 
 pub type BoxResult<T> = Result<T, Box<dyn std::error::Error>>;
-const APPLICATION_JSON: HeaderValue = HeaderValue::from_static("application/json");
+static APPLICATION_JSON: HeaderValue = HeaderValue::from_static("application/json");
 
 pub struct WebdavServer {}
 
@@ -363,7 +363,8 @@ impl WebdavServer {
             }
         }
         let j = serde_json::to_string(&paths)?;
-        res.headers_mut().insert(CONTENT_TYPE, APPLICATION_JSON);
+        res.headers_mut()
+            .insert(CONTENT_TYPE, APPLICATION_JSON.to_owned());
         *res.body_mut() = Body::from(j);
         Ok(())
     }
@@ -376,7 +377,8 @@ impl WebdavServer {
         let full_path = fs::canonicalize(path).await?;
         let du = crate::sysinfo::disk_info(full_path).await?;
         let j = serde_json::to_string(&du)?;
-        res.headers_mut().insert(CONTENT_TYPE, APPLICATION_JSON);
+        res.headers_mut()
+            .insert(CONTENT_TYPE, APPLICATION_JSON.to_owned());
         *res.body_mut() = Body::from(j);
         Ok(())
     }
