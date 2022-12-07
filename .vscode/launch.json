@@ -9,7 +9,12 @@
       "type": "dart",
       "request": "launch",
       "program": "frontend/lib/main.dart",
-      "args": ["--web-hostname", "atrium.127.0.0.1.nip.io"]
+      "args": [
+        "--web-hostname",
+        "atrium.127.0.0.1.nip.io",
+        "--web-renderer",
+        "html"
+      ]
     },
     {
       "type": "lldb",

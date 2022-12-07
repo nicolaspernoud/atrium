@@ -16,8 +16,8 @@ argon2 = { features = ["alloc", "password-hash"], default-features = false, vers
 async_zip = { features = ["deflate"], default-features = false, version = "0.0.9" }
 async-stream = "0.3"
 async-walkdir = "0.2"
-axum = { version="0.6", features = ["query", "json", "http2", "tokio", "headers"], default-features = false }
-axum-extra = { version = "0.4.1", features = ["cookie-private"], default-features = false }
+axum = { version="0.6.1", features = ["query", "json", "http2", "tokio", "headers"], default-features = false }
+axum-extra = { version = "0.4.2", features = ["cookie-private"], default-features = false }
 axum-server = "0.4.0"
 base64ct = { version = "1.5", features = ["alloc"]}
 chacha20poly1305 = { version = "0.10", features = ["stream"], default-features = false }

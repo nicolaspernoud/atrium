@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tokio::fs::{self};
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OnlyOfficeConfiguration<'a> {
     pub document: Document<'a>,
@@ -19,7 +19,7 @@ pub struct OnlyOfficeConfiguration<'a> {
     pub token: &'a str,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Document<'a> {
     pub file_type: &'a str,
@@ -28,7 +28,7 @@ pub struct Document<'a> {
     pub url: &'a str,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EditorConfig<'a> {
     pub lang: &'a str,
@@ -37,13 +37,13 @@ pub struct EditorConfig<'a> {
     pub user: OOUser<'a>,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Customization {
     pub autosave: bool,
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OOUser<'a> {
     pub id: &'a str,

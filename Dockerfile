@@ -55,7 +55,7 @@ FROM --platform=$BUILDPLATFORM cirrusci/flutter:3.3.8 as frontend-builder
 WORKDIR /build
 COPY ./frontend .
 RUN flutter pub get
-RUN flutter build web --csp
+RUN flutter build web --csp --web-renderer html
 RUN sed -i "s/serviceWorkerVersion = null/serviceWorkerVersion = '$(shuf -i 1000000000-9999999999 -n 1)'/g" ./build/web/init.js
 
 #########################
