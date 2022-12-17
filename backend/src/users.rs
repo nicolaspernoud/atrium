@@ -662,7 +662,7 @@ mod check_user_has_role_or_forbid_tests {
             ..Default::default()
         };
         let app = AppWithUri::from_app_domain_and_http_port(app, "atrium.io", None);
-        let target = HostType::ReverseApp(app);
+        let target = HostType::ReverseApp(Box::new(app));
         assert!(check_user_has_role_or_forbid(user, &target, "", "").is_some());
     }
 
@@ -678,7 +678,7 @@ mod check_user_has_role_or_forbid_tests {
             ..Default::default()
         };
         let app = AppWithUri::from_app_domain_and_http_port(app, "atrium.io", None);
-        let target = HostType::ReverseApp(app);
+        let target = HostType::ReverseApp(Box::new(app));
         assert!(check_user_has_role_or_forbid(&Some(user), &target, "", "").is_none());
     }
 
@@ -694,7 +694,7 @@ mod check_user_has_role_or_forbid_tests {
             ..Default::default()
         };
         let app = AppWithUri::from_app_domain_and_http_port(app, "atrium.io", None);
-        let target = HostType::ReverseApp(app);
+        let target = HostType::ReverseApp(Box::new(app));
         assert!(check_user_has_role_or_forbid(&Some(user), &target, "", "").is_none());
     }
 
@@ -710,7 +710,7 @@ mod check_user_has_role_or_forbid_tests {
             ..Default::default()
         };
         let app = AppWithUri::from_app_domain_and_http_port(app, "atrium.io", None);
-        let target = HostType::ReverseApp(app);
+        let target = HostType::ReverseApp(Box::new(app));
         assert!(check_user_has_role_or_forbid(&Some(user), &target, "", "").is_some());
     }
 
@@ -723,7 +723,7 @@ mod check_user_has_role_or_forbid_tests {
             ..Default::default()
         };
         let app = AppWithUri::from_app_domain_and_http_port(app, "atrium.io", None);
-        let target = HostType::ReverseApp(app);
+        let target = HostType::ReverseApp(Box::new(app));
         assert!(check_user_has_role_or_forbid(&Some(user), &target, "", "").is_some());
     }
 
@@ -738,7 +738,7 @@ mod check_user_has_role_or_forbid_tests {
             ..Default::default()
         };
         let app = AppWithUri::from_app_domain_and_http_port(app, "atrium.io", None);
-        let target = HostType::ReverseApp(app);
+        let target = HostType::ReverseApp(Box::new(app));
         assert!(check_user_has_role_or_forbid(&Some(user), &target, "", "").is_some());
     }
 
@@ -750,7 +750,7 @@ mod check_user_has_role_or_forbid_tests {
             ..Default::default()
         };
         let app = AppWithUri::from_app_domain_and_http_port(app, "atrium.io", None);
-        let target = HostType::ReverseApp(app);
+        let target = HostType::ReverseApp(Box::new(app));
         assert!(check_user_has_role_or_forbid(&Some(user), &target, "", "").is_some());
     }
 }

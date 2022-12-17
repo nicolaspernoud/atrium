@@ -150,16 +150,16 @@ impl Config {
     }
 
     pub fn domains(&self) -> Vec<String> {
-        let mut domains = filter_services(&self.apps, &self.hostname)
+        let mut domains = filter_services(&self.apps, &self.hostname, &self.domain)
             .map(|app| format!("{}.{}", trim_host(&app.host), self.hostname))
             .chain(
-                filter_services(&self.davs, &self.hostname)
+                filter_services(&self.davs, &self.hostname, &self.domain)
                     .map(|dav| format!("{}.{}", trim_host(&dav.host), self.hostname)),
             )
             .collect::<Vec<String>>();
         domains.insert(0, self.hostname.to_owned());
         // Insert apps subdomains
-        for app in filter_services(&self.apps, &self.hostname) {
+        for app in filter_services(&self.apps, &self.hostname, &self.domain) {
             for domain in app.subdomains.as_ref().unwrap_or(&Vec::new()) {
                 domains.push(format!(
                     "{}.{}.{}",
@@ -192,24 +192,27 @@ pub async fn load_config(config_file: &str) -> Result<(ConfigState, ConfigMap), 
     } else {
         Some(config.http_port)
     };
-    let mut hashmap: HashMap<String, HostType> = filter_services(&config.apps, &config.hostname)
-        .map(|app| {
-            (
-                format!("{}.{}", trim_host(&app.host), config.hostname),
-                app_to_host_type(app, &config, port),
+    let mut hashmap: HashMap<String, HostType> =
+        filter_services(&config.apps, &config.hostname, &config.domain)
+            .map(|app| {
+                (
+                    format!("{}.{}", trim_host(&app.host), config.hostname),
+                    app_to_host_type(app, &config, port),
+                )
+            })
+            .chain(
+                filter_services(&config.davs, &config.hostname, &config.domain).map(|dav| {
+                    let mut dav = dav.clone();
+                    dav.compute_key();
+                    (
+                        format!("{}.{}", trim_host(&dav.host), config.hostname),
+                        HostType::Dav(dav),
+                    )
+                }),
             )
-        })
-        .chain(filter_services(&config.davs, &config.hostname).map(|dav| {
-            let mut dav = dav.clone();
-            dav.compute_key();
-            (
-                format!("{}.{}", trim_host(&dav.host), config.hostname),
-                HostType::Dav(dav),
-            )
-        }))
-        .collect();
+            .collect();
     // Insert apps subdomains
-    for app in filter_services(&config.apps, &config.hostname) {
+    for app in filter_services(&config.apps, &config.hostname, &config.domain) {
         for domain in app.subdomains.as_ref().unwrap_or(&Vec::new()) {
             hashmap.insert(
                 format!("{}.{}.{}", domain, trim_host(&app.host), config.hostname),
@@ -226,11 +229,11 @@ pub(crate) fn trim_host(host: &str) -> String {
 
 fn app_to_host_type(app: &App, config: &Config, port: Option<u16>) -> HostType {
     if app.is_proxy {
-        HostType::ReverseApp(AppWithUri::from_app_domain_and_http_port(
+        HostType::ReverseApp(Box::new(AppWithUri::from_app_domain_and_http_port(
             app.clone(),
             &config.hostname,
             port,
-        ))
+        )))
     } else {
         HostType::StaticApp(app.clone())
     }
@@ -265,18 +268,23 @@ impl Service for Dav {
 fn filter_services<'a, T: Service + 'a>(
     services: &'a [T],
     hostname: &'a str,
+    domain: &'a str,
 ) -> impl Iterator<Item = &'a T> {
     services.iter().filter(move |s| {
-        !s.host()
-            .trim_end_matches(&format!(".{}", hostname))
-            .contains('.')
+        if hostname == domain {
+            // If domain == hostname, we keep all the apps that do not contain another hostname
+            !s.host().contains(hostname)
+        } else {
+            // else we keep only the apps that DO contain another hostname (a subdomain)
+            s.host().contains(hostname)
+        }
     })
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum HostType {
     StaticApp(App),
-    ReverseApp(AppWithUri),
+    ReverseApp(Box<AppWithUri>),
     Dav(Dav),
 }
 

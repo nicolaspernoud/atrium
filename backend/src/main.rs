@@ -83,6 +83,10 @@ async fn run() -> Result<()> {
         if config.0.tls_mode == TlsMode::Auto {
             let config = atrium::configuration::load_config(CONFIG_FILE).await?;
             let domains: Vec<String> = config.0.domains();
+            info!(
+                "Getting let's encrypt certificates for FQDNs : {:?}",
+                domains
+            );
             let mut state = AcmeConfig::new(domains)
                 .contact_push(format!("mailto:{}", config.0.letsencrypt_email))
                 .directory_lets_encrypt(true)

@@ -45,7 +45,7 @@ serde = { version = "1", default-features = false }
 serde_json = { default-features = false, version = "1.0" }
 serde_yaml = "0.9"
 sha2 = { default-features = false, version = "0.10" }
-sysinfo = { default-features = false, version = "0.26" }
+sysinfo = { default-features = false, version = "0.27" }
 time = { default-features = false, version = "0.3" }
 tokio = { version = "1.20", features = ["full"], default-features = false }
 tokio-stream = { version="0.1", default-features = false }
