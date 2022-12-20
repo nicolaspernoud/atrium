@@ -38,7 +38,7 @@ dependencies:
   filesize: ^2.0.1
   flutter_colorpicker: ^1.0.3
   flutter_iconpicker: ^3.2.2
-  flutter_local_notifications: ^12.0.3
+  flutter_local_notifications: ^13.0.0
   path_provider: ^2.0.11
   pdfx: ^2.3.0
   provider: ^6.0.4

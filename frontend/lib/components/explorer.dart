@@ -221,6 +221,10 @@ class ExplorerState extends State<Explorer> {
   }
 
   Widget _buildListView(BuildContext context, List<webdav.File> list) {
+    if (list.isNotEmpty && list[0].path == null) {
+      list.removeAt(0);
+    } // Remove the ".." placeholder it it has been inserted before rebuild
+
     if (sortBy == SortBy.names) {
       // Sort : folders first and then alphabetically
       list.sort((a, b) {
@@ -696,7 +700,7 @@ enum FileType { text, document, image, media, pdf, other }
 
 FileType fileType(File? file) {
   if (file == null || file.name == null) return FileType.other;
-  var ext = file.name!.split(".").last;
+  var ext = file.name!.split(".").last.toLowerCase();
 
   if (ext == "pdf") return FileType.pdf;
   if (["txt", "md", "csv", "sh", "nfo", "log", "json", "yml", "srt", "py"]
