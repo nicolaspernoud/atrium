@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:atrium/globals.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -18,29 +16,35 @@ class AppWebView extends StatefulWidget {
 }
 
 class AppWebViewState extends State<AppWebView> {
-  final cookieManager = CookieManager();
+  late WebViewController controller;
+  late final WebViewCookieManager cookieManager = WebViewCookieManager();
 
   @override
   void initState() {
     super.initState();
-    // Enable virtual display.
-    if (Platform.isAndroid) WebView.platform = AndroidWebView();
+    controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setNavigationDelegate(
+        NavigationDelegate(),
+      );
+    initWebView();
+  }
+
+  Future<void> initWebView() async {
+    await cookieManager.clearCookies();
+    await cookieManager.setCookie(WebViewCookie(
+        name: authCookieName,
+        value: Uri.decodeComponent(App().cookie.split(";")[0].split("=")[1]),
+        domain: Uri.parse(widget.initialUrl).host));
+    controller.loadRequest(Uri.parse(widget.initialUrl));
   }
 
   @override
   Widget build(BuildContext context) {
-    cookieManager.clearCookies();
-    var authCookie = WebViewCookie(
-        name: authCookieName,
-        value: Uri.decodeComponent(App().cookie.split(";")[0].split("=")[1]),
-        domain: Uri.parse(widget.initialUrl).host);
-
-    return WebView(
-        initialCookies: [authCookie],
-        initialUrl: widget.initialUrl,
-        javascriptMode: JavascriptMode.unrestricted,
-        gestureRecognizers: Platform.isAndroid
-            ? {Factory(() => EagerGestureRecognizer())}
-            : null);
+    return Scaffold(
+      body: WebViewWidget(
+          controller: controller,
+          gestureRecognizers: {Factory(() => EagerGestureRecognizer())}),
+    );
   }
 }

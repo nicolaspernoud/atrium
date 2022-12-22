@@ -134,13 +134,20 @@ class OpenIdWebView extends StatefulWidget {
 class _OpenIdWebViewState extends State<OpenIdWebView> {
   final cookieManager = WebviewCookieManager();
   bool _dstReached = false;
+  late WebViewController controller;
 
   @override
   void initState() {
     super.initState();
-    // Enable virtual display.
-    if (Platform.isAndroid) WebView.platform = AndroidWebView();
     cookieManager.clearCookies();
+    controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onNavigationRequest: _interceptNavigation,
+        ),
+      )
+      ..loadRequest(Uri.parse("${App().prefs.hostname}/auth/oauth2login"));
   }
 
   @override
@@ -150,10 +157,8 @@ class _OpenIdWebViewState extends State<OpenIdWebView> {
           appBar: AppBar(
             title: const Text("Open Id Connect"),
           ),
-          body: WebView(
-            initialUrl: "${App().prefs.hostname}/auth/oauth2login",
-            javascriptMode: JavascriptMode.unrestricted,
-            navigationDelegate: _interceptNavigation,
+          body: WebViewWidget(
+            controller: controller,
           ));
     } else {
       cookieManager.getCookies(App().prefs.hostname).then((value) {

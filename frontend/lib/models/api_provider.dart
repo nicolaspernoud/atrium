@@ -68,10 +68,14 @@ class ApiProvider {
     _dio.options.baseUrl = App().prefs.hostname;
     try {
       await _dio.get('/auth/oauth2login');
-      return true;
-    } catch (_) {
-      return false;
+    } on DioError catch (e) {
+      if (e.response == null ||
+          e.response!.statusCode == null ||
+          e.response!.statusCode! >= 404) {
+        return false;
+      }
     }
+    return true;
   }
 
   Future<String?> getShareToken(String hostname, String path,
