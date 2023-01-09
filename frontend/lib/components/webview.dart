@@ -23,10 +23,7 @@ class AppWebViewState extends State<AppWebView> {
   void initState() {
     super.initState();
     controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setNavigationDelegate(
-        NavigationDelegate(),
-      );
+      ..setJavaScriptMode(JavaScriptMode.unrestricted);
     initWebView();
   }
 
