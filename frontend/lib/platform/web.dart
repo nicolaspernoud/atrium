@@ -81,3 +81,16 @@ void openIdConnectLogin(BuildContext context) {
     }
   });
 }
+
+void redirectToAppAfterAuth() {
+  final cookie = document.cookie!;
+  final entity = cookie.split("; ").map((item) {
+    final split = item.split("=");
+    return MapEntry(split[0], split[1]);
+  });
+  final cookieMap = Map.fromEntries(entity);
+  if (cookieMap.containsKey("ATRIUM_REDIRECT")) {
+    var redirectTo = cookieMap["ATRIUM_REDIRECT"]!;
+    window.location.href = redirectTo;
+  }
+}

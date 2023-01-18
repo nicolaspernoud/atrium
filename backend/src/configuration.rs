@@ -136,11 +136,11 @@ impl Config {
         }
     }
 
-    pub fn full_hostname(&self) -> String {
+    pub fn full_domain(&self) -> String {
         format!(
             "{s}://{h}{p}",
             s = self.scheme(),
-            h = self.hostname,
+            h = self.domain,
             p = &(if self.tls_mode == TlsMode::No {
                 format!(":{}", self.http_port)
             } else {

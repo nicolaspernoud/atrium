@@ -138,6 +138,10 @@ class _LoginDialogState extends State<LoginDialog> {
                     label: const Text("OpenID Connect"), // Your text here
                     onPressed: () {
                       openIdConnectLogin(context);
+                      // If there is an ATRIUM_REDIRECT cookie set, redirect to the target
+                      if (kIsWeb) {
+                        redirectToAppAfterAuth();
+                      }
                     },
                   );
                 } else {
@@ -165,6 +169,10 @@ class _LoginDialogState extends State<LoginDialog> {
         await ApiProvider().login(login, password);
         if (!widget.mounted) return;
         Navigator.pop(context, 'OK');
+        // If there is an ATRIUM_REDIRECT cookie set, redirect to the target
+        if (kIsWeb) {
+          redirectToAppAfterAuth();
+        }
       } catch (e) {
         if (e is DioError && e.response?.statusCode == 401) {
           setState(() {

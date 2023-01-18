@@ -504,7 +504,7 @@ pub async fn get_share_token(
         })
         .ok_or(StatusCode::FORBIDDEN)?;
     // Check that the user is allowed to access the wanted share
-    if check_user_has_role(&user, &to_share.roles) {
+    if !&to_share.secured || check_user_has_role(&user, &to_share.roles) {
         // Create a token with the required information
         let share_login = share
             .share_with

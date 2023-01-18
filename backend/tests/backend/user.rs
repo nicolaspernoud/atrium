@@ -141,7 +141,7 @@ async fn get_share_token_test() {
         .await
         .expect("failed to execute request");
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    // Act and Assert : Get the a share token for an host which the user has no rights for
+    // Act and Assert : Get the a share token for an unsecured host
     let response = app
         .client
         .post(format!(
@@ -151,6 +151,20 @@ async fn get_share_token_test() {
         .header("Content-Type", "application/json")
         .header("xsrf-token", &xsrf_token)
         .body(r#"{"hostname":"files2.atrium.io","path":"/file1"}"#)
+        .send()
+        .await
+        .expect("failed to execute request");
+    assert_eq!(response.status(), StatusCode::OK);
+    // Act and Assert : Get the a share token for an host which the user has no rights for
+    let response = app
+        .client
+        .post(format!(
+            "http://atrium.io:{}/api/user/get_share_token",
+            app.port
+        ))
+        .header("Content-Type", "application/json")
+        .header("xsrf-token", &xsrf_token)
+        .body(r#"{"hostname":"secured-files.atrium.io","path":"/file1"}"#)
         .send()
         .await
         .expect("failed to execute request");

@@ -113,7 +113,7 @@ pub async fn onlyoffice_page(
             },
             editor_config: EditorConfig {
                 lang: "fr-FR",
-                callback_url: &format!("{}/onlyoffice/save?{}", &config.full_hostname(), url),
+                callback_url: &format!("{}/onlyoffice/save?{}", &config.full_domain(), url),
                 customization: Customization { autosave: false },
                 user: OOUser {
                     id: oo_user,

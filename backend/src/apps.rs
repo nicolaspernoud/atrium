@@ -7,9 +7,13 @@ use axum::{
     response::IntoResponse,
     Json,
 };
+use axum_extra::extract::cookie::{Cookie, SameSite};
 use base64ct::Encoding;
 use headers::HeaderValue;
-use http::{header::AUTHORIZATION, Version};
+use http::{
+    header::{AUTHORIZATION, SET_COOKIE},
+    Version,
+};
 use hyper::{
     header::{HOST, LOCATION},
     Body, StatusCode, Uri,
@@ -150,12 +154,36 @@ pub async fn proxy_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     app: HostType,
     Host(hostname): Host,
+    State(config): State<ConfigState>,
     mut req: Request<Body>,
 ) -> Response<Body> {
     // Downgrade to HTTP/1.1 to be compatible with any website
     *req.version_mut() = Version::HTTP_11;
     let domain = hostname.split(':').next().unwrap_or_default();
-    if let Some(value) = check_authorization(&app, &user.map(|u| u.0), domain, req.uri().path()) {
+    if let Some(mut value) = check_authorization(&app, &user.map(|u| u.0), domain, req.uri().path())
+    {
+        // Redirect to login page if user is not logged, write where to get back after login in a cookie
+        if value.status() == StatusCode::UNAUTHORIZED {
+            if let Ok(hn) = HeaderValue::from_str(&config.full_domain()) {
+                *value.status_mut() = StatusCode::FOUND;
+                value.headers_mut().append(LOCATION, hn);
+                let cookie = Cookie::build(
+                    "ATRIUM_REDIRECT",
+                    format!("{}://{hostname}", config.scheme()),
+                )
+                .domain(config.domain.clone())
+                .path("/")
+                .same_site(SameSite::Lax)
+                .secure(false)
+                .max_age(time::Duration::seconds(60))
+                .http_only(false)
+                .finish();
+                value.headers_mut().append(
+                    SET_COOKIE,
+                    HeaderValue::from_str(&format!("{cookie}")).unwrap(),
+                );
+            }
+        }
         return value;
     }
 

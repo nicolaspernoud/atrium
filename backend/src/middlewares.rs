@@ -1,3 +1,4 @@
+use crate::{appstate::ConfigState, configuration::HostType};
 use axum::{
     extract::State,
     http::{Request, StatusCode},
@@ -5,10 +6,6 @@ use axum::{
     response::Response,
 };
 use http::{HeaderValue, Method};
-use crate::{
-    appstate::ConfigState,
-    configuration::{HostType},
-};
 
 pub async fn cors_middleware<B>(
     State(cfg): State<ConfigState>,
@@ -23,7 +20,7 @@ pub async fn cors_middleware<B>(
     } {
         origin.unwrap()
     } else {
-        cfg.full_hostname()
+        cfg.full_domain()
             .parse()
             .expect("could not parse hostname : invalid format")
     };

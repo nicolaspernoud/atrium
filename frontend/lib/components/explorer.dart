@@ -703,27 +703,38 @@ FileType fileType(File? file) {
   var ext = file.name!.split(".").last.toLowerCase();
 
   if (ext == "pdf") return FileType.pdf;
-  if (["txt", "md", "csv", "sh", "nfo", "log", "json", "yml", "srt", "py"]
-      .contains(ext)) return FileType.text;
+  if ([
+    "csv",
+    "json",
+    "log",
+    "md",
+    "nfo",
+    "py",
+    "sh",
+    "srt",
+    "txt",
+    "yaml",
+    "yml",
+  ].contains(ext)) return FileType.text;
   if (["docx", "doc", "odt", "xlsx", "xls", "ods", "pptx", "ppt", "opd"]
       .contains(ext)) return FileType.document;
   if ([
-    "jpg",
-    "jpeg",
-    "jfif",
-    "pjpeg",
-    "pjp",
-    "png",
-    "gif",
-    "svg",
     "apng",
     "avif",
-    "webp",
     "bmp",
+    "cur",
+    "gif",
     "ico",
+    "jfif",
+    "jpeg",
+    "jpg",
+    "pjp",
+    "pjpeg",
+    "png",
+    "svg",
     "tif",
     "tiff",
-    "cur"
+    "webp"
   ].contains(ext)) return FileType.image;
   if (["mp3", "wav", "ogg", "mp4", "avi", "mkv", "m4v", "webm"].contains(ext)) {
     return FileType.media;

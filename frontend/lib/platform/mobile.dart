@@ -125,6 +125,8 @@ openIdConnectLogin(BuildContext context) async {
   );
 }
 
+void redirectToAppAfterAuth() {}
+
 class OpenIdWebView extends StatefulWidget {
   const OpenIdWebView({super.key});
   @override

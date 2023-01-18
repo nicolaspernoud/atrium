@@ -64,7 +64,7 @@ pub async fn oauth2_login(
     }
     let client = oauth_client(
         config.openid_config.as_ref().unwrap().clone(),
-        format!("{}/auth/oauth2callback", config.full_hostname()),
+        format!("{}/auth/oauth2callback", config.full_domain()),
     )?;
 
     let (auth_url, csrf_token) = client
@@ -106,7 +106,7 @@ pub async fn oauth2_callback(
     let oidc_config = config.openid_config.as_ref().unwrap();
     let oauth_client = oauth_client(
         oidc_config.clone(),
-        format!("{}/auth/oauth2callback", config.full_hostname()),
+        format!("{}/auth/oauth2callback", config.full_domain()),
     )?;
 
     // Check the state
