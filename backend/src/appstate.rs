@@ -1,5 +1,6 @@
 use axum::extract::FromRef;
 use axum_extra::extract::cookie::Key;
+use hyper_trust_dns::{RustlsHttpsConnector, TrustDnsResolver};
 use maxminddb::Reader;
 
 use std::{collections::HashMap, sync::Arc};
@@ -10,6 +11,7 @@ pub type OptionalMaxMindReader = Arc<Option<Reader<Vec<u8>>>>;
 pub type ConfigMap = Arc<HashMap<String, HostType>>;
 pub type ConfigFile = Arc<String>;
 pub type ConfigState = Arc<Config>;
+pub type Client = hyper::client::Client<RustlsHttpsConnector>;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -18,6 +20,7 @@ pub struct AppState {
     config_map: ConfigMap,
     config_file: ConfigFile,
     maxmind_reader: OptionalMaxMindReader,
+    client: Client,
 }
 
 impl AppState {
@@ -34,6 +37,9 @@ impl AppState {
             config_map,
             config_file: Arc::new(config_file),
             maxmind_reader: Arc::new(maxmind_reader),
+            client: hyper::Client::builder().build::<_, hyper::Body>(
+                TrustDnsResolver::default().into_rustls_webpki_https_connector(),
+            ),
         }
     }
 }
@@ -65,5 +71,11 @@ impl FromRef<AppState> for ConfigFile {
 impl FromRef<AppState> for OptionalMaxMindReader {
     fn from_ref(state: &AppState) -> Self {
         Arc::clone(&state.maxmind_reader)
+    }
+}
+
+impl FromRef<AppState> for Client {
+    fn from_ref(state: &AppState) -> Self {
+        state.client.clone()
     }
 }

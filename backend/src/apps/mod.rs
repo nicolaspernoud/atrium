@@ -10,26 +10,23 @@ use axum::{
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use base64ct::Encoding;
 use headers::HeaderValue;
-use http::{
-    header::{AUTHORIZATION, SET_COOKIE},
-    Version,
-};
-use hyper::{
-    header::{HOST, LOCATION},
-    Body, StatusCode, Uri,
-};
-use hyper_reverse_proxy::ReverseProxy;
-use hyper_trust_dns::{RustlsHttpsConnector, TrustDnsResolver};
+use http::header::{AUTHORIZATION, COOKIE, SET_COOKIE};
+use hyper::{header::LOCATION, Body, StatusCode, Uri};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
-use tracing::{debug, error};
+use tracing::error;
 
 use crate::{
-    appstate::{ConfigFile, ConfigState},
+    apps::proxy::ProxyError,
+    appstate::{Client, ConfigFile, ConfigState},
     configuration::{config_or_error, HostType},
-    users::{check_authorization, AdminToken, UserTokenWithoutXSRFCheck},
+    users::{check_authorization, AdminToken, UserTokenWithoutXSRFCheck, AUTH_COOKIE},
     utils::{is_default, option_vec_trim_remove_empties, string_trim, vec_trim_remove_empties},
 };
+
+mod proxy;
+
+pub static AUTHENTICATED_USER_MAIL_HEADER: &str = "Remote-User";
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct App {
@@ -79,6 +76,8 @@ pub struct App {
         deserialize_with = "option_vec_trim_remove_empties"
     )]
     pub subdomains: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub forward_user_mail: bool,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone)]
@@ -86,10 +85,8 @@ pub struct AppWithUri {
     pub inner: App,
     pub app_scheme: Scheme,
     pub app_authority: Authority,
-    pub forward_uri: Uri,
     pub forward_scheme: Scheme,
     pub forward_authority: Authority,
-    pub forward_host: String,
 }
 
 impl AppWithUri {
@@ -115,38 +112,23 @@ impl AppWithUri {
         } else {
             Scheme::HTTP
         };
-        let forward_uri: Uri = inner
+        let forward_base_uri: Uri = inner
             .target
             .parse()
             .expect("could not parse app target service");
-        let mut forward_parts = forward_uri.into_parts();
+        let forward_parts = forward_base_uri.into_parts();
         let forward_authority = forward_parts
             .authority
-            .clone()
             .expect("could not parse app target service host");
 
-        let forward_host = forward_authority.host().to_owned();
-        forward_parts.scheme = Some(forward_scheme.clone());
-        forward_parts.path_and_query = Some("/".parse().unwrap());
-        let forward_uri = Uri::from_parts(forward_parts).unwrap();
         Self {
             inner,
             app_scheme,
             app_authority,
-            forward_uri,
             forward_scheme,
             forward_authority,
-            forward_host,
         }
     }
-}
-
-lazy_static::lazy_static! {
-    static ref  PROXY_CLIENT: ReverseProxy<RustlsHttpsConnector> = {
-        ReverseProxy::new(
-            hyper::Client::builder().build::<_, hyper::Body>(TrustDnsResolver::default().into_rustls_webpki_https_connector()),
-        )
-    };
 }
 
 pub async fn proxy_handler(
@@ -155,12 +137,12 @@ pub async fn proxy_handler(
     app: HostType,
     Host(hostname): Host,
     State(config): State<ConfigState>,
+    State(client): State<Client>,
     mut req: Request<Body>,
-) -> Response<Body> {
-    // Downgrade to HTTP/1.1 to be compatible with any website
-    *req.version_mut() = Version::HTTP_11;
+) -> Result<Response<Body>, ProxyError> {
     let domain = hostname.split(':').next().unwrap_or_default();
-    if let Some(mut value) = check_authorization(&app, &user.map(|u| u.0), domain, req.uri().path())
+    if let Some(mut value) =
+        check_authorization(&app, &user.as_ref().map(|u| &u.0), domain, req.uri().path())
     {
         // Redirect to login page if user is not logged, write where to get back after login in a cookie
         if value.status() == StatusCode::UNAUTHORIZED {
@@ -184,7 +166,7 @@ pub async fn proxy_handler(
                 );
             }
         }
-        return value;
+        return Ok(value);
     }
 
     let app = match app {
@@ -192,23 +174,11 @@ pub async fn proxy_handler(
         _ => panic!("Service is not an app !"),
     };
 
-    // If the target service contains no port, is to an external service and we need to rewrite the request to fool the target site
-    if app.forward_authority.port().is_none() {
-        let uri = req.uri_mut();
-        let mut parts = uri.clone().into_parts();
-        parts.scheme = Some(app.forward_scheme);
-        if let Some(port) = &app.forward_authority.port() {
-            parts.authority = Some(format!("{}:{}", app.forward_host, port).parse().unwrap());
-        } else {
-            parts.authority = Some(app.forward_host.parse().unwrap());
-        }
-        *uri = Uri::from_parts(parts).unwrap();
-        req.headers_mut().insert(
-            HOST,
-            HeaderValue::from_str(app.forward_authority.as_ref()).unwrap(),
-        );
-    } else {
-        // else we inform the app that we are proxying to it
+    remove_auth_cookie(&mut req)?;
+    insert_authenticated_user_mail_header(&app, user, &mut req)?;
+
+    // If the target service contains a port, it is an internal service, inform the app that we are proxying to it
+    if app.forward_authority.port().is_some() {
         req.headers_mut().insert(
             "X-Forwarded-Host",
             HeaderValue::from_str(app.app_authority.as_ref()).unwrap(),
@@ -232,51 +202,94 @@ pub async fn proxy_handler(
         );
     }
 
-    match PROXY_CLIENT
-        .call(addr.ip(), &app.forward_uri.to_string(), req)
-        .await
-    {
-        Ok(mut response) => {
-            // If the response contains a location, alter the redirect location if the redirection is relative to the proxied host
+    let mut response = proxy::call(
+        addr.ip(),
+        app.forward_scheme,
+        &app.forward_authority,
+        req,
+        client,
+    )
+    .await?;
 
-            if let Some(location) = response.headers().get("location") {
-                // parse location as an url
-                let location_uri: Uri =
-                    match location.to_str().unwrap().trim_start_matches('.').parse() {
+    // If the response contains a location, alter the redirect location if the redirection is relative to the proxied host
+    if let Some(location) = response.headers().get("location") {
+        if let Ok(location) = location.to_str() {
+            // parse location as an url
+            let location_uri: Uri = match location.trim_start_matches('.').parse() {
+                Ok(uri) => uri,
+                Err(_) => {
+                    // Try to add a forward slash
+                    match format!("/{}", location).parse() {
                         Ok(uri) => uri,
                         Err(e) => {
-                            error!("Proxy uri parse error : {:?}", e);
-                            return Response::builder()
-                                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                                .body(Body::empty())
-                                .unwrap();
+                            error!(
+                                "proxy redirect location header parsing for {:?} gave error: {:?}",
+                                location, e
+                            );
+                            return Err(ProxyError::BadRedirectResponseError);
                         }
-                    };
-                // test if the host of this url contains the target service host
-                if location_uri.host().is_some()
-                    && location_uri.host().unwrap().contains(&app.forward_host)
-                {
-                    // if so, replace the target service host with the front service host
-                    let mut parts = location_uri.into_parts();
-                    parts.scheme = Some(app.app_scheme);
-                    parts.authority = Some(app.app_authority);
-                    let uri = Uri::from_parts(parts).unwrap();
-
-                    response
-                        .headers_mut()
-                        .insert(LOCATION, HeaderValue::from_str(&uri.to_string()).unwrap());
+                    }
                 }
+            };
+            // test if the host of this url contains the target service host
+            if location_uri.host().is_some()
+                && location_uri
+                    .host()
+                    .unwrap()
+                    .contains(app.forward_authority.host())
+            {
+                // if so, replace the target service host with the front service host
+                let mut parts = location_uri.into_parts();
+                parts.scheme = Some(app.app_scheme);
+                parts.authority = Some(app.app_authority);
+                let uri = Uri::from_parts(parts).unwrap();
+
+                response
+                    .headers_mut()
+                    .insert(LOCATION, HeaderValue::from_str(&uri.to_string()).unwrap());
             }
-            response
-        }
-        Err(e) => {
-            debug!("Proxy error: {:?}", e);
-            Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(Body::empty())
-                .unwrap()
         }
     }
+    Ok(response)
+}
+
+fn insert_authenticated_user_mail_header(
+    app: &AppWithUri,
+    user: Option<UserTokenWithoutXSRFCheck>,
+    req: &mut Request<Body>,
+) -> Result<(), ProxyError> {
+    let email = match (app.inner.forward_user_mail, user) {
+        (true, Some(user)) => user.0.info.map(|info| info.email),
+        _ => None,
+    };
+    Ok(if let Some(email) = email {
+        req.headers_mut()
+            .insert(AUTHENTICATED_USER_MAIL_HEADER, email.parse()?);
+    } else {
+        req.headers_mut().remove(AUTHENTICATED_USER_MAIL_HEADER);
+    })
+}
+
+fn remove_auth_cookie(req: &mut Request<Body>) -> Result<(), ProxyError> {
+    let mut new_cookie = String::new();
+    for c in req.headers_mut().get_all(COOKIE) {
+        match c.to_str() {
+            Ok(s) => {
+                new_cookie.push_str(
+                    &s.split(";")
+                        .skip_while(|&c| c.contains(AUTH_COOKIE))
+                        .collect::<Vec<&str>>()
+                        .join(";"),
+                );
+                if !new_cookie.is_empty() {
+                    new_cookie.push(';');
+                }
+            }
+            Err(_) => continue,
+        }
+    }
+    req.headers_mut().insert(COOKIE, new_cookie.parse()?);
+    Ok(())
 }
 
 pub async fn get_apps(

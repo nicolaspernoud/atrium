@@ -3,7 +3,7 @@
 ###########################
 
 # Set up an environnement to cross-compile the app for musl to create a statically-linked binary
-FROM --platform=$BUILDPLATFORM rust:1.66 AS backend-builder
+FROM --platform=$BUILDPLATFORM rust:1.67 AS backend-builder
 ARG TARGETPLATFORM
 RUN case "$TARGETPLATFORM" in \
       "linux/amd64") echo x86_64-unknown-linux-musl > /rust_target.txt ;; \
@@ -51,7 +51,7 @@ RUN chown -Rf "${UID}":"${UID}" /myapp
 # Stage 2 : Frontend build #
 ############################
 
-FROM --platform=$BUILDPLATFORM cirrusci/flutter:3.3.8 as frontend-builder
+FROM --platform=$BUILDPLATFORM cirrusci/flutter:3.7.0 as frontend-builder
 WORKDIR /build
 COPY ./frontend .
 RUN flutter pub get

@@ -6,20 +6,31 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use http::header;
+use http::{header, HeaderMap, StatusCode};
 use serde::Deserialize;
 use std::net::TcpListener;
 
 pub async fn mock_proxied_server(listener: TcpListener) {
     let port = listener.local_addr().unwrap().port();
     let message = format!("Hello world from mock server on port {port}!");
-    let app = Router::new().route("/", get(move || async { message }));
+    let app = Router::new()
+        .route("/", get(move || async { message }))
+        .route("/foo", get(move || async { "bar" }))
+        .route("/headers", get(headers))
+        .route(
+            "/ws",
+            get(move || async { StatusCode::SWITCHING_PROTOCOLS }),
+        );
 
     axum::Server::from_tcp(listener)
         .expect("failed to build mock server")
         .serve(app.into_make_service())
         .await
         .unwrap();
+}
+
+async fn headers(headers: HeaderMap) -> impl IntoResponse {
+    format!("HEADERS: {:?}", headers)
 }
 
 pub async fn mock_oauth2_server(listener: TcpListener) {

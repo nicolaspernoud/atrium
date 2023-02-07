@@ -42,6 +42,8 @@ class MyLocalizations {
       "email": "Email",
       "files": "Files",
       "firstname": "First name",
+      "forward_user_mail":
+          "Forward authenticated user email to the proxied app using the Remote-User header",
       "host": "Host",
       "hostname": "Hostname",
       "id": "Id",
@@ -115,6 +117,8 @@ class MyLocalizations {
       "email": "Courriel",
       "files": "Fichiers",
       "firstname": "Prénom",
+      "forward_user_mail":
+          "Transférer le mail de l'utilisateur connecté à l'application cible via l'entête Remote-User",
       "host": "Hôte",
       "hostname": "Nom d'hôte",
       "id": "Id",

@@ -7,6 +7,9 @@ use tracing::info;
 use crate::helpers::TestApp;
 use std::{fs, net::TcpListener};
 
+mod proxy;
+mod remote_user;
+
 #[tokio::test]
 async fn secured_proxy_test() {
     // Arrange
@@ -64,63 +67,6 @@ async fn secured_proxy_test() {
         .expect("failed to execute request");
     // Assert that is possible
     assert!(response.status().is_success());
-    assert!(response
-        .text()
-        .await
-        .unwrap()
-        .contains("Hello world from mock server"));
-}
-
-#[tokio::test]
-async fn proxy_test() {
-    // Arrange
-    let app = TestApp::spawn(None).await;
-
-    // Act
-    let response = app
-        .client
-        .get(format!("http://atrium.io:{}", app.port))
-        .send()
-        .await
-        .expect("failed to execute request");
-
-    // Assert
-    assert_eq!(response.status(), 200);
-    assert!(response.headers().contains_key("Content-Security-Policy"));
-    assert!(response
-        .text()
-        .await
-        .unwrap()
-        .contains("Hello world from main server !"));
-
-    // Act
-    let response = app
-        .client
-        .get(format!("http://app1.atrium.io:{}", app.port))
-        .send()
-        .await
-        .expect("failed to execute request");
-
-    // Assert
-    assert_eq!(response.status(), 200);
-    assert!(!response.headers().contains_key("Content-Security-Policy"));
-    assert!(response
-        .text()
-        .await
-        .unwrap()
-        .contains("Hello world from mock server"));
-
-    // Act
-    let response = app
-        .client
-        .get(format!("http://app2.atrium.io:{}", app.port))
-        .send()
-        .await
-        .expect("failed to execute request");
-
-    // Assert
-    assert!(response.status().is_success());
-    assert!(response.headers().contains_key("Content-Security-Policy"));
     assert!(response
         .text()
         .await
@@ -310,8 +256,7 @@ async fn redirect_test() {
             password: "".to_owned(),
             openpath: "".to_owned(),
             roles: vec![],
-            inject_security_headers: false,
-            subdomains: None,
+            ..Default::default()
         },
         App {
             id: 1,
@@ -326,8 +271,7 @@ async fn redirect_test() {
             password: "".to_owned(),
             openpath: "".to_owned(),
             roles: vec![],
-            inject_security_headers: true,
-            subdomains: None,
+            ..Default::default()
         },
         App {
             id: 1,
@@ -342,8 +286,7 @@ async fn redirect_test() {
             password: "".to_owned(),
             openpath: "".to_owned(),
             roles: vec![],
-            inject_security_headers: true,
-            subdomains: None,
+            ..Default::default()
         },
     ];
 

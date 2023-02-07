@@ -210,6 +210,23 @@ class CreateEditAppState extends State<CreateEditApp> {
                         ),
                       ],
                     ),
+                    Row(
+                      children: [
+                        Checkbox(
+                          value: widget.app.forwardUserMail,
+                          onChanged: (bool? value) async {
+                            if (value != null) {
+                              widget.app.forwardUserMail = value;
+                              setState((() {}));
+                            }
+                          },
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Text(tr(context, "forward_user_mail")),
+                        ),
+                      ],
+                    ),
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 16.0),
                       child: ElevatedButton(

@@ -25,7 +25,7 @@ use std::{net::SocketAddr, sync::Arc};
 use time::{Duration, OffsetDateTime};
 use tracing::info;
 
-static COOKIE_NAME: &str = "ATRIUM_AUTH";
+pub static AUTH_COOKIE: &str = "ATRIUM_AUTH";
 static SHARE_TOKEN: &str = "SHARE_TOKEN";
 static WWWAUTHENTICATE: HeaderName = HeaderName::from_static("www-authenticate");
 pub static ADMINS_ROLE: &str = "ADMINS";
@@ -127,7 +127,7 @@ where
             .expect("Could not find cookie jar");
 
         // Get the serialized user_token from the cookie jar, and check the xsrf token
-        if let Some(cookie) = jar.get(COOKIE_NAME) {
+        if let Some(cookie) = jar.get(AUTH_COOKIE) {
             if let Ok(TypedHeader(XSRFToken(xsrf_token))) =
                 TypedHeader::<XSRFToken>::from_request_parts(parts, state).await
             {
@@ -148,7 +148,7 @@ where
                 .ok()
                 .map(|hm| hm.get("token").map(|v| v.to_owned()))
             {
-                let res = cookie_from_password(COOKIE_NAME, &jar, password);
+                let res = cookie_from_password(AUTH_COOKIE, &jar, password);
                 if res.is_ok() {
                     return res;
                 } else {
@@ -162,7 +162,7 @@ where
         if let Ok(TypedHeader(Authorization(basic))) =
             TypedHeader::<Authorization<Basic>>::from_request_parts(parts, state).await
         {
-            match cookie_from_password(COOKIE_NAME, &jar, basic.password()) {
+            match cookie_from_password(AUTH_COOKIE, &jar, basic.password()) {
                 Ok(token) => return Ok(token),
                 Err(_) => {
                     let config = ConfigState::from_ref(state);
@@ -253,7 +253,7 @@ where
             .expect("Could not find cookie jar");
 
         // Get the serialized user_token from the cookie jar, and check the xsrf token
-        if let Some(cookie) = jar.get(COOKIE_NAME) {
+        if let Some(cookie) = jar.get(AUTH_COOKIE) {
             // Deserialize the user_token and return him/her
             let serialized_user_token = cookie.value();
             let user_token = UserToken::from_json(serialized_user_token)?;
@@ -311,7 +311,7 @@ pub(crate) fn create_user_cookie(
         .next()
         .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "could not find domain"))?
         .to_owned();
-    let cookie = Cookie::build(COOKIE_NAME, encoded)
+    let cookie = Cookie::build(AUTH_COOKIE, encoded)
         .domain(domain)
         .path("/")
         .same_site(axum_extra::extract::cookie::SameSite::Lax)
@@ -578,7 +578,7 @@ pub fn check_user_has_role(user: &UserToken, roles: &[String]) -> bool {
 }
 
 pub fn check_user_has_role_or_forbid(
-    user: &Option<UserToken>,
+    user: &Option<&UserToken>,
     target: &HostType,
     hostname: &str,
     path: &str,
@@ -609,7 +609,7 @@ pub fn check_user_has_role_or_forbid(
 
 pub fn check_authorization(
     app: &HostType,
-    user: &Option<UserToken>,
+    user: &Option<&UserToken>,
     hostname: &str,
     path: &str,
 ) -> Option<Response<Body>> {
@@ -679,7 +679,7 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app_domain_and_http_port(app, "atrium.io", None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(&Some(user), &target, "", "").is_none());
+        assert!(check_user_has_role_or_forbid(&Some(&user), &target, "", "").is_none());
     }
 
     #[test]
@@ -695,7 +695,7 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app_domain_and_http_port(app, "atrium.io", None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(&Some(user), &target, "", "").is_none());
+        assert!(check_user_has_role_or_forbid(&Some(&user), &target, "", "").is_none());
     }
 
     #[test]
@@ -711,7 +711,7 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app_domain_and_http_port(app, "atrium.io", None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(&Some(user), &target, "", "").is_some());
+        assert!(check_user_has_role_or_forbid(&Some(&user), &target, "", "").is_some());
     }
 
     #[test]
@@ -724,7 +724,7 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app_domain_and_http_port(app, "atrium.io", None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(&Some(user), &target, "", "").is_some());
+        assert!(check_user_has_role_or_forbid(&Some(&user), &target, "", "").is_some());
     }
 
     #[test]
@@ -739,7 +739,7 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app_domain_and_http_port(app, "atrium.io", None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(&Some(user), &target, "", "").is_some());
+        assert!(check_user_has_role_or_forbid(&Some(&user), &target, "", "").is_some());
     }
 
     #[test]
@@ -751,6 +751,6 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app_domain_and_http_port(app, "atrium.io", None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(&Some(user), &target, "", "").is_some());
+        assert!(check_user_has_role_or_forbid(&Some(&user), &target, "", "").is_some());
     }
 }

@@ -2205,7 +2205,6 @@ const Map<String, IconData> roundedIcons = {
   "wechat": IconData(0xf03b7, fontFamily: 'MaterialIcons'),
   "weekend": IconData(0xf02b4, fontFamily: 'MaterialIcons'),
   "west": IconData(0xf02b5, fontFamily: 'MaterialIcons'),
-  "whatsapp": IconData(0xf03b8, fontFamily: 'MaterialIcons'),
   "whatshot": IconData(0xf02b6, fontFamily: 'MaterialIcons'),
   "wheelchair_pickup": IconData(0xf02b7, fontFamily: 'MaterialIcons'),
   "where_to_vote": IconData(0xf02b8, fontFamily: 'MaterialIcons'),

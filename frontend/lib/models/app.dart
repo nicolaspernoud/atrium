@@ -22,6 +22,7 @@ class AppModel implements Model {
     this.openpath = "",
     this.roles = const ["ADMINS", "USERS"],
     this.injectSecurityHeaders = true,
+    this.forwardUserMail = false,
   });
 
   late int id;
@@ -41,6 +42,7 @@ class AppModel implements Model {
   late String openpath;
   late List<String> roles;
   late bool injectSecurityHeaders;
+  late bool forwardUserMail;
 
   AppModel.fromJson(Map<String, dynamic> json) {
     id = json['id'];
@@ -61,6 +63,7 @@ class AppModel implements Model {
         ? List.castFrom<dynamic, String>(json['roles'])
         : [];
     injectSecurityHeaders = json['inject_security_headers'] ?? false;
+    forwardUserMail = json['forward_user_mail'] ?? false;
   }
 
   Map<String, dynamic> toJson() {
@@ -80,6 +83,7 @@ class AppModel implements Model {
     data['openpath'] = openpath;
     data['roles'] = roles;
     data['inject_security_headers'] = injectSecurityHeaders;
+    data['forward_user_mail'] = forwardUserMail;
     return data;
   }
 }

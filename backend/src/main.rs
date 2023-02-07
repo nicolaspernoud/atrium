@@ -194,7 +194,7 @@ fn setup_logger(debug_mode: bool, log_to_file: bool) -> Vec<WorkerGuard> {
     if debug_mode {
         _tracing
             .with(tracing_subscriber::EnvFilter::new(
-                "hyper_reverse_proxy=info,atrium=debug,tower_http=debug",
+                "atrium=debug,tower_http=debug",
             ))
             .init();
     } else {

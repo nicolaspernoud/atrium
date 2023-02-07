@@ -1,7 +1,8 @@
 use reqwest::Client;
-use std::{fs, net::SocketAddr};
+use std::{fs, net::SocketAddr, sync::Once};
 use tokio::sync::broadcast;
 use tracing::info;
+use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
 use atrium::{
     apps::App,
@@ -22,6 +23,20 @@ pub struct TestApp {
     pub server_started: tokio::sync::broadcast::Receiver<()>,
 }
 
+static TRACING: Once = Once::new();
+
+pub fn install_tracing() {
+    TRACING.call_once(|| {
+        tracing_subscriber::registry()
+            .with(
+                tracing_subscriber::EnvFilter::try_from_default_env()
+                    .unwrap_or_else(|_| "atrium=debug,tower_http=debug".into()),
+            )
+            .with(tracing_subscriber::fmt::layer())
+            .init();
+    });
+}
+
 impl TestApp {
     pub async fn is_ready(&mut self) {
         self.server_started
@@ -31,6 +46,7 @@ impl TestApp {
     }
 
     pub async fn spawn(config: Option<Config>) -> Self {
+        install_tracing();
         let id = random_string(16);
         create_test_tree(&id).ok();
         let main_listener =
@@ -156,11 +172,11 @@ pub fn create_default_config(
             password: "ff54fds6f".to_owned(),
             openpath: "".to_owned(),
             roles: vec!["ADMINS".to_owned(), "USERS".to_owned()],
-            inject_security_headers: false,
             subdomains: Some(vec![
                 "app1-subdomain1".to_owned(),
                 "app1.subdomain2".to_owned(),
             ]),
+            ..Default::default()
         },
         App {
             id: 2,
@@ -176,7 +192,8 @@ pub fn create_default_config(
             openpath: "/javascript_simple.html".to_owned(),
             roles: vec!["ADMINS".to_owned()],
             inject_security_headers: true,
-            subdomains: None,
+            forward_user_mail: true,
+            ..Default::default()
         },
         App {
             id: 3,
@@ -191,8 +208,7 @@ pub fn create_default_config(
             password: "".to_owned(),
             openpath: "".to_owned(),
             roles: vec!["ADMINS".to_owned()],
-            inject_security_headers: true,
-            subdomains: None,
+            ..Default::default()
         },
         App {
             id: 4,
@@ -208,7 +224,7 @@ pub fn create_default_config(
             openpath: "".to_owned(),
             roles: vec!["ADMINS".to_owned()],
             inject_security_headers: true,
-            subdomains: None,
+            ..Default::default()
         },
     ];
 
@@ -290,6 +306,10 @@ pub fn create_default_config(
             login: "admin".to_owned(),
             password: "$argon2id$v=19$m=4096,t=3,p=1$QWsdpHrjCaPwy3IODegzNA$dqyioLh9ndJ3V7OoKpkCaczJmGNKjuG99F5hisd3bPs".to_owned(),
             roles: vec!["ADMINS".to_owned()],
+            info: Some(atrium::users::UserInfo{
+                email:"admin@atrium.io".to_owned(),
+                ..Default::default()
+            }),
             ..Default::default()
         },
         User {

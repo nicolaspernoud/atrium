@@ -377,8 +377,7 @@ mod tests {
                     password: "ff54fds6f".to_owned(),
                     openpath: "".to_owned(),
                     roles: vec!["ADMINS".to_owned(), "USERS".to_owned()],
-                    inject_security_headers: true,
-                    subdomains: None,
+                    ..Default::default()
                 },
                 App {
                     id: 2,
@@ -393,8 +392,7 @@ mod tests {
                     password: "ff54fds6f".to_owned(),
                     openpath: "/javascript_simple.html".to_owned(),
                     roles: vec!["ADMINS".to_owned()],
-                    inject_security_headers: true,
-                    subdomains: None,
+                    ..Default::default()
                 },
             ]
         };

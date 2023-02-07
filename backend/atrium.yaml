@@ -35,6 +35,7 @@ apps: # optional : applications served by atrium
       - USERS
     inject_security_headers: true # optional, defaults to false : if true some content security policy headers will be added to the app, following some good practices, and generally allowing the app to be displayed in the UI
     subdomains: [app1-subdomain1, app1.subdomain2] # optional : subdomains that the app can be reached on : for example this app will respond to app1-subdomain1.app1.atrium.127.0.0.1.nip.io and app1.subdomain2.app1.atrium.127.0.0.1.nip.io in addition to app1.atrium.127.0.0.1.nip.io
+    forward_user_mail: true # optional, defaults to false : if true forward authenticated user email to the proxied app using the Remote-User header
   - id: 2
     name: App 2
     icon: web_asset
