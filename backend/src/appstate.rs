@@ -37,9 +37,11 @@ impl AppState {
             config_map,
             config_file: Arc::new(config_file),
             maxmind_reader: Arc::new(maxmind_reader),
-            client: hyper::Client::builder().build::<_, hyper::Body>(
-                TrustDnsResolver::default().into_rustls_webpki_https_connector(),
-            ),
+            client: hyper::Client::builder()
+                .http1_title_case_headers(true)
+                .build::<_, hyper::Body>(
+                    TrustDnsResolver::default().into_rustls_webpki_https_connector(),
+                ),
         }
     }
 }

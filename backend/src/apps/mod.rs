@@ -262,12 +262,13 @@ fn insert_authenticated_user_mail_header(
         (true, Some(user)) => user.0.info.map(|info| info.email),
         _ => None,
     };
-    Ok(if let Some(email) = email {
+    if let Some(email) = email {
         req.headers_mut()
             .insert(AUTHENTICATED_USER_MAIL_HEADER, email.parse()?);
     } else {
         req.headers_mut().remove(AUTHENTICATED_USER_MAIL_HEADER);
-    })
+    };
+    Ok(())
 }
 
 fn remove_auth_cookie(req: &mut Request<Body>) -> Result<(), ProxyError> {
@@ -276,7 +277,7 @@ fn remove_auth_cookie(req: &mut Request<Body>) -> Result<(), ProxyError> {
         match c.to_str() {
             Ok(s) => {
                 new_cookie.push_str(
-                    &s.split(";")
+                    &s.split(';')
                         .skip_while(|&c| c.contains(AUTH_COOKIE))
                         .collect::<Vec<&str>>()
                         .join(";"),
