@@ -3,7 +3,6 @@ import 'dart:math';
 import 'package:atrium/components/create_edit_dav.dart';
 import 'package:atrium/components/delete_dialog.dart';
 import 'package:atrium/components/explorer.dart';
-import 'package:atrium/components/icons.dart';
 import 'package:atrium/components/login_dialog.dart';
 import 'package:atrium/components/sized_items_grid.dart';
 import 'package:atrium/globals.dart';
@@ -15,6 +14,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 import '../models/dav.dart';
+import 'icons.dart';
 
 class DavsList extends StatefulWidget {
   const DavsList({Key? key}) : super(key: key);

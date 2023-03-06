@@ -1,5 +1,4 @@
 import 'package:atrium/components/create_edit_app.dart';
-import 'package:atrium/components/icons.dart';
 import 'package:atrium/models/api_provider.dart';
 import 'package:atrium/models/dav.dart';
 import 'package:atrium/utils.dart';
@@ -7,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../i18n.dart';
+import 'icons.dart';
 
 class CreateEditDav extends StatefulWidget {
   final DavModel dav;

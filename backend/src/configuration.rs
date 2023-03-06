@@ -361,96 +361,89 @@ mod tests {
         users::User,
     };
 
-    lazy_static::lazy_static! {
-        static ref APPS: Vec<App> = {
-            vec![
-                App {
-                    id: 1,
-                    name: "App 1".to_owned(),
-                    icon: "web_asset".to_owned(),
-                    color: 4292030255,
-                    is_proxy: true,
-                    host: "app1".to_owned(),
-                    target: "192.168.1.8".to_owned(),
-                    secured: true,
-                    login: "admin".to_owned(),
-                    password: "ff54fds6f".to_owned(),
-                    openpath: "".to_owned(),
-                    roles: vec!["ADMINS".to_owned(), "USERS".to_owned()],
-                    ..Default::default()
-                },
-                App {
-                    id: 2,
-                    name: "App 2".to_owned(),
-                    icon: "web_asset".to_owned(),
-                    color: 4292030255,
-                    is_proxy: false,
-                    host: "app2".to_owned(),
-                    target: "localhost:8081".to_owned(),
-                    secured: true,
-                    login: "admin".to_owned(),
-                    password: "ff54fds6f".to_owned(),
-                    openpath: "/javascript_simple.html".to_owned(),
-                    roles: vec!["ADMINS".to_owned()],
-                    ..Default::default()
-                },
-            ]
-        };
-
-        static ref DAVS: Vec<Dav> = {
-            vec![
-                    Dav {
-                    id: 1,
-                    host: "files1".to_owned(),
-                    directory: "/data/file1".to_owned(),
-                    writable: true,
-                    name: "Files 1".to_owned(),
-                    icon: "folder".to_owned(),
-                    color: 4292030255,
-                    secured: true,
-                    allow_symlinks: false,
-                    roles: vec!["ADMINS".to_owned(),"USERS".to_owned()],
-                    passphrase: Some("ABCD123".to_owned()),
-                    key: None,
-                },
-                Dav {
-                    id: 2,
-                    host: "files2".to_owned(),
-                    directory: "/data/file2".to_owned(),
-                    writable: true,
-                    name: "Files 2".to_owned(),
-                    icon: "folder".to_owned(),
-                    color: 4292030255,
-                    secured: true,
-                    allow_symlinks: true,
-                    roles: vec!["USERS".to_owned()],
-                    passphrase: None,
-                    key: None,
-                },
-            ]
-        };
-
-        static ref USERS: Vec<User> = {
-            vec![
-                User {
-                    login: "admin".to_owned(),
-                    password: "password".to_owned(),
-                    roles: vec!["ADMINS".to_owned()],
-                    info: None
-                },
-                User {
-                    login: "user".to_owned(),
-                    password: "password".to_owned(),
-                    roles: vec!["USERS".to_owned()],
-                    info: None
-                },
-            ]
-        };
-    }
-
     #[tokio::test]
     async fn test_config_to_file_and_back() {
         // Arrange
+
+        let apps = vec![
+            App {
+                id: 1,
+                name: "App 1".to_owned(),
+                icon: "web_asset".to_owned(),
+                color: 4292030255,
+                is_proxy: true,
+                host: "app1".to_owned(),
+                target: "192.168.1.8".to_owned(),
+                secured: true,
+                login: "admin".to_owned(),
+                password: "ff54fds6f".to_owned(),
+                openpath: "".to_owned(),
+                roles: vec!["ADMINS".to_owned(), "USERS".to_owned()],
+                ..Default::default()
+            },
+            App {
+                id: 2,
+                name: "App 2".to_owned(),
+                icon: "web_asset".to_owned(),
+                color: 4292030255,
+                is_proxy: false,
+                host: "app2".to_owned(),
+                target: "localhost:8081".to_owned(),
+                secured: true,
+                login: "admin".to_owned(),
+                password: "ff54fds6f".to_owned(),
+                openpath: "/javascript_simple.html".to_owned(),
+                roles: vec!["ADMINS".to_owned()],
+                ..Default::default()
+            },
+        ];
+
+        let davs = vec![
+            Dav {
+                id: 1,
+                host: "files1".to_owned(),
+                directory: "/data/file1".to_owned(),
+                writable: true,
+                name: "Files 1".to_owned(),
+                icon: "folder".to_owned(),
+                color: 4292030255,
+                secured: true,
+                allow_symlinks: false,
+                roles: vec!["ADMINS".to_owned(), "USERS".to_owned()],
+                passphrase: Some("ABCD123".to_owned()),
+                key: None,
+            },
+            Dav {
+                id: 2,
+                host: "files2".to_owned(),
+                directory: "/data/file2".to_owned(),
+                writable: true,
+                name: "Files 2".to_owned(),
+                icon: "folder".to_owned(),
+                color: 4292030255,
+                secured: true,
+                allow_symlinks: true,
+                roles: vec!["USERS".to_owned()],
+                passphrase: None,
+                key: None,
+            },
+        ];
+
+        let users = vec![
+            User {
+                login: "admin".to_owned(),
+                password: "password".to_owned(),
+                roles: vec!["ADMINS".to_owned()],
+                info: None,
+            },
+            User {
+                login: "user".to_owned(),
+                password: "password".to_owned(),
+                roles: vec!["USERS".to_owned()],
+                info: None,
+            },
+        ];
+
         let config = Config {
             hostname: "atrium.io".to_owned(),
             domain: "".to_owned(),
@@ -460,9 +453,9 @@ mod tests {
             letsencrypt_email: "foo@bar.com".to_owned(),
             cookie_key: None,
             log_to_file: false,
-            apps: APPS.clone(),
-            davs: DAVS.clone(),
-            users: USERS.clone(),
+            apps,
+            davs,
+            users,
             session_duration_days: None,
             onlyoffice_config: None,
             openid_config: None,

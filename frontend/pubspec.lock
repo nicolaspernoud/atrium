@@ -97,14 +97,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.17.2"
-  cupertino_icons:
-    dependency: transitive
-    description:
-      name: cupertino_icons
-      sha256: e35129dc44c9118cee2a5603506d823bab99c68393879edb440e0090d07586be
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.5"
   dbus:
     dependency: transitive
     description:
@@ -165,10 +157,10 @@ packages:
     dependency: "direct main"
     description:
       name: dio
-      sha256: "7d328c4d898a61efc3cd93655a0955858e29a0aa647f0f9e02d59b3bb275e2e8"
+      sha256: "3709d74615bba5e443eb141f6a7f4bcc4788f8fae6f743edadfb79c2a8e6287e"
       url: "https://pub.dev"
     source: hosted
-    version: "4.0.6"
+    version: "5.0.1"
   extension:
     dependency: transitive
     description:
@@ -230,15 +222,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.3"
-  flutter_iconpicker:
-    dependency: "direct main"
-    description:
-      path: "."
-      ref: hotfix
-      resolved-ref: cc8878dbd9b3f4d7e29540dcd57d78896f9d9fb7
-      url: "https://github.com/kechankrisna/FlutterIconPicker"
-    source: git
-    version: "3.2.2"
   flutter_launcher_icons:
     dependency: "direct dev"
     description:
@@ -302,14 +285,6 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
-  font_awesome_flutter:
-    dependency: transitive
-    description:
-      name: font_awesome_flutter
-      sha256: "875dbb9ec1ad30d68102019ceb682760d06c72747c1c5b7885781b95f88569cc"
-      url: "https://pub.dev"
-    source: hosted
-    version: "10.3.0"
   html:
     dependency: transitive
     description:
@@ -791,10 +766,10 @@ packages:
     dependency: "direct main"
     description:
       name: webdav_client
-      sha256: "28e959e88a9923909ab900f30b73943f2a661f013ab8362529b4c0177b40e45b"
+      sha256: bfd8e4a9dc8fe5014d3f6e681e00a3e54fad710e33938d6746d97f67614b5bda
       url: "https://pub.dev"
     source: hosted
-    version: "1.1.8"
+    version: "1.2.0"
   webview_cookie_manager:
     dependency: "direct main"
     description:
@@ -868,5 +843,5 @@ packages:
     source: hosted
     version: "3.1.1"
 sdks:
-  dart: ">=2.18.0 <3.7.0"
+  dart: ">=2.18.0 <3.0.0"
   flutter: ">=3.0.0"

@@ -34,9 +34,9 @@ class ApiProvider {
   late Dio _dio;
 
   final BaseOptions options = BaseOptions(
-    baseUrl: App().prefs.hostname,
-    receiveTimeout: 13000,
-  );
+      baseUrl: App().prefs.hostname,
+      receiveTimeout: const Duration(seconds: 10),
+      contentType: Headers.jsonContentType);
   static final ApiProvider _instance = ApiProvider._internal();
 
   factory ApiProvider() => _instance;

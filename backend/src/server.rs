@@ -39,9 +39,6 @@ pub struct Server {
 
 impl Server {
     pub async fn build(config_file: &str, tx: Sender<()>) -> Result<Self, anyhow::Error> {
-        // Configure Maxmind GeoLite2 City Database as shared state
-        let maxmind_reader = maxminddb::Reader::open_readfile("GeoLite2-City.mmdb").ok();
-
         let config = load_config(config_file).await?;
         tracing::info!("Atrium's main hostname: {}", config.0.hostname);
 
@@ -55,7 +52,6 @@ impl Server {
             config.0,
             config.1,
             config_file.to_owned(),
-            maxmind_reader,
         );
 
         let user_router = Router::new()

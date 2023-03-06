@@ -1,5 +1,5 @@
 use crate::{
-    appstate::{ConfigState, OptionalMaxMindReader},
+    appstate::{ConfigState, MAXMIND_READER},
     configuration::OpenIdConfig,
     users::{create_user_cookie, user_to_token, User, ADMINS_ROLE},
 };
@@ -14,7 +14,7 @@ use oauth2::{
     ClientSecret, CsrfToken, RedirectUrl, Scope, TokenResponse, TokenUrl,
 };
 use serde::Deserialize;
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 
 const STATE_COOKIE: &str = "ATRIUM_OAUTH2_STATE";
 
@@ -90,7 +90,6 @@ pub struct AuthRequest {
 
 pub async fn oauth2_callback(
     Query(query): Query<AuthRequest>,
-    State(reader): State<OptionalMaxMindReader>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     jar: CookieJar,
     private_jar: PrivateCookieJar,
@@ -168,7 +167,14 @@ pub async fn oauth2_callback(
         user.roles.push(ADMINS_ROLE.to_owned());
     }
     let user_token = user_to_token(&user, &config);
-    let cookie = create_user_cookie(&user_token, hostname, &config, addr, reader, &user)?;
+    let cookie = create_user_cookie(
+        &user_token,
+        hostname,
+        &config,
+        addr,
+        Arc::clone(&MAXMIND_READER),
+        &user,
+    )?;
 
     Ok((
         private_jar.add(cookie),

@@ -2,7 +2,7 @@ use crate::middlewares::debug_cors_middleware;
 use axum::{
     extract::Query,
     middleware,
-    response::{IntoResponse, Redirect},
+    response::{Html, IntoResponse, Redirect},
     routing::{get, post},
     Router,
 };
@@ -38,6 +38,7 @@ pub async fn mock_oauth2_server(listener: TcpListener) {
         .route("/.well-known/openid-configuration", get(well_known_openid))
         .route("/authorize", get(authorize))
         .route("/authorize_wrong_state", get(authorize_wrong_state))
+        .route("/authorize_manual_action", get(authorize_manual_action))
         .route("/token", post(token))
         .route("/userinfo", get(userinfo))
         .route("/admininfo", get(admininfo))
@@ -88,6 +89,13 @@ async fn well_known_openid() -> impl IntoResponse {
 struct AuthorizeQuery {
     redirect_uri: String,
     state: String,
+}
+
+async fn authorize_manual_action(q: Query<AuthorizeQuery>) -> Html<String> {
+    Html(format!(
+        r#"<button onclick="location.href='{}?state={}&code=mock_code';">Authenticate and log in...</button>"#,
+        q.redirect_uri, q.state
+    ))
 }
 
 async fn authorize(q: Query<AuthorizeQuery>) -> impl IntoResponse {

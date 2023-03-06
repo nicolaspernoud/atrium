@@ -948,7 +948,10 @@ impl PathItem {
     }
 
     pub fn to_dav_xml(&self, prefix: &str) -> String {
-        let mut mtime = Utc.timestamp_millis(self.mtime as i64).to_rfc2822();
+        let mut mtime = Utc
+            .timestamp_millis_opt(self.mtime as i64)
+            .unwrap()
+            .to_rfc2822();
         mtime.truncate(mtime.len() - 6);
         let mtime = format!("{} GMT", mtime);
         let mut href = encode_uri(&format!("{}{}", prefix, &self.name));

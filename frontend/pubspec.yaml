@@ -33,14 +33,10 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
-  dio: ^4.0.4
+  dio: ^5.0.0
   file_picker: ^5.2.2
   filesize: ^2.0.1
   flutter_colorpicker: ^1.0.3
-  flutter_iconpicker:
-    git:
-      url: https://github.com/kechankrisna/FlutterIconPicker
-      ref: hotfix
   flutter_local_notifications: ^13.0.0
   path_provider: ^2.0.11
   pdfx: ^2.3.0
@@ -48,7 +44,7 @@ dependencies:
   shared_preferences: ^2.0.15
   url_launcher: ^6.1.5
   video_player: ^2.4.7
-  webdav_client: ^1.1.7
+  webdav_client: ^1.2.0
   webview_flutter: ^4.0.0
   webview_cookie_manager: ^2.0.6
   path: ^1.8.2

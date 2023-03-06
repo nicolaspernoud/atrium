@@ -2,7 +2,7 @@
 import 'dart:html';
 
 import 'package:atrium/globals.dart';
-import 'package:dio/adapter_browser.dart';
+import 'package:dio/browser.dart';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -49,6 +49,7 @@ download(String url, webdav.Client client, webdav.File file,
 upload(String destPath, PlatformFile file, webdav.Client client,
     Function(int, int)? onProgress, CancelToken cancelToken) async {
   var path = "$destPath${file.name}";
+  client.c.options.contentType = "application/octet-stream";
   await client.c.wdWriteWithStream(
     client,
     path,

@@ -5,17 +5,15 @@ use std::{
 
 use axum::Json;
 use http::StatusCode;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use sysinfo::{CpuExt, DiskExt, System, SystemExt};
 use tokio::task;
 
 use crate::users::UserToken;
 
-lazy_static::lazy_static! {
-    static ref  SYSTEM_INFO: Arc<Mutex<System>> = {
-        Arc::new(Mutex::new(System::new_all()))
-    };
-}
+static SYSTEM_INFO: Lazy<Arc<Mutex<System>>> =
+    Lazy::new(|| Arc::new(Mutex::new(System::new_all())));
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SystemInfo {

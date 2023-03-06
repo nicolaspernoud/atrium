@@ -1,12 +1,12 @@
-import 'package:atrium/components/icons.dart';
 import 'package:atrium/models/api_provider.dart';
 import 'package:atrium/models/app.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
-import 'package:flutter_iconpicker/flutter_iconpicker.dart';
 
 import '../i18n.dart';
+import 'icon_picker.dart';
+import 'icons.dart';
 
 class CreateEditApp extends StatefulWidget {
   final AppModel app;
@@ -221,9 +221,11 @@ class CreateEditAppState extends State<CreateEditApp> {
                             }
                           },
                         ),
-                        Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Text(tr(context, "forward_user_mail")),
+                        Flexible(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Text(tr(context, "forward_user_mail")),
+                          ),
                         ),
                       ],
                     ),
@@ -263,36 +265,34 @@ class CreateEditAppState extends State<CreateEditApp> {
 }
 
 pickIcon(BuildContext context, Model model) async {
-  IconData? icon = await FlutterIconPicker.showIconPicker(context,
-      title: Text(tr(context, 'pick_an_icon')),
-      searchHintText: tr(context, 'search'),
-      noResultsText: tr(context, 'no_result_for'),
-      iconPackModes: [],
-      customIconPack: roundedIcons,
-      closeChild: Text(
-        tr(context, 'close'),
-        textScaleFactor: 1.25,
-      ));
-  model.icon = roundedIcons.keys
-      .firstWhere((k) => roundedIcons[k] == icon, orElse: () => "");
-  await showDialog(
-    context: context,
-    builder: (BuildContext context) {
-      return AlertDialog(
-        titlePadding: const EdgeInsets.all(0),
-        contentPadding: const EdgeInsets.all(16),
-        content: SingleChildScrollView(
-          child: MaterialPicker(
-            pickerColor: model.color,
-            onColorChanged: (color) {
-              model.color = color;
-              Navigator.pop(context, 'OK');
-            },
-            enableLabel: true,
-            portraitOnly: true,
+  model.icon = await showDialog<String>(
+        context: context,
+        barrierDismissible: true,
+        builder: (BuildContext context) {
+          return IconPicker(currentValue: model.icon);
+        },
+      ) ??
+      model.icon;
+  if (context.mounted) {
+    await showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          titlePadding: const EdgeInsets.all(0),
+          contentPadding: const EdgeInsets.all(16),
+          content: SingleChildScrollView(
+            child: MaterialPicker(
+              pickerColor: model.color,
+              onColorChanged: (color) {
+                model.color = color;
+                Navigator.pop(context, 'OK');
+              },
+              enableLabel: true,
+              portraitOnly: true,
+            ),
           ),
-        ),
-      );
-    },
-  );
+        );
+      },
+    );
+  }
 }

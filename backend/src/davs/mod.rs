@@ -2,15 +2,16 @@ pub(crate) mod dav_file;
 pub(crate) mod headers;
 pub mod model;
 pub(crate) mod webdav_server;
+use once_cell::sync::Lazy;
 
 use crate::{
-    appstate::OptionalMaxMindReader,
+    appstate::MAXMIND_READER,
     configuration::HostType,
     logger::city_from_ip,
     users::{check_authorization, UserToken},
 };
 use axum::{
-    extract::{ConnectInfo, Host, State},
+    extract::{ConnectInfo, Host},
     http::{Request, Response},
 };
 use http::Method;
@@ -19,24 +20,20 @@ use hyper::{Body, StatusCode};
 use std::{net::SocketAddr, sync::Arc};
 use tracing::info;
 
-lazy_static::lazy_static! {
-    static ref  WEBDAV_SERVER: Arc<webdav_server::WebdavServer> = {
-        Arc::new(webdav_server::WebdavServer::new(
+static WEBDAV_SERVER: Lazy<Arc<webdav_server::WebdavServer>> =
+    Lazy::new(|| Arc::new(webdav_server::WebdavServer::new()));
 
-        ))
-    };
-
-    static ref UNLOGGED_METHODS: [Method; 5] = [
+static UNLOGGED_METHODS: Lazy<[Method; 5]> = Lazy::new(|| {
+    [
         Method::OPTIONS,
         Method::HEAD,
         Method::from_bytes(b"LOCK").unwrap(),
         Method::from_bytes(b"UNLOCK").unwrap(),
         Method::from_bytes(b"PROPFIND").unwrap(),
-    ];
-}
+    ]
+});
 
 pub async fn webdav_handler(
-    State(reader): State<OptionalMaxMindReader>,
     user: Option<UserToken>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     dav: HostType,
@@ -66,7 +63,7 @@ pub async fn webdav_handler(
                     dav_host_str,
                     uri_str,
                     user_str,
-                    city_from_ip(addr, reader)
+                    city_from_ip(addr, Arc::clone(&MAXMIND_READER))
                 );
             });
             return access_denied_resp;
@@ -88,7 +85,7 @@ pub async fn webdav_handler(
                         dav_host_str,
                         uri_str,
                         user_str,
-                        city_from_ip(addr, reader)
+                        city_from_ip(addr, Arc::clone(&MAXMIND_READER))
                     );
                 });
             }

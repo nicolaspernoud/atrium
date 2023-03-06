@@ -14,7 +14,7 @@ onlyoffice_config: # optional : OnlyOffice connector integration
 openid_config: # optional : allow login with OpenID Connect
   client_id: dummy # required : client id to authenticate Atrium with the Identity Provider
   client_secret: dummy # required : client secret to authenticate Atrium with the Identity Provider
-  auth_url: http://127.0.0.1:8090/authorize # required : Identity Provider's authorization endpoint
+  auth_url: http://127.0.0.1:8090/authorize_manual_action # required : Identity Provider's authorization endpoint
   token_url: http://localhost:8090/token # required : Identity Provider's token endpoint
   userinfo_url: http://localhost:8090/userinfo # required : Identity Provider's userinfo endpoint
   admins_group: TO_BECOME_ADMINS # required : group gotten from memberOf attribute that will be mapped to ADMINS role

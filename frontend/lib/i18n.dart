@@ -88,7 +88,6 @@ class MyLocalizations {
       "user_created": "User created or altered with success",
       "users": "Users",
       "close": "Close",
-      "no_result_for": "No result for",
       "search": "Search",
     },
     'fr': {
@@ -138,7 +137,6 @@ class MyLocalizations {
       "new_dav": "Nouveau dav",
       "new_name": "Nouveau nom",
       "new_user": "Nouvel utilisateur",
-      "no_result_for": "Aucun résultat pour",
       "ok": "OK",
       "open_in_new_tab": "Ouvrir dans un nouvel onglet",
       "openpath": "Chemin de démarrage de l'application",

@@ -1,5 +1,4 @@
 import 'package:atrium/components/delete_dialog.dart';
-import 'package:atrium/components/icons.dart';
 import 'package:atrium/components/image_viewer.dart';
 import 'package:atrium/components/media_player.dart';
 import 'package:atrium/components/pdf_viewer.dart';
@@ -27,6 +26,7 @@ import 'package:webdav_client/webdav_client.dart';
 import 'package:atrium/components/webview.dart'
     if (dart.library.html) 'package:atrium/components/iframe_webview.dart';
 import 'package:path/path.dart' as p;
+import 'icons.dart';
 
 enum SortBy { names, dates }
 

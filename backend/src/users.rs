@@ -1,6 +1,6 @@
 use crate::{
     apps::App,
-    appstate::{ConfigFile, ConfigState, OptionalMaxMindReader},
+    appstate::{ConfigFile, ConfigState, OptionalMaxMindReader, MAXMIND_READER},
     configuration::{config_or_error, trim_host, Config, HostType},
     davs::model::Dav,
     headers::XSRFToken,
@@ -118,7 +118,6 @@ where
     S: Send + Sync,
     Key: FromRef<S>,
     ConfigState: FromRef<S>,
-    OptionalMaxMindReader: FromRef<S>,
 {
     type Rejection = (StatusCode, &'static str);
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
@@ -166,7 +165,6 @@ where
                 Ok(token) => return Ok(token),
                 Err(_) => {
                     let config = ConfigState::from_ref(state);
-                    let reader = OptionalMaxMindReader::from_ref(state);
 
                     let Extension(addr) = parts
                         .extract::<Extension<ConnectInfo<SocketAddr>>>()
@@ -178,7 +176,7 @@ where
                             login: basic.username().to_string(),
                             password: basic.password().to_string(),
                         },
-                        reader,
+                        Arc::clone(&MAXMIND_READER),
                         addr.0,
                     ) {
                         Ok(user) => Ok(user.1),
@@ -225,7 +223,6 @@ where
     S: Send + Sync,
     Key: FromRef<S>,
     ConfigState: FromRef<S>,
-    OptionalMaxMindReader: FromRef<S>,
 {
     type Rejection = (StatusCode, &'static str);
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
@@ -276,7 +273,6 @@ pub struct AuthResponse {
 }
 
 pub async fn local_auth(
-    State(reader): State<OptionalMaxMindReader>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     jar: PrivateCookieJar,
     State(config): State<ConfigState>,
@@ -284,8 +280,16 @@ pub async fn local_auth(
     Json(payload): Json<LocalAuth>,
 ) -> Result<(PrivateCookieJar, Json<AuthResponse>), (StatusCode, &'static str)> {
     // Find the user in configuration
-    let (user, user_token) = authenticate_local_user(&config, payload, Arc::clone(&reader), addr)?;
-    let cookie = create_user_cookie(&user_token, hostname, &config, addr, reader, user)?;
+    let (user, user_token) =
+        authenticate_local_user(&config, payload, Arc::clone(&MAXMIND_READER), addr)?;
+    let cookie = create_user_cookie(
+        &user_token,
+        hostname,
+        &config,
+        addr,
+        Arc::clone(&MAXMIND_READER),
+        user,
+    )?;
 
     Ok((
         jar.add(cookie),

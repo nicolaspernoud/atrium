@@ -2,7 +2,6 @@ import 'dart:math';
 
 import 'package:atrium/components/create_edit_app.dart';
 import 'package:atrium/components/delete_dialog.dart';
-import 'package:atrium/components/icons.dart';
 import 'package:atrium/components/sized_items_grid.dart';
 
 import 'package:atrium/components/login_dialog.dart';
@@ -17,6 +16,7 @@ import 'package:url_launcher/url_launcher_string.dart';
 
 import '../globals.dart';
 import '../models/app.dart';
+import 'icons.dart';
 
 class AppsList extends StatefulWidget {
   const AppsList({Key? key}) : super(key: key);

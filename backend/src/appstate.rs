@@ -2,7 +2,7 @@ use axum::extract::FromRef;
 use axum_extra::extract::cookie::Key;
 use hyper_trust_dns::{RustlsHttpsConnector, TrustDnsResolver};
 use maxminddb::Reader;
-
+use once_cell::sync::Lazy;
 use std::{collections::HashMap, sync::Arc};
 
 use crate::configuration::{Config, HostType};
@@ -13,13 +13,17 @@ pub type ConfigFile = Arc<String>;
 pub type ConfigState = Arc<Config>;
 pub type Client = hyper::client::Client<RustlsHttpsConnector>;
 
+pub static MAXMIND_READER: Lazy<OptionalMaxMindReader> = Lazy::new(|| {
+    let maxmind_reader = maxminddb::Reader::open_readfile("GeoLite2-City.mmdb").ok();
+    Arc::new(maxmind_reader)
+});
+
 #[derive(Clone)]
 pub struct AppState {
     key: Key,
     config: ConfigState,
     config_map: ConfigMap,
     config_file: ConfigFile,
-    maxmind_reader: OptionalMaxMindReader,
     client: Client,
 }
 
@@ -29,14 +33,12 @@ impl AppState {
         config: ConfigState,
         config_map: ConfigMap,
         config_file: String,
-        maxmind_reader: Option<Reader<Vec<u8>>>,
     ) -> Self {
         AppState {
             key,
             config,
             config_map,
             config_file: Arc::new(config_file),
-            maxmind_reader: Arc::new(maxmind_reader),
             client: hyper::Client::builder()
                 .http1_title_case_headers(true)
                 .build::<_, hyper::Body>(
@@ -67,12 +69,6 @@ impl FromRef<AppState> for ConfigMap {
 impl FromRef<AppState> for ConfigFile {
     fn from_ref(state: &AppState) -> Self {
         Arc::clone(&state.config_file)
-    }
-}
-
-impl FromRef<AppState> for OptionalMaxMindReader {
-    fn from_ref(state: &AppState) -> Self {
-        Arc::clone(&state.maxmind_reader)
     }
 }
 
