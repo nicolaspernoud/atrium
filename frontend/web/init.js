@@ -1,15 +1,15 @@
 // The value below is altered by the docker image build
-var serviceWorkerVersion = null;
+let serviceWorkerVersion = null;
 
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   "https://cdn.jsdelivr.net/npm/pdfjs-dist@2.12.313/build/pdf.worker.min.js";
-pdfRenderOptions = {
+window.pdfRenderOptions = {
   cMapUrl: "https://cdn.jsdelivr.net/npm/pdfjs-dist@2.12.313/cmaps/",
   cMapPacked: true,
 };
 
 window.addEventListener("load", function () {
-  var loading = document.querySelector("#loading");
+  let loading = document.querySelector("#loading");
   _flutter.loader
     .loadEntrypoint({
       serviceWorker: {

@@ -125,7 +125,7 @@ pub async fn oauth2_callback(
             )
         })?;
 
-    // Fetch user data from discord
+    // Fetch user data
     let client = reqwest::Client::new();
     let user_data: OAuthUser = client
         .get(&oidc_config.userinfo_url)
