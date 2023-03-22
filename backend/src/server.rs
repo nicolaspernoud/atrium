@@ -54,22 +54,24 @@ impl Server {
             config_file.to_owned(),
         );
 
+        // FIXME : Whenever https://github.com/tokio-rs/axum/issues/1624 is fixed, put back the nesting and remove the /api/user prefix
         let user_router = Router::new()
-            .route("/whoami", get(whoami))
-            .route("/list_services", get(list_services))
-            .route("/system_info", get(system_info))
+            .route("/api/user/whoami", get(whoami))
+            .route("/api/user/list_services", get(list_services))
+            .route("/api/user/system_info", get(system_info))
             .route(
-                "/get_share_token",
+                "/api/user/get_share_token",
                 post(get_share_token).layer(middleware::from_fn(cookie_to_body)),
             );
 
+        // FIXME : Whenever https://github.com/tokio-rs/axum/issues/1624 is fixed, put back the nesting and remove the /api/admin prefix
         let admin_router = Router::new()
-            .route("/users", get(get_users).post(add_user))
-            .route("/users/:user_login", delete(delete_user))
-            .route("/apps", get(get_apps).post(add_app))
-            .route("/apps/:app_id", delete(delete_app))
-            .route("/davs", get(get_davs).post(add_dav))
-            .route("/davs/:dav_id", delete(delete_dav));
+            .route("/api/admin/users", get(get_users).post(add_user))
+            .route("/api/admin/users/:user_login", delete(delete_user))
+            .route("/api/admin/apps", get(get_apps).post(add_app))
+            .route("/api/admin/apps/:app_id", delete(delete_app))
+            .route("/api/admin/davs", get(get_davs).post(add_dav))
+            .route("/api/admin/davs/:dav_id", delete(delete_dav));
 
         let main_router: Router<()> = Router::new()
             .route(
@@ -84,8 +86,12 @@ impl Server {
             .route("/auth/local", post(local_auth))
             .route("/auth/oauth2login", get(oauth2_login))
             .route("/auth/oauth2callback", get(oauth2_callback))
-            .nest("/api/admin", admin_router)
-            .nest("/api/user", user_router)
+            // FIXME : Whenever https://github.com/tokio-rs/axum/issues/1624 is fixed, put back the nesting
+            //.nest("/api/admin", admin_router)
+            //.nest("/api/user", user_router)
+            .merge(admin_router)
+            .merge(user_router)
+            //
             .route("/onlyoffice/save", post(onlyoffice_callback))
             .route("/onlyoffice", get(onlyoffice_page))
             .fallback_service(get_service(ServeDir::new("web")).handle_error(error_500))
@@ -139,6 +145,6 @@ impl Server {
     }
 }
 
-async fn error_500(_err: std::io::Error) -> impl IntoResponse {
+async fn error_500(_err: std::convert::Infallible) -> impl IntoResponse {
     (StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong...")
 }

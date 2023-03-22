@@ -176,7 +176,7 @@ pub async fn onlyoffice_callback(
     if payload.status == 2 && payload.url.is_some() && query.is_some() {
         // Get the binary content from url
         let response = reqwest::get(payload.url.unwrap()).await.map_err(|e| {
-            tracing::log::error!("ERROR: {e}");
+            tracing::error!("ERROR: {e}");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "could not get document from OnlyOffice server",

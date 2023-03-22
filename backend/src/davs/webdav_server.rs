@@ -294,9 +294,7 @@ impl WebdavServer {
             .body_mut()
             .map_err(|err| io::Error::new(io::ErrorKind::Other, err));
 
-        let body_reader = StreamReader::new(body_with_io_error);
-
-        futures::pin_mut!(body_reader);
+        let mut body_reader = StreamReader::new(body_with_io_error);
 
         file.copy_from(&mut body_reader).await?;
 

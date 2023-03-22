@@ -5,6 +5,8 @@ use atrium::{
     server::Server,
 };
 use axum_server::Handle;
+#[cfg(target_arch = "x86_64")]
+use mimalloc::MiMalloc;
 use rustls::ServerConfig;
 use rustls_acme::{caches::DirCache, AcmeConfig};
 use std::{fs::File, net::SocketAddr, sync::Arc, time::Duration};
@@ -13,6 +15,10 @@ use tokio_stream::StreamExt;
 use tracing::{error, info};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{fmt, fmt::time::OffsetTime, prelude::*};
+
+#[cfg(target_arch = "x86_64")]
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 pub const CONFIG_FILE: &str = "atrium.yaml";
 

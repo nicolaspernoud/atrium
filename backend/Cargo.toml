@@ -12,12 +12,12 @@ name = "atrium"
 
 [dependencies]
 anyhow = { default-features = false, version = "1.0" }
-argon2 = { features = ["alloc", "password-hash"], default-features = false, version = "0.4" }
-async_zip = { features = ["deflate"], default-features = false, version = "0.0.11" }
+argon2 = { features = ["alloc", "password-hash"], default-features = false, version = "0.5" }
+async_zip = { features = ["deflate"], default-features = false, version = "0.0.12" }
 async-stream = "0.3"
 async-walkdir = "0.2"
 axum = { version="0.6.1", features = ["query", "json", "http2", "tokio", "headers"], default-features = false }
-axum-extra = { version = "0.4.2", features = ["cookie-private"], default-features = false }
+axum-extra = { version = "0.7", features = ["cookie-private"], default-features = false }
 axum-server = "0.4.0"
 base64ct = { version = "1.5", features = ["alloc"]}
 chacha20poly1305 = { version = "0.10", features = ["stream"], default-features = false }
@@ -43,13 +43,13 @@ serde = { version = "1", default-features = false }
 serde_json = { default-features = false, version = "1.0" }
 serde_yaml = "0.9"
 sha2 = { default-features = false, version = "0.10" }
-sysinfo = { default-features = false, version = "0.27" }
+sysinfo = { default-features = false, version = "0.28" }
 time = { default-features = false, version = "0.3" }
 tokio = { version = "1.20", features = ["full"], default-features = false }
 tokio-stream = { version="0.1", default-features = false }
 tokio-util = { version = "0.7",  features = ["compat"], default-features = false }
 tower = { default-features = false, version = "0.4" }
-tower-http = { version = "0.3.0", features = ["fs"], default-features = false }
+tower-http = { version = "0.4.0", features = ["fs"], default-features = false }
 tracing = { default-features = false, version = "0.1" }
 tracing-subscriber = { version = "0.3", features = ["local-time", "ansi", "env-filter"], default-features = false }
 tracing-appender = "0.2"
@@ -58,9 +58,11 @@ urlencoding = "2.1"
 uuid = { version = "1.1", features = ["fast-rng", "v4"], default-features = false }
 xml-rs = "0.8"
 
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+mimalloc = "0.1"
 
 [dev-dependencies]
-async-tungstenite = { version = "0.19", features = ["tokio-runtime"] }
+async-tungstenite = { version = "0.20", features = ["tokio-runtime"] }
 reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls", "cookies", "stream"] }
 tungstenite = "0.18"
 
