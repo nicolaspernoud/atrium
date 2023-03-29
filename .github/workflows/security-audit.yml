@@ -1,0 +1,22 @@
+name: Security audit
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - development
+    paths:
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+jobs:
+  security_audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      # Moves all files in sub dir to top-level dir
+      - run: cd $GITHUB_WORKSPACE && mv backend/* .
+      # Delete directories not to be audited
+      - run: cd $GITHUB_WORKSPACE && rm -rf backend  Dockerfile  frontend  LICENSE  README.md  scripts
+      - uses: actions-rs/audit-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
