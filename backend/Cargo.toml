@@ -16,7 +16,7 @@ argon2 = { features = ["alloc", "password-hash"], default-features = false, vers
 async_zip = { features = ["deflate"], default-features = false, version = "0.0.12" }
 async-stream = "0.3"
 async-walkdir = "0.2"
-axum = { version="0.6.1", features = ["query", "json", "http2", "tokio", "headers"], default-features = false }
+axum = { version="0.6.15", features = ["query", "json", "http2", "tokio", "headers"], default-features = false }
 axum-extra = { version = "0.7", features = ["cookie-private"], default-features = false }
 axum-server = "0.4.0"
 base64ct = { version = "1.5", features = ["alloc"]}
@@ -26,19 +26,20 @@ filetime = "0.2"
 futures = { default-features = false, version = "0.3" }
 futures-util = { default-features = false, version = "0.3" }
 headers = "0.3"
+http = "0.2"
 hyper = { version = "0.14", default-features = false }
 hyper-trust-dns = { version = "0.5", default-features = false, features = ["dns-over-https-rustls", "rustls-http2", "rustls-webpki"] }
-http = "0.2"
 jsonwebtoken = {version = "8", default-features = false }
 maxminddb = "0.23"
 mime_guess = { default-features = false, version = "2.0" }
 oauth2 = { features = ["rustls-tls"], default-features = false, version = "4.1" }
 once_cell = "1.17.0" # TO BE REMOVED WHEN ONCE CELL LANDS IN STD : https://github.com/rust-lang/rfcs/pull/2788
 percent-encoding = { default-features = false, version = "2.1" }
+quick-xml = "0.28"
 rand= { default-features = false, version = "0.8" }
 reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls","stream"] }
-rustls = { default-features = false, version = "0.20.6" }
-rustls-acme = { git = "https://github.com/FlorianUekermann/rustls-acme.git", features = ["axum"], default-features = false }
+rustls = { default-features = false, version = "0.20" }
+rustls-acme = { version = "0.6", features = ["axum"], default-features = false }
 serde = { version = "1", default-features = false }
 serde_json = { default-features = false, version = "1.0" }
 serde_yaml = "0.9"
@@ -51,20 +52,19 @@ tokio-util = { version = "0.7",  features = ["compat"], default-features = false
 tower = { default-features = false, version = "0.4" }
 tower-http = { version = "0.4.0", features = ["fs"], default-features = false }
 tracing = { default-features = false, version = "0.1" }
-tracing-subscriber = { version = "0.3", features = ["local-time", "ansi", "env-filter"], default-features = false }
 tracing-appender = "0.2"
+tracing-subscriber = { version = "0.3", features = ["local-time", "ansi", "env-filter"], default-features = false }
 trim-in-place = "0.1.7"
 urlencoding = "2.1"
 uuid = { version = "1.1", features = ["fast-rng", "v4"], default-features = false }
-xml-rs = "0.8"
 
-[target.'cfg(target_arch = "x86_64")'.dependencies]
+[target.'cfg(not(target_arch = "arm"))'.dependencies]
 mimalloc = "0.1"
 
 [dev-dependencies]
-async-tungstenite = { version = "0.20", features = ["tokio-runtime"] }
+async-tungstenite = { version = "0.21", features = ["tokio-runtime"] }
 reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls", "cookies", "stream"] }
-tungstenite = "0.18"
+tungstenite = "0.19"
 
 [profile.release_optimized]
 inherits = "release"

@@ -43,6 +43,7 @@ use hyper::{
     },
     Body, Method, StatusCode, Uri,
 };
+use quick_xml::escape::escape;
 use serde::Serialize;
 use std::{
     borrow::Cow,
@@ -56,7 +57,6 @@ use tokio::{fs, io, io::AsyncWrite};
 use tokio_util::io::StreamReader;
 use tracing::{debug, error};
 use uuid::Uuid;
-use xml::escape::escape_str_pcdata;
 
 pub type Request = hyper::Request<Body>;
 pub type Response = hyper::Response<Body>;
@@ -956,7 +956,7 @@ impl PathItem {
         if self.is_dir() && !href.ends_with('/') {
             href.push('/');
         }
-        let displayname = escape_str_pcdata(self.base_name());
+        let displayname = escape(self.base_name());
         match self.path_type {
             PathType::Dir | PathType::SymlinkDir => format!(
                 r#"<D:response>

@@ -21,6 +21,7 @@ class CreateEditDav extends StatefulWidget {
 class CreateEditDavState extends State<CreateEditDav> {
   final _formKey = GlobalKey<FormState>();
   final _passController = TextEditingController();
+  bool submitting = false;
 
   @override
   void initState() {
@@ -201,31 +202,41 @@ class CreateEditDavState extends State<CreateEditDav> {
                         },
                       ),
                       Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 16.0),
-                        child: ElevatedButton(
-                          onPressed: () async {
-                            // Validate returns true if the form is valid, or false otherwise.
-                            if (_formKey.currentState!.validate()) {
-                              var msg = tr(context, "dav_created");
-                              try {
-                                await ApiProvider().createDav(widget.dav);
-                                // Do nothing on TypeError as Create respond with a null id
-                              } catch (e) {
-                                msg = e.toString();
-                              }
-                              if (!mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(msg)),
-                              );
-                              Navigator.pop(context);
-                            }
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Text(tr(context, "submit")),
-                          ),
-                        ),
-                      ),
+                          padding: const EdgeInsets.symmetric(vertical: 16.0),
+                          child: AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 1000),
+                            child: !submitting
+                                ? ElevatedButton(
+                                    onPressed: () async {
+                                      // Validate returns true if the form is valid, or false otherwise.
+                                      if (_formKey.currentState!.validate()) {
+                                        var msg = tr(context, "dav_created");
+                                        try {
+                                          setState(() {
+                                            submitting = true;
+                                          });
+                                          await ApiProvider()
+                                              .createDav(widget.dav);
+                                          // Do nothing on TypeError as Create respond with a null id
+                                        } catch (e) {
+                                          msg = e.toString();
+                                        }
+                                        if (!mounted) return;
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(content: Text(msg)),
+                                        );
+                                        Navigator.pop(context);
+                                      }
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(16.0),
+                                      child: Text(tr(context, "submit")),
+                                    ),
+                                  )
+                                : const Center(
+                                    child: CircularProgressIndicator()),
+                          )),
                     ],
                   ),
                 )),

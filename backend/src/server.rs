@@ -1,7 +1,8 @@
 use axum::{
+    handler::Handler,
     middleware,
     response::{Html, IntoResponse},
-    routing::{delete, get, get_service, post},
+    routing::{any, delete, get, get_service, post, MethodRouter},
     Router,
 };
 
@@ -33,7 +34,7 @@ use crate::{
 };
 
 pub struct Server {
-    pub router: Router,
+    pub router: MethodRouter,
     pub port: u16,
 }
 
@@ -54,7 +55,6 @@ impl Server {
             config_file.to_owned(),
         );
 
-        // FIXME : Whenever https://github.com/tokio-rs/axum/issues/1624 is fixed, put back the nesting and remove the /api/user prefix
         let user_router = Router::new()
             .route("/api/user/whoami", get(whoami))
             .route("/api/user/list_services", get(list_services))
@@ -64,7 +64,6 @@ impl Server {
                 post(get_share_token).layer(middleware::from_fn(cookie_to_body)),
             );
 
-        // FIXME : Whenever https://github.com/tokio-rs/axum/issues/1624 is fixed, put back the nesting and remove the /api/admin prefix
         let admin_router = Router::new()
             .route("/api/admin/users", get(get_users).post(add_user))
             .route("/api/admin/users/:user_login", delete(delete_user))
@@ -86,49 +85,40 @@ impl Server {
             .route("/auth/local", post(local_auth))
             .route("/auth/oauth2login", get(oauth2_login))
             .route("/auth/oauth2callback", get(oauth2_callback))
-            // FIXME : Whenever https://github.com/tokio-rs/axum/issues/1624 is fixed, put back the nesting
-            //.nest("/api/admin", admin_router)
-            //.nest("/api/user", user_router)
+            // We use merge instead of nest as it is still a little bit faster
             .merge(admin_router)
             .merge(user_router)
-            //
             .route("/onlyoffice/save", post(onlyoffice_callback))
             .route("/onlyoffice", get(onlyoffice_page))
             .fallback_service(get_service(ServeDir::new("web")).handle_error(error_500))
             .with_state(state.clone());
 
-        let proxy_router = Router::new()
-            .fallback(proxy_handler)
-            .with_state(state.clone());
+        let proxy_router = proxy_handler.with_state(state.clone());
 
-        let webdav_router = Router::new()
-            .fallback(webdav_handler)
+        let webdav_router = webdav_handler
             .layer(middleware::from_fn_with_state(
                 state.clone(),
                 cors_middleware,
             ))
             .with_state(state.clone());
 
-        let dir_router = Router::new()
-            .fallback(dir_handler)
-            .with_state(state.clone());
+        let dir_router = dir_handler.with_state(state.clone());
 
-        let mut router = Router::new()
-            .fallback(
-                |hostype: Option<HostType>, request: Request<Body>| async move {
-                    match hostype {
-                        Some(HostType::StaticApp(_)) => dir_router.oneshot(request).await,
-                        Some(HostType::ReverseApp(_)) => proxy_router.oneshot(request).await,
-                        Some(HostType::Dav(_)) => webdav_router.oneshot(request).await,
-                        None => main_router.oneshot(request).await,
-                    }
-                },
-            )
-            .layer(middleware::from_fn_with_state(
-                state.clone(),
-                inject_security_headers,
-            ))
-            .with_state(state);
+        let mut router = any(
+            |hostype: Option<HostType>, request: Request<Body>| async move {
+                match hostype {
+                    Some(HostType::StaticApp(_)) => dir_router.oneshot(request).await,
+                    Some(HostType::ReverseApp(_)) => proxy_router.oneshot(request).await,
+                    Some(HostType::Dav(_)) => webdav_router.oneshot(request).await,
+                    None => main_router.oneshot(request).await,
+                }
+            },
+        )
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            inject_security_headers,
+        ))
+        .with_state(state);
 
         if debug_mode {
             router = router

@@ -2,6 +2,7 @@ use std::net::SocketAddr;
 
 use axum::{
     body::{Body, Bytes},
+    extract::ConnectInfo,
     http::{Request, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
@@ -41,17 +42,14 @@ pub fn city_from_ip(addr: SocketAddr, reader: OptionalMaxMindReader) -> String {
     format!("{location} ({})", addr.ip())
 }
 
+#[tracing::instrument(name = "Request", level = "debug", skip_all, fields(ip=%addr, uri = %req.uri(), method = %req.method()))]
 pub async fn print_request_response(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     req: Request<Body>,
     next: Next<Body>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let (parts, body) = req.into_parts();
-    tracing::debug!(
-        "request = {} {} {:?}",
-        parts.method,
-        parts.uri,
-        parts.headers
-    );
+    tracing::debug!("request headers = {:?}", parts.headers);
     let bytes = buffer_and_print("request", body).await?;
     let req = Request::from_parts(parts, Body::from(bytes));
 

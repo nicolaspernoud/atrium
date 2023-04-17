@@ -130,7 +130,7 @@ class ApiProvider {
 
   Future<void> createApp(AppModel app) async {
     await _dio.post('/api/admin/apps', data: app);
-    await _dio.get('/reload');
+    await _reloadConfigurationAndWaitUntilReady();
   }
 
   Future<List<DavModel>> getDavs() async {
@@ -150,7 +150,7 @@ class ApiProvider {
 
   Future<void> createDav(DavModel dav) async {
     await _dio.post('/api/admin/davs', data: dav);
-    await _dio.get('/reload');
+    await _reloadConfigurationAndWaitUntilReady();
   }
 
   Future<List<UserModel>> getUsers() async {
@@ -191,6 +191,22 @@ class ApiProvider {
   Future<SysInfo> getSysInfo() async {
     final response = await _dio.get('/api/user/system_info');
     return SysInfo.fromJson(response.data);
+  }
+
+  Future<Response> _reloadConfigurationAndWaitUntilReady() async {
+    await _dio.get('/reload');
+    const int maxRetries = 10;
+    int retries = 0;
+    while (retries < maxRetries) {
+      try {
+        Response response = await _dio.get("/api/admin/apps");
+        return response;
+      } catch (e) {
+        retries++;
+        await Future.delayed(const Duration(seconds: 2));
+      }
+    }
+    throw Exception('Request failed after $maxRetries retries');
   }
 }
 

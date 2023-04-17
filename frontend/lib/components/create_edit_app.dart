@@ -20,6 +20,7 @@ class CreateEditApp extends StatefulWidget {
 
 class CreateEditAppState extends State<CreateEditApp> {
   final _formKey = GlobalKey<FormState>();
+  bool submitting = false;
 
   @override
   Widget build(BuildContext context) {
@@ -230,31 +231,41 @@ class CreateEditAppState extends State<CreateEditApp> {
                       ],
                     ),
                     Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 16.0),
-                      child: ElevatedButton(
-                        onPressed: () async {
-                          // Validate returns true if the form is valid, or false otherwise.
-                          if (_formKey.currentState!.validate()) {
-                            var msg = tr(context, "app_created");
-                            try {
-                              await ApiProvider().createApp(widget.app);
-                              // Do nothing on TypeError as Create respond with a null id
-                            } catch (e) {
-                              msg = e.toString();
-                            }
-                            if (!mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(msg)),
-                            );
-                            Navigator.pop(context);
-                          }
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Text(tr(context, "submit")),
-                        ),
-                      ),
-                    ),
+                        padding: const EdgeInsets.symmetric(vertical: 16.0),
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 1000),
+                          child: !submitting
+                              ? ElevatedButton(
+                                  onPressed: () async {
+                                    // Validate returns true if the form is valid, or false otherwise.
+                                    if (_formKey.currentState!.validate()) {
+                                      var msg = tr(context, "app_created");
+                                      try {
+                                        setState(() {
+                                          submitting = true;
+                                        });
+                                        await ApiProvider()
+                                            .createApp(widget.app);
+                                        // Do nothing on TypeError as Create respond with a null id
+                                      } catch (e) {
+                                        msg = e.toString();
+                                      }
+                                      if (!mounted) return;
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(content: Text(msg)),
+                                      );
+                                      Navigator.pop(context);
+                                    }
+                                  },
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(16.0),
+                                    child: Text(tr(context, "submit")),
+                                  ),
+                                )
+                              : const Center(
+                                  child: CircularProgressIndicator()),
+                        )),
                   ],
                 ),
               ),

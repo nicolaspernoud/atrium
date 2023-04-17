@@ -8,8 +8,8 @@ use tokio::fs::File;
 use anyhow::Result;
 use base64ct::{Base64, Encoding};
 use futures::StreamExt;
+use quick_xml::escape::escape;
 use sha2::{Digest, Sha512};
-use xml::escape::escape_str_pcdata;
 
 #[tokio::test]
 async fn put_and_retrieve_tests() -> Result<()> {
@@ -18,7 +18,7 @@ async fn put_and_retrieve_tests() -> Result<()> {
     put_and_get_file(&app, app.port, "lorem.txt", "files2", "text/plain", true).await?;
 
     let big_file_path = "tests/data/big_file.bin";
-    create_big_binary_file(big_file_path);
+    create_big_binary_file(100_000_000, big_file_path);
     put_and_get_file(
         &app,
         app.port,
@@ -39,6 +39,76 @@ async fn put_and_retrieve_tests() -> Result<()> {
     .await?;
 
     std::fs::remove_file(big_file_path).ok();
+    Ok(())
+}
+
+// Run with `cargo test --release --package atrium --test backend -- davs::sized_files_bench --exact --nocapture --ignored |grep "→"`
+#[tokio::test]
+#[ignore]
+async fn sized_files_bench() -> Result<()> {
+    let app = TestApp::spawn(None).await;
+
+    let file_sizes_mb = [1, 10, 100, 500, 1000, 3000];
+
+    for size in file_sizes_mb.iter() {
+        // Create a file
+        let sized_file_name = "sized_file.bin";
+        let sized_file_path = &format!("tests/data/{sized_file_name}");
+        let downloaded_file_path = "tests/data/downloaded_sized_file.bin";
+        create_big_binary_file(size * 1_000_000, sized_file_path);
+
+        // Reference : file copy
+        let before = time::Instant::now();
+        std::fs::copy(sized_file_path, downloaded_file_path)?;
+        println!(
+            "=== Reference: file copy of size {size} Mb in {:.2?} s → {:.2?} Mb/s",
+            before.elapsed().as_seconds_f32(),
+            *size as f32 / before.elapsed().as_seconds_f32()
+        );
+
+        for dav in ["files1", "files2"] {
+            let encrypted = if dav == "files2" { " (encrypted)" } else { "" };
+            // Send the file
+            let before = time::Instant::now();
+            let file = File::open(sized_file_path).await?;
+            let resp = app
+                .client
+                .put(format!(
+                    "http://{dav}.atrium.io:{}/{sized_file_name}",
+                    app.port
+                ))
+                .body(file_to_body(file))
+                .send()
+                .await?;
+            assert_eq!(resp.status(), 201);
+            println!(
+                "Sent file of size {size} Mb to {dav}{encrypted} in {:.2?} s → {:.2?} Mb/s",
+                before.elapsed().as_seconds_f32(),
+                *size as f32 / before.elapsed().as_seconds_f32()
+            );
+
+            let before = time::Instant::now();
+            let resp = app
+                .client
+                .get(format!(
+                    "http://{dav}.atrium.io:{}/{sized_file_name}",
+                    app.port
+                ))
+                .send()
+                .await?;
+            assert_eq!(resp.status(), 200);
+            let mut file = std::fs::File::create(downloaded_file_path)?;
+            let mut content = io::Cursor::new(resp.bytes().await?);
+            std::io::copy(&mut content, &mut file)?;
+            println!(
+                "Retrieved file of size {size} Mb from {dav}{encrypted} in {:.2?} s → {:.2?} Mb/s",
+                before.elapsed().as_seconds_f32(),
+                *size as f32 / before.elapsed().as_seconds_f32()
+            );
+        }
+        std::fs::remove_file(sized_file_path).ok();
+        std::fs::remove_file(downloaded_file_path).ok();
+    }
     Ok(())
 }
 
@@ -118,9 +188,7 @@ fn file_to_body(file: File) -> reqwest::Body {
     reqwest::Body::wrap_stream(stream)
 }
 
-fn create_big_binary_file(path: &str) {
-    let size = 100_000_000;
-
+fn create_big_binary_file(size: usize, path: &str) {
     std::fs::remove_file(path).ok();
     let f = std::fs::File::create(path).unwrap();
     let mut writer = BufWriter::new(f);
@@ -541,10 +609,7 @@ async fn propfind_dir() -> Result<()> {
     assert!(body.contains("<D:getcontentlength>0</D:getcontentlength>"));
     for f in ["file1", "file2"] {
         assert!(body.contains(&format!("<D:href>/dira/{}</D:href>", encode_uri(f))));
-        assert!(body.contains(&format!(
-            "<D:displayname>{}</D:displayname>",
-            escape_str_pcdata(f)
-        )));
+        assert!(body.contains(&format!("<D:displayname>{}</D:displayname>", escape(f))));
     }
     Ok(())
 }

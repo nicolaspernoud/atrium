@@ -1,0 +1,15 @@
+hostname: atrium.127.0.0.1.nip.io
+http_port: 8180
+tls_mode: No
+letsencrypt_email: foo@bar.com
+cookie_key: hIY3Zwld8wpKvjVbe6GB0jWSSiA3YhHE5YmfqVn2NEACFlCRvy7DeItESqUXI3lD
+session_duration_days: 1
+apps:
+- id: 1
+  name: App 1
+  icon: web_asset
+  color: 4292030255
+  is_proxy: true
+  host: app1
+  target: localhost:8090
+  inject_security_headers: true
