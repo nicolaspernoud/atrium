@@ -1,11 +1,10 @@
+use crate::configuration::HostType;
 use axum::{
     body::{boxed, Body, BoxBody},
     http::{Request, Response, StatusCode, Uri},
 };
 use tower::ServiceExt;
 use tower_http::services::ServeDir;
-
-use crate::configuration::HostType;
 
 pub async fn dir_handler(
     uri: Uri,

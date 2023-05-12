@@ -29,7 +29,7 @@ use super::{
 };
 use crate::davs::{dav_file::DavFile, headers::Overwrite};
 use async_walkdir::WalkDir;
-use async_zip::{write::ZipFileWriter, Compression, ZipEntryBuilder};
+use async_zip::{Compression, ZipEntryBuilder, tokio::write::ZipFileWriter};
 use chrono::{TimeZone, Utc};
 use futures::TryStreamExt;
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
@@ -670,7 +670,7 @@ impl WebdavServer {
         let decoded_path = decode_uri(&wanted_path[1..])?.into_owned();
         let stripped_path = Path::new(&decoded_path).components().collect::<PathBuf>();
         let self_path = Path::new(dav_path);
-        Some(self_path.join(&stripped_path))
+        Some(self_path.join(stripped_path))
     }
 
     async fn list_dir(
@@ -1052,7 +1052,7 @@ async fn zip_dir<W: AsyncWrite + Unpin>(
     dir: &Path,
     key: Option<[u8; 32]>,
 ) -> BoxResult<()> {
-    let mut writer = ZipFileWriter::new(writer);
+    let mut writer = ZipFileWriter::with_tokio(writer);
     let mut walkdir = WalkDir::new(dir);
     while let Some(entry) = walkdir.next().await {
         if let Ok(entry) = entry {
@@ -1068,13 +1068,16 @@ async fn zip_dir<W: AsyncWrite + Unpin>(
                 Some(v) => v,
                 None => continue,
             };
-            let entry_options = ZipEntryBuilder::new(filename.to_owned(), Compression::Deflate);
+
             let file = DavFile::open(&entry_path, key).await?;
-            let mut file_writer = writer.write_entry_stream(entry_options).await?;
 
-            file.copy_to(&mut file_writer).await?;
+            let builder = ZipEntryBuilder::new(filename.into(), Compression::Deflate);
+            let entry_writer = writer.write_entry_stream(builder).await?;
+            let mut entry_writer_compat = tokio_util::compat::FuturesAsyncWriteCompatExt::compat_write(entry_writer);
 
-            file_writer.close().await?;
+            file.copy_to(&mut entry_writer_compat).await?;
+
+            entry_writer_compat.into_inner().close().await?;
         }
     }
     writer.close().await?;

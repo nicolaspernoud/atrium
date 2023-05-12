@@ -1,6 +1,7 @@
 use crate::{
     appstate::{ConfigState, MAXMIND_READER},
     configuration::OpenIdConfig,
+    errors::ErrResponse,
     users::{create_user_cookie, user_to_token, User, ADMINS_ROLE},
 };
 use axum::{
@@ -8,10 +9,12 @@ use axum::{
     response::{IntoResponse, Redirect},
 };
 use axum_extra::extract::{cookie::Cookie, CookieJar, PrivateCookieJar};
-use http::StatusCode;
+use http::{header::AUTHORIZATION, HeaderValue, Request, Uri};
+use hyper::{Body, Client};
+use hyper_rustls::HttpsConnectorBuilder;
 use oauth2::{
-    basic::BasicClient, reqwest::async_http_client, AuthUrl, AuthorizationCode, ClientId,
-    ClientSecret, CsrfToken, RedirectUrl, Scope, TokenResponse, TokenUrl,
+    basic::BasicClient, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, HttpRequest,
+    HttpResponse, RedirectUrl, Scope, TokenResponse, TokenUrl,
 };
 use serde::Deserialize;
 use std::{net::SocketAddr, sync::Arc};
@@ -40,27 +43,17 @@ fn oauth_client_internal(
     .set_redirect_uri(RedirectUrl::new(redirect_url)?))
 }
 
-fn oauth_client(
-    config: OpenIdConfig,
-    redirect_url: String,
-) -> Result<BasicClient, (StatusCode, &'static str)> {
-    oauth_client_internal(config, redirect_url).map_err(|_| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "could not parse OpenID configuration",
-        )
-    })
+fn oauth_client(config: OpenIdConfig, redirect_url: String) -> Result<BasicClient, ErrResponse> {
+    oauth_client_internal(config, redirect_url)
+        .map_err(|_| ErrResponse::S500("could not parse OpenID configuration"))
 }
 
 pub async fn oauth2_login(
     State(config): State<ConfigState>,
     jar: CookieJar,
-) -> Result<impl IntoResponse, impl IntoResponse> {
+) -> Result<impl IntoResponse, ErrResponse> {
     if config.openid_config.is_none() {
-        return Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "OpenID configuration is not available",
-        ));
+        return Err(ErrResponse::S500("OpenID configuration is not available"));
     }
     let client = oauth_client(
         config.openid_config.as_ref().unwrap().clone(),
@@ -95,12 +88,9 @@ pub async fn oauth2_callback(
     private_jar: PrivateCookieJar,
     State(config): State<ConfigState>,
     Host(hostname): Host,
-) -> Result<(PrivateCookieJar, Redirect), (StatusCode, &'static str)> {
+) -> Result<(PrivateCookieJar, Redirect), ErrResponse> {
     if config.openid_config.is_none() {
-        return Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "OpenID configuration is not available",
-        ));
+        return Err(ErrResponse::S500("OpenID configuration is not available"));
     }
     let oidc_config = config.openid_config.as_ref().unwrap();
     let oauth_client = oauth_client(
@@ -110,42 +100,42 @@ pub async fn oauth2_callback(
 
     // Check the state
     if jar.get(STATE_COOKIE).is_none() || jar.get(STATE_COOKIE).unwrap().value() != query.state {
-        return Err((StatusCode::FORBIDDEN, "OAuth2 state does not match"));
+        return Err(ErrResponse::S403("OAuth2 state does not match"));
     }
 
     // Get an auth token
     let token = oauth_client
         .exchange_code(AuthorizationCode::new(query.code.clone()))
-        .request_async(async_http_client)
+        .request_async(hyper_oauth2_client)
         .await
-        .map_err(|_| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "could not get OAuth2 token",
-            )
-        })?;
+        .map_err(|_| ErrResponse::S500("could not get OAuth2 token"))?;
 
     // Fetch user data
-    let client = reqwest::Client::new();
-    let user_data: OAuthUser = client
-        .get(&oidc_config.userinfo_url)
-        .bearer_auth(token.access_token().secret())
-        .send()
+    let client = hyper_client();
+
+    let userinfo_uri = oidc_config
+        .userinfo_url
+        .parse::<Uri>()
+        .map_err(|_| ErrResponse::S500("could not parse oidc user info url"))?;
+    let req = Request::builder()
+        .uri(userinfo_uri)
+        .header(
+            AUTHORIZATION,
+            HeaderValue::from_str(&format!("Bearer {}", token.access_token().secret())).map_err(
+                |_| ErrResponse::S500("could not create bearer header from access token"),
+            )?,
+        )
+        .body(hyper::Body::empty())
+        .map_err(|_| ErrResponse::S500("could not create user info request"))?;
+    let res = client
+        .request(req)
         .await
-        .map_err(|_| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "could not retrieve user from user info endpoint",
-            )
-        })?
-        .json::<OAuthUser>()
+        .map_err(|_| ErrResponse::S500("could not make user info request"))?;
+    let user_data = hyper::body::to_bytes(res.into_body())
         .await
-        .map_err(|_| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "could not retrieve user from user info endpoint",
-            )
-        })?;
+        .map_err(|_| ErrResponse::S500("could not get user info response body"))?;
+    let user_data: OAuthUser = serde_json::from_slice(&user_data)
+        .map_err(|_| ErrResponse::S500("could not retrieve user from user info endpoint"))?;
 
     let mut user = User {
         login: user_data.login,
@@ -185,4 +175,45 @@ pub async fn oauth2_callback(
             user.login
         )),
     ))
+}
+
+fn hyper_client() -> Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>> {
+    let https = HttpsConnectorBuilder::new()
+        .with_webpki_roots()
+        .https_or_http()
+        .enable_http1()
+        .build();
+    let client: Client<_, hyper::Body> = Client::builder().build(https);
+    client
+}
+
+pub async fn hyper_oauth2_client(request: HttpRequest) -> Result<HttpResponse, ErrResponse> {
+    let client = hyper_client();
+
+    let mut req = Request::builder()
+        .uri(request.url.as_str())
+        .method(request.method);
+
+    for (name, value) in &request.headers {
+        req = req.header(name.as_str(), value.as_bytes());
+    }
+
+    let req = req
+        .body(Body::from(request.body))
+        .map_err(|_| ErrResponse::S500("could not create OAuth2 request"))?;
+    let mut res = client
+        .request(req)
+        .await
+        .map_err(|_| ErrResponse::S500("could not make OAuth2 request"))?;
+    let status_code = res.status();
+    let headers = std::mem::take(res.headers_mut());
+    let body = hyper::body::to_bytes(res.into_body())
+        .await
+        .map_err(|_| ErrResponse::S500("could not get body from OAuth2 response"))?;
+
+    Ok(HttpResponse {
+        status_code,
+        headers,
+        body: body.into(),
+    })
 }

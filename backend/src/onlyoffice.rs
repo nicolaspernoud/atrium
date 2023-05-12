@@ -1,11 +1,14 @@
 use crate::appstate::ConfigState;
+use crate::errors::ErrResponse;
 use crate::utils::{is_default, raw_query_pairs};
 use axum::extract::{RawQuery, State};
 use axum::response::IntoResponse;
 use axum::{response::Html, Json};
-use http::{header, StatusCode};
+use http::header::CONTENT_TYPE;
+use http::{header, Method, Request, StatusCode};
+use hyper::{Body, Client};
+use hyper_rustls::HttpsConnectorBuilder;
 use jsonwebtoken::{encode, EncodingKey, Header};
-use reqwest::Body;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tokio::fs::{self};
@@ -71,12 +74,7 @@ pub async fn onlyoffice_page(
     {
         let template = fs::read_to_string("./web/onlyoffice/index.tmpl")
             .await
-            .map_err(|_| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "couldn't read onlyoffice template file",
-                )
-            })?;
+            .map_err(|_| ErrResponse::S500("couldn't read onlyoffice template file"))?;
         let title = config
             .onlyoffice_config
             .as_ref()
@@ -152,11 +150,8 @@ pub async fn onlyoffice_page(
     }
 }
 
-fn ooconf_to_json_error(_: serde_json::Error) -> (StatusCode, &'static str) {
-    (
-        StatusCode::INTERNAL_SERVER_ERROR,
-        "couldn't create OnlyOffice configuration json",
-    )
+fn ooconf_to_json_error(_: serde_json::Error) -> ErrResponse {
+    ErrResponse::S500("couldn't create OnlyOffice configuration json")
 }
 
 #[derive(Default, Debug, Serialize, Deserialize)]
@@ -174,27 +169,46 @@ pub async fn onlyoffice_callback(
 ) -> Result<impl IntoResponse, (StatusCode, &'static str)> {
     // Case of document closed after editing
     if payload.status == 2 && payload.url.is_some() && query.is_some() {
-        // Get the binary content from url
-        let response = reqwest::get(payload.url.unwrap()).await.map_err(|e| {
-            tracing::error!("ERROR: {e}");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "could not get document from OnlyOffice server",
-            )
-        })?;
-        // PUT the content on the ressource gotten from the query
-        let client = reqwest::Client::new();
-        client
-            .put(query.unwrap())
-            .body(Body::wrap_stream(response.bytes_stream()))
-            .send()
+        let https = HttpsConnectorBuilder::new()
+            .with_webpki_roots()
+            .https_or_http()
+            .enable_http1()
+            .build();
+
+        let client: Client<_, hyper::Body> = Client::builder().build(https);
+
+        // GET the binary content from url
+        let request = Request::get(payload.url.unwrap())
+            .body(Body::empty())
+            .map_err(|_| ErrResponse::S500("could not create GET request to OnlyOffice server"))?;
+        let response = client
+            .request(request)
             .await
-            .map_err(|_| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "could not push the document to atrium file server",
-                )
-            })?;
+            .map_err(|_| ErrResponse::S500("could not send GET request to OnlyOffice server"))?;
+        if !response.status().is_success() {
+            return Err((
+                response.status(),
+                "could not get document from OnlyOffice server",
+            ));
+        }
+
+        // PUT the content on the ressource gotten from the query
+        let request = Request::builder()
+            .method(Method::PUT)
+            .uri(query.unwrap())
+            .header(CONTENT_TYPE, "application/octet-stream")
+            .body(Body::wrap_stream(response.into_body()))
+            .map_err(|_| ErrResponse::S500("could not create PUT request to atrium file server"))?;
+        let response = client
+            .request(request)
+            .await
+            .map_err(|_| ErrResponse::S500("could not send PUT request to atrium file server"))?;
+        if !response.status().is_success() {
+            return Err((
+                response.status(),
+                "could not push the document to atrium file server",
+            ));
+        }
     }
     Ok((
         [(header::CONTENT_TYPE, "application/json")],

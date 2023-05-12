@@ -3,6 +3,7 @@ use crate::{
     appstate::{ConfigFile, ConfigState, OptionalMaxMindReader, MAXMIND_READER},
     configuration::{config_or_error, trim_host, Config, HostType},
     davs::model::Dav,
+    errors::ErrResponse,
     headers::XSRFToken,
     logger::city_from_ip,
     utils::{is_default, random_string, raw_query_pairs, string_trim, vec_trim_remove_empties},
@@ -307,13 +308,13 @@ pub(crate) fn create_user_cookie(
     addr: SocketAddr,
     reader: OptionalMaxMindReader,
     user: &User,
-) -> Result<Cookie<'static>, (StatusCode, &'static str)> {
+) -> Result<Cookie<'static>, ErrResponse> {
     let encoded = serde_json::to_string(user_token)
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "could not encode user"))?;
+        .map_err(|_| ErrResponse::S500("could not encode user"))?;
     let domain = hostname
         .split(':')
         .next()
-        .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "could not find domain"))?
+        .ok_or(ErrResponse::S500("could not find domain"))?
         .to_owned();
     let cookie = Cookie::build(AUTH_COOKIE, encoded)
         .domain(domain)

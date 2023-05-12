@@ -1,5 +1,4 @@
-use std::net::SocketAddr;
-
+use crate::appstate::OptionalMaxMindReader;
 use axum::{
     body::{Body, Bytes},
     extract::ConnectInfo,
@@ -8,8 +7,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use maxminddb::geoip2;
-
-use crate::appstate::OptionalMaxMindReader;
+use std::net::SocketAddr;
 
 const UNKNOWN_CITY: &str = "unknown city";
 const UNKNOWN_COUNTRY: &str = "unknown country";
@@ -49,21 +47,31 @@ pub async fn print_request_response(
     next: Next<Body>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let (parts, body) = req.into_parts();
-    tracing::debug!("request headers = {:?}", parts.headers);
-    let bytes = buffer_and_print("request", body).await?;
-    let req = Request::from_parts(parts, Body::from(bytes));
+
+    let body = buffer_body(body).await?;
+    tracing::debug!(
+        "\nREQUEST\n⇨ headers: {:?}\n⇨ body: {}",
+        parts.headers,
+        body.0
+    );
+    let req = Request::from_parts(parts, Body::from(body.1));
 
     let res = next.run(req).await;
 
     let (parts, body) = res.into_parts();
-    tracing::debug!("response headers = {} {:?}", parts.status, parts.headers);
-    let bytes = buffer_and_print("response", body).await?;
-    let res = Response::from_parts(parts, Body::from(bytes));
+    let body = buffer_body(body).await?;
+    tracing::debug!(
+        "\nRESPONSE\n⇨ status: {}\n⇨ headers: {:?}\n⇨ body: {}",
+        parts.status,
+        parts.headers,
+        body.0
+    );
+    let res = Response::from_parts(parts, Body::from(body.1));
 
     Ok(res)
 }
 
-async fn buffer_and_print<B>(direction: &str, body: B) -> Result<Bytes, (StatusCode, String)>
+async fn buffer_body<B>(body: B) -> Result<(String, Bytes), (StatusCode, String)>
 where
     B: axum::body::HttpBody<Data = Bytes>,
     B::Error: std::fmt::Display,
@@ -73,14 +81,12 @@ where
         Err(err) => {
             return Err((
                 StatusCode::BAD_REQUEST,
-                format!("failed to read {} body: {}", direction, err),
+                format!("failed to read body: {}", err),
             ));
         }
     };
 
-    if let Ok(body) = std::str::from_utf8(&bytes) {
-        tracing::debug!("{} body = {:?}", direction, body);
-    }
+    let body_str = std::str::from_utf8(&bytes).unwrap_or("NOT UTF-8 (probably binary)");
 
-    Ok(bytes)
+    Ok((body_str.to_owned(), bytes))
 }

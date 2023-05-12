@@ -1,16 +1,13 @@
+use crate::{errors::ErrResponse, users::UserToken};
+use axum::Json;
+use once_cell::sync::Lazy;
+use serde::{Deserialize, Serialize};
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
 };
-
-use axum::Json;
-use http::StatusCode;
-use once_cell::sync::Lazy;
-use serde::{Deserialize, Serialize};
 use sysinfo::{CpuExt, DiskExt, System, SystemExt};
 use tokio::task;
-
-use crate::users::UserToken;
 
 static SYSTEM_INFO: Lazy<Arc<Mutex<System>>> =
     Lazy::new(|| Arc::new(Mutex::new(System::new_all())));
@@ -77,14 +74,11 @@ fn corresponding_disk_info(
         .ok_or("no disks found")
 }
 
-pub async fn system_info(_user: UserToken) -> Result<Json<SystemInfo>, (StatusCode, &'static str)> {
+pub async fn system_info(_user: UserToken) -> Result<Json<SystemInfo>, ErrResponse> {
     let sysinfo = task::spawn_blocking(|| {
-        let mut sys = SYSTEM_INFO.lock().map_err(|_| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "could not lock system info",
-            )
-        })?;
+        let mut sys = SYSTEM_INFO
+            .lock()
+            .map_err(|_| ErrResponse::S500("could not lock system info"))?;
         sys.refresh_system();
         Ok(SystemInfo {
             total_memory: sys.total_memory(),
@@ -94,12 +88,7 @@ pub async fn system_info(_user: UserToken) -> Result<Json<SystemInfo>, (StatusCo
         })
     })
     .await
-    .map_err(|_| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "could not spawn system info task",
-        )
-    })??;
+    .map_err(|_| ErrResponse::S500("could not spawn system info task"))??;
     Ok(Json(sysinfo))
 }
 

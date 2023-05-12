@@ -1,11 +1,10 @@
+use crate::configuration::{Config, HostType};
 use axum::extract::FromRef;
 use axum_extra::extract::cookie::Key;
 use hyper_trust_dns::{RustlsHttpsConnector, TrustDnsResolver};
 use maxminddb::Reader;
 use once_cell::sync::Lazy;
 use std::{collections::HashMap, sync::Arc};
-
-use crate::configuration::{Config, HostType};
 
 pub type OptionalMaxMindReader = Arc<Option<Reader<Vec<u8>>>>;
 pub type ConfigMap = Arc<HashMap<String, HostType>>;

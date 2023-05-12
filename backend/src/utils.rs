@@ -66,9 +66,9 @@ pub(crate) fn is_default<T: Default + PartialEq>(t: &T) -> bool {
 
 const QUERY_ERROR: (StatusCode, &str) = (StatusCode::INTERNAL_SERVER_ERROR, "query is empty");
 
-pub fn raw_query_pairs<'a>(
-    query: Option<&'a str>,
-) -> Result<std::collections::HashMap<&'a str, &'a str>, (StatusCode, &'static str)> {
+pub fn raw_query_pairs(
+    query: Option<&str>,
+) -> Result<std::collections::HashMap<&str, &str>, (StatusCode, &'static str)> {
     let query = query.ok_or(QUERY_ERROR)?;
     if query.is_empty() {
         return Err(QUERY_ERROR);

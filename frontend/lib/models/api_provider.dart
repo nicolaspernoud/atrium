@@ -170,7 +170,7 @@ class ApiProvider {
 
   Future<void> createUser(UserModel user) async {
     await _dio.post('/api/admin/users', data: user);
-    await _dio.get('/reload');
+    await _reloadConfigurationAndWaitUntilReady();
   }
 
   Future<DiskInfo> getDiskInfo(DavModel dav) async {

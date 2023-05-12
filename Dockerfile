@@ -3,7 +3,7 @@
 ###########################
 
 # Set up an environnement to cross-compile the app for musl to create a statically-linked binary
-FROM --platform=$BUILDPLATFORM rust:1.68 AS backend-builder
+FROM --platform=$BUILDPLATFORM rust:1.69 AS backend-builder
 ARG TARGETPLATFORM
 RUN case "$TARGETPLATFORM" in \
       "linux/amd64") echo x86_64-unknown-linux-musl > /rust_target.txt ;; \
@@ -16,7 +16,6 @@ RUN rustup target add $(cat /rust_target.txt)
 RUN apt update && apt install -y musl-tools musl-dev binutils-arm-linux-gnueabihf gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu libcap2-bin
 RUN ln -s /usr/bin/arm-linux-gnueabihf-gcc /usr/bin/arm-linux-musleabihf-gcc
 RUN ln -s /usr/bin/aarch64-linux-gnu-gcc /usr/bin/aarch64-linux-musl-gcc
-RUN update-ca-certificates
 
 # Create appuser
 ENV USER=appuser
@@ -64,8 +63,6 @@ RUN sed -i "s/serviceWorkerVersion = null/serviceWorkerVersion = '$(shuf -i 1000
 
 FROM scratch
 
-COPY --from=backend-builder /usr/share/zoneinfo /usr/share/zoneinfo
-COPY --from=backend-builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=backend-builder /etc/passwd /etc/passwd
 COPY --from=backend-builder /etc/group /etc/group
 

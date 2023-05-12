@@ -4,7 +4,9 @@ use atrium::{
     mocks::{mock_oauth2_server, mock_proxied_server},
     server::Server,
 };
+use axum::{extract::Host, handler::HandlerWithoutStateExt, response::Redirect, BoxError};
 use axum_server::Handle;
+use http::{StatusCode, Uri};
 #[cfg(not(target_arch = "arm"))]
 use mimalloc::MiMalloc;
 use rustls::ServerConfig;
@@ -114,6 +116,10 @@ async fn run() -> Result<()> {
                 }
             });
 
+            // Spawn a server to redirect HTTP to HTTPS
+            tokio::spawn(redirect_http_to_https(handle.clone()));
+
+            // Main server
             let addr = format!("[::]:{}", 443)
                 .parse::<std::net::SocketAddr>()
                 .unwrap();
@@ -210,4 +216,34 @@ fn setup_logger(debug_mode: bool, log_to_file: bool) -> Vec<WorkerGuard> {
     }
 
     guards
+}
+
+async fn redirect_http_to_https(handle: Handle) -> tokio::io::Result<()> {
+    fn make_https(host: String, uri: Uri) -> Result<Uri, BoxError> {
+        let mut parts = uri.into_parts();
+        parts.scheme = Some(axum::http::uri::Scheme::HTTPS);
+        if parts.path_and_query.is_none() {
+            parts.path_and_query = Some("/".parse().unwrap());
+        }
+        parts.authority = Some(host.parse()?);
+        Ok(Uri::from_parts(parts)?)
+    }
+
+    let redirect = move |Host(host): Host, uri: Uri| async move {
+        match make_https(host, uri) {
+            Ok(uri) => Ok(Redirect::permanent(&uri.to_string())),
+            Err(error) => {
+                tracing::warn!(%error, "failed to convert URI to HTTPS");
+                Err(StatusCode::BAD_REQUEST)
+            }
+        }
+    };
+
+    let addr = format!("[::]:{}", 80)
+        .parse::<std::net::SocketAddr>()
+        .unwrap();
+    axum_server::bind(addr)
+        .handle(handle)
+        .serve(redirect.into_make_service())
+        .await
 }

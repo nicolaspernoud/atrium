@@ -39,3 +39,12 @@ git merge development --squash
 git checkout development
 git reset --hard main
 ```
+
+### Clean useless dependencies and features
+
+```bash
+cargo install cargo-udeps --locked
+cargo +nightly udeps --all-targets
+cargo install cargo-unused-features
+unused-features analyze --bins --lib --tests && unused-features build-report --input "report.json" && unused-features prune --input "report.json"
+```
