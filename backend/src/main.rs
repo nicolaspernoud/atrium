@@ -40,10 +40,8 @@ fn main() -> Result<()> {
 
 #[tokio::main]
 async fn run() -> Result<()> {
-    let config = atrium::configuration::load_config(CONFIG_FILE).await?;
-    let (tx, _) = broadcast::channel(16);
-
-    if config.0.debug_mode {
+    let debug_mode = Config::from_file(CONFIG_FILE).await?.debug_mode;
+    if debug_mode {
         let mock1_listener =
             std::net::TcpListener::bind("[::]:8081").expect("failed to bind to port");
         tokio::spawn(mock_proxied_server(mock1_listener));
@@ -55,7 +53,10 @@ async fn run() -> Result<()> {
         tokio::spawn(mock_oauth2_server(mock_oauth2_listener));
     }
 
+    let config = atrium::configuration::load_config(CONFIG_FILE).await?;
+
     let reload_loop = std::sync::Arc::new(std::sync::Mutex::new(true));
+    let (tx, _) = broadcast::channel(16);
 
     info!("Starting server...");
     loop {

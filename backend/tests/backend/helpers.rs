@@ -73,7 +73,7 @@ impl TestApp {
             config.http_port = main_port;
         }
 
-        create_apps_file(&id, config).await;
+        create_config_file(&id, config).await;
 
         tokio::spawn(mock_proxied_server(mock1_listener));
         tokio::spawn(mock_proxied_server(mock2_listener));
@@ -146,7 +146,7 @@ impl Drop for TestApp {
     }
 }
 
-pub async fn create_apps_file(id: &str, config: Config) {
+pub async fn create_config_file(id: &str, config: Config) {
     let filepath = format!("{}.yaml", &id);
     config.to_file(&filepath).await.unwrap();
 }
@@ -339,12 +339,10 @@ pub fn create_default_config(
             jwt_secret: "CHANGE_ME_IN_PRODUCTION".to_owned(),
         }),
         openid_config: Some(OpenIdConfig {
-            client_id: "dummy".to_owned(),
-            client_secret: "dummy".to_owned(),
-            auth_url: format!("http://localhost:{mock_oauth2_port}/authorize"),
-            token_url: format!("http://localhost:{mock_oauth2_port}/token"),
-            userinfo_url: format!("http://localhost:{mock_oauth2_port}/userinfo"),
-            admins_group: Some("TO_BECOME_ADMINS".to_owned()),
+            openid_configuration_url: Some(format!(
+                "http://localhost:{mock_oauth2_port}/.well-known/openid-configuration"
+            )),
+            ..Default::default()
         }),
     }
 }

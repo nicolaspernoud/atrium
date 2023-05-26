@@ -24,7 +24,7 @@ use crate::{
     },
     dir_server::dir_handler,
     middlewares::{cors_middleware, debug_cors_middleware, inject_security_headers},
-    oauth2::{oauth2_callback, oauth2_login},
+    oauth2::{oauth2_callback, oauth2_login, oauth2_available},
     onlyoffice::{onlyoffice_callback, onlyoffice_page},
     sysinfo::system_info,
     users::{
@@ -85,6 +85,7 @@ impl Server {
             .route("/auth/local", post(local_auth))
             .route("/auth/oauth2login", get(oauth2_login))
             .route("/auth/oauth2callback", get(oauth2_callback))
+            .route("/auth/oauth2available", get(oauth2_available))
             // We use merge instead of nest as it is still a little bit faster
             .merge(admin_router)
             .merge(user_router)

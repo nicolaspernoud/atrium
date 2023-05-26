@@ -3,31 +3,93 @@ use crate::{
     configuration::OpenIdConfig,
     errors::ErrResponse,
     users::{create_user_cookie, user_to_token, User, ADMINS_ROLE},
+    utils::select_entries_by_value,
 };
+use anyhow::Result;
 use axum::{
     extract::{ConnectInfo, Host, Query, State},
     response::{IntoResponse, Redirect},
 };
 use axum_extra::extract::{cookie::Cookie, CookieJar, PrivateCookieJar};
-use http::{header::AUTHORIZATION, HeaderValue, Request, Uri};
+use http::{header::AUTHORIZATION, HeaderValue, Request, StatusCode, Uri};
 use hyper::{Body, Client};
 use hyper_rustls::HttpsConnectorBuilder;
 use oauth2::{
     basic::BasicClient, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, HttpRequest,
     HttpResponse, RedirectUrl, Scope, TokenResponse, TokenUrl,
 };
-use serde::Deserialize;
-use std::{net::SocketAddr, sync::Arc};
+use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
 const STATE_COOKIE: &str = "ATRIUM_OAUTH2_STATE";
+
+#[derive(Default, Debug, Clone, PartialEq, Deserialize)]
+pub struct OpenIdUrls {
+    pub authorization_endpoint: String,
+    pub token_endpoint: String,
+    pub userinfo_endpoint: String,
+}
+
+pub fn is_default_scopes(vec: &Vec<String>) -> bool {
+    *vec == default_scopes()
+}
+
+pub fn default_scopes() -> Vec<String> {
+    vec!["openid".to_string()]
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq)]
+pub struct RolesMap(HashMap<String, String>);
+
+impl Default for RolesMap {
+    fn default() -> Self {
+        RolesMap(HashMap::from([
+            ("ADMINS".to_owned(), "ADMINS".to_owned()),
+            ("USERS".to_owned(), "USERS".to_owned()),
+        ]))
+    }
+}
+
+// Override the openid urls with the ones provided by the well known configuration endpoint, if it fails, the previous values are kept
+pub async fn openid_configuration(cfg: &mut Option<OpenIdConfig>) {
+    if cfg.is_some() {
+        openid_configuration_internal(cfg)
+            .await
+            .unwrap_or_else(|error| {
+                tracing::info!(
+                    "Could not set up Open ID Connect configuration from well-known url: {}",
+                    error
+                )
+            });
+    }
+}
+async fn openid_configuration_internal(cfg: &mut Option<OpenIdConfig>) -> Result<()> {
+    let url = cfg
+        .as_ref()
+        .ok_or(anyhow::Error::msg("no open id configuration"))?
+        .openid_configuration_url
+        .as_ref()
+        .ok_or(anyhow::Error::msg("no open id configuration url"))?;
+
+    let client = hyper_client();
+    let req = Request::builder().uri(url).body(Body::empty())?;
+    let res = client.request(req).await?;
+
+    let data = hyper::body::to_bytes(res.into_body()).await?;
+    let urls: OpenIdUrls = serde_json::from_slice(&data)?;
+
+    // Unwrap is ok since we tested before that the option was Some...
+    cfg.as_mut().unwrap().auth_url = urls.authorization_endpoint;
+    cfg.as_mut().unwrap().token_url = urls.token_endpoint;
+    cfg.as_mut().unwrap().userinfo_url = urls.userinfo_endpoint;
+    Ok(())
+}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OAuthUser {
-    pub display_name: String,
-    pub member_of: Vec<String>,
-    pub id: String,
     pub login: String,
+    pub member_of: Vec<String>,
 }
 
 fn oauth_client_internal(
@@ -60,18 +122,30 @@ pub async fn oauth2_login(
         format!("{}/auth/oauth2callback", config.full_domain()),
     )?;
 
-    let (auth_url, csrf_token) = client
-        .authorize_url(CsrfToken::new_random)
-        .add_scope(Scope::new("login".to_string()))
-        .add_scope(Scope::new("memberOf".to_string()))
-        .add_scope(Scope::new("displayName".to_string()))
-        .add_scope(Scope::new("email".to_string()))
-        .url();
+    let mut client = client.authorize_url(CsrfToken::new_random);
+
+    for s in &config.as_ref().openid_config.as_ref().unwrap().scopes {
+        client = client.add_scope(Scope::new(s.to_string()));
+    }
+
+    let (auth_url, csrf_token) = client.url();
 
     Ok((
         jar.add(Cookie::new(STATE_COOKIE, csrf_token.secret().clone())),
         Redirect::to(auth_url.as_ref()),
     ))
+}
+
+pub async fn oauth2_available(
+    State(config): State<ConfigState>,
+) -> Result<impl IntoResponse, impl IntoResponse> {
+    if config.openid_config.is_none() {
+        return Err((
+            StatusCode::NOT_FOUND,
+            "OpenID configuration is not available",
+        ));
+    }
+    Ok((StatusCode::OK, "OpenID configuration found"))
 }
 
 #[derive(Debug, Deserialize)]
@@ -137,25 +211,21 @@ pub async fn oauth2_callback(
     let user_data: OAuthUser = serde_json::from_slice(&user_data)
         .map_err(|_| ErrResponse::S500("could not retrieve user from user info endpoint"))?;
 
-    let mut user = User {
+    // Map roles
+    let user_roles = user_data
+        .member_of
+        .iter()
+        .map(|e| e.trim_start_matches("CN="))
+        .collect();
+    let mapped_roles = select_entries_by_value(&oidc_config.roles_map.0, user_roles);
+
+    let user = User {
         login: user_data.login,
         password: "".to_owned(),
-        roles: user_data
-            .member_of
-            .iter()
-            .map(|e| e.trim_start_matches("CN=").to_owned())
-            .collect(),
+        roles: mapped_roles,
         ..Default::default()
     };
-    // Map admins_group to ADMINS_ROLE if not already present
-    if oidc_config.admins_group.is_some()
-        && user
-            .roles
-            .contains(oidc_config.admins_group.as_ref().unwrap())
-        && !user.roles.contains(&ADMINS_ROLE.to_owned())
-    {
-        user.roles.push(ADMINS_ROLE.to_owned());
-    }
+
     let user_token = user_to_token(&user, &config);
     let cookie = create_user_cookie(
         &user_token,

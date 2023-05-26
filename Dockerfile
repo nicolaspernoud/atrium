@@ -44,6 +44,8 @@ RUN setcap cap_net_bind_service=+ep ./atrium
 
 RUN mkdir -p /myapp/app
 COPY ./backend/atrium.yaml /myapp/app
+COPY ./backend/web/onlyoffice/ /myapp/app/web/onlyoffice/
+COPY ./backend/web/oauth2/ /myapp/app/web/oauth2/
 RUN chown -Rf "${UID}":"${UID}" /myapp
 
 ############################
@@ -70,7 +72,6 @@ COPY --from=backend-builder /myapp /
 WORKDIR /app
 COPY --from=backend-builder /build/atrium ./
 COPY --from=frontend-builder /build/build/web/ /app/web/
-COPY ./backend/web/onlyoffice/ /app/web/onlyoffice/
 
 USER appuser:appuser
 ENTRYPOINT ["./atrium"]

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -21,6 +22,21 @@ class TextEditor extends StatefulWidget {
 
 class _TextEditorState extends State<TextEditor> {
   late TextEditingController _editingController;
+
+  bool _showTick = false;
+  bool _saveError = false;
+
+  void _showTickForDuration() {
+    setState(() {
+      _showTick = true;
+    });
+
+    Timer(const Duration(seconds: 3), () {
+      setState(() {
+        _showTick = false;
+      });
+    });
+  }
 
   @override
   void initState() {
@@ -67,14 +83,34 @@ class _TextEditorState extends State<TextEditor> {
       bottomNavigationBar: widget.readWrite
           ? BottomAppBar(
               child: Row(children: [
-              IconButton(
-                  icon: const Icon(Icons.save),
-                  onPressed: () {
-                    widget.client.write(
-                        widget.file.path!,
-                        Uint8List.fromList(
-                            utf8.encode(_editingController.text)));
-                  })
+              Stack(
+                alignment: AlignmentDirectional.bottomEnd,
+                children: [
+                  AnimatedOpacity(
+                    opacity: _showTick ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 500),
+                    child: Icon(
+                      _saveError ? Icons.priority_high : Icons.done,
+                      color: _saveError ? Colors.red : Colors.green,
+                    ),
+                  ),
+                  IconButton(
+                      icon: const Icon(Icons.save),
+                      onPressed: () async {
+                        try {
+                          await widget.client.write(
+                              widget.file.path!,
+                              Uint8List.fromList(
+                                  utf8.encode(_editingController.text)));
+                          _saveError = false;
+                        } on Exception {
+                          _saveError = true;
+                          // Do nothing but do not display the tick
+                        }
+                        _showTickForDuration();
+                      }),
+                ],
+              ),
             ]))
           : null,
     );

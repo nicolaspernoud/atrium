@@ -38,6 +38,7 @@ git merge development --squash
 # Alter commit message and commit
 git checkout development
 git reset --hard main
+git push --force
 ```
 
 ### Clean useless dependencies and features

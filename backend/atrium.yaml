@@ -14,10 +14,14 @@ onlyoffice_config: # optional : OnlyOffice connector integration
 openid_config: # optional : allow login with OpenID Connect
   client_id: dummy # required : client id to authenticate Atrium with the Identity Provider
   client_secret: dummy # required : client secret to authenticate Atrium with the Identity Provider
-  auth_url: http://127.0.0.1:8090/authorize_manual_action # required : Identity Provider's authorization endpoint
-  token_url: http://localhost:8090/token # required : Identity Provider's token endpoint
-  userinfo_url: http://localhost:8090/userinfo # required : Identity Provider's userinfo endpoint
-  admins_group: TO_BECOME_ADMINS # required : group gotten from memberOf attribute that will be mapped to ADMINS role
+  auth_url: http://127.0.0.1:8090/authorize_manual_action # required if openid_configuration_url is not set : Identity Provider's authorization endpoint
+  token_url: http://localhost:8090/token # required if openid_configuration_url is not set : Identity Provider's token endpoint
+  userinfo_url: http://localhost:8090/userinfo # required if openid_configuration_url is not set : Identity Provider's userinfo endpoint
+  openid_configuration_url: http://localhost:8090/.well-known/openid-configuration # optional ; if set, the auth, token and userinfo urls will be set with the values fetched from a request to this endpoint
+  roles_map: # required (if not present, it will be set to ADMINS: ADMINS, USERS: USERS) ; the role from memberOf (right side) that will be mapped to the atrium role (left side)
+    ADMINS: ADMINS # atrium's ADMINS role is the only one recognized to alter configuration, it should probably be mapped somehow
+    USERS: USERS # other roles can have arbitrary names, that are matched between users and services to control access
+  scopes: [login, memberOf, openid] # optional : the scopes claimed from the identity provider, will default to only "openid". The identity token from the userinfo endpoint MUST contains a "memberOf" array attribute containing the groups the user is member of, and a "login" attribute representing the login of the user.
 apps: # optional : applications served by atrium
   - id: 1 # required : app id
     name: App 1 # required : app name

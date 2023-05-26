@@ -1,6 +1,6 @@
 use crate::middlewares::debug_cors_middleware;
 use axum::{
-    extract::Query,
+    extract::{Host, Query},
     middleware,
     response::{Html, IntoResponse, Redirect},
     routing::{get, post},
@@ -54,10 +54,11 @@ pub async fn mock_oauth2_server(listener: TcpListener) {
         .unwrap();
 }
 
-async fn well_known_openid() -> impl IntoResponse {
+async fn well_known_openid(Host(host): Host) -> impl IntoResponse {
     (
         [(header::CONTENT_TYPE, "application/json")],
-        r#"{
+        format!(
+            r#"{{
 			"response_types_supported": [
 			  "code",
 			  "id_token",
@@ -76,12 +77,13 @@ async fn well_known_openid() -> impl IntoResponse {
 			"id_token_signing_alg_values_supported": [
 			  "RS512"
 			],
-			"registration_endpoint": "http://localhost:8090/register",
-			"issuer": "http://localhost:8090",
-			"authorization_endpoint": "http://localhost:8090/authorize",
-			"token_endpoint": "http://localhost:8090/token",
-			"userinfo_endpoint": "http://localhost:8090/userinfo"
-		  }"#,
+			"registration_endpoint": "http://{host}/register",
+			"issuer": "http://{host}",
+			"authorization_endpoint": "http://{host}/authorize",
+			"token_endpoint": "http://{host}/token",
+			"userinfo_endpoint": "http://{host}/userinfo"
+		  }}"#
+        ),
     )
 }
 
@@ -147,7 +149,7 @@ async fn admininfo() -> impl IntoResponse {
         r#"{
 			"displayName": "Ad MIN",
 			"memberOf": [
-				"CN=TO_BECOME_ADMINS",
+				"CN=ADMINS",
 				"CN=OTHER_GROUP"
 			],
 			"id": "1",

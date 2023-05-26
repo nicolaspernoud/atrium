@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use http::StatusCode;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 
@@ -84,11 +86,28 @@ pub fn raw_query_pairs(
     Ok(ooq)
 }
 
+pub fn select_entries_by_value(
+    hashmap: &HashMap<String, String>,
+    values_to_select: Vec<&str>,
+) -> Vec<String> {
+    let selected_entries: Vec<(&String, &String)> = hashmap
+        .iter()
+        .filter(|(_, value)| values_to_select.contains(&value.as_str()))
+        .collect();
+
+    selected_entries
+        .iter()
+        .map(|(key, _)| (**key).clone())
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use crate::utils::{
-        option_string_trim, option_vec_trim_remove_empties, raw_query_pairs, string_trim,
-        vec_trim_remove_empties,
+        option_string_trim, option_vec_trim_remove_empties, raw_query_pairs,
+        select_entries_by_value, string_trim, vec_trim_remove_empties,
     };
     use serde::Deserialize;
 
@@ -187,5 +206,43 @@ mod tests {
         let qp = raw_query_pairs(query).unwrap();
         assert_eq!(qp.get("a").unwrap(), &"1");
         assert!(qp.get("c").is_none());
+    }
+
+    #[test]
+    fn test_select_entries_by_value() {
+        // Test with non-empty hashmap and non-empty values_to_select
+        let hashmap = HashMap::from([
+            ("key1".to_owned(), "value1".to_owned()),
+            ("key2".to_owned(), "value2".to_owned()),
+            ("key3".to_owned(), "value3".to_owned()),
+            ("key4".to_owned(), "value4".to_owned()),
+        ]);
+
+        // Nominal case
+        let values_to_select = vec!["value2", "value4"];
+        let mut selected_keys = select_entries_by_value(&hashmap, values_to_select);
+        selected_keys.sort_by(|a, b| a.cmp(b));
+        assert_eq!(selected_keys, vec!["key2", "key4"]);
+
+        // Test with values unexisting in hashmap
+        let values_to_select = vec!["value5", "value6"];
+        let selected_keys = select_entries_by_value(&hashmap, values_to_select);
+        assert_eq!(selected_keys, Vec::<String>::new());
+
+        // Test with empty hashmap
+        let empty_hashmap: HashMap<String, String> = HashMap::new();
+        let values_to_select = vec!["value1", "value2"];
+        let selected_keys = select_entries_by_value(&empty_hashmap, values_to_select);
+        assert_eq!(selected_keys, Vec::<String>::new());
+
+        // Test with empty values_to_select
+        let values_to_select = Vec::<&str>::new();
+        let selected_keys = select_entries_by_value(&hashmap, values_to_select);
+        assert_eq!(selected_keys, Vec::<String>::new());
+
+        // Test with both empty hashmap and empty values_to_select
+        let values_to_select = Vec::<&str>::new();
+        let selected_keys = select_entries_by_value(&empty_hashmap, values_to_select);
+        assert_eq!(selected_keys, Vec::<String>::new());
     }
 }

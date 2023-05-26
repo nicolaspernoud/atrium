@@ -67,13 +67,9 @@ class ApiProvider {
   Future<bool> hasOIDC() async {
     _dio.options.baseUrl = App().prefs.hostname;
     try {
-      await _dio.get('/auth/oauth2login');
-    } on DioError catch (e) {
-      if (e.response == null ||
-          e.response!.statusCode == null ||
-          e.response!.statusCode! >= 404) {
-        return false;
-      }
+      await _dio.get('/auth/oauth2available');
+    } on DioError catch (_) {
+      return false;
     }
     return true;
   }

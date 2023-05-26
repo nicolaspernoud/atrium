@@ -2,6 +2,7 @@ use crate::{
     apps::{App, AppWithUri},
     appstate::{ConfigMap, ConfigState},
     davs::model::Dav,
+    oauth2::{openid_configuration, RolesMap},
     users::User,
     utils::{is_default, option_string_trim, string_trim},
 };
@@ -35,11 +36,19 @@ pub struct OnlyOfficeConfig {
 pub struct OpenIdConfig {
     pub client_id: String,
     pub client_secret: String,
+    #[serde(default, skip_serializing_if = "is_default")]
     pub auth_url: String,
+    #[serde(default, skip_serializing_if = "is_default")]
     pub token_url: String,
+    #[serde(default, skip_serializing_if = "is_default")]
     pub userinfo_url: String,
     #[serde(default, skip_serializing_if = "is_default")]
-    pub admins_group: Option<String>,
+    pub openid_configuration_url: Option<String>,
+    #[serde(default)]
+    pub roles_map: RolesMap,
+    #[serde(default = "crate::oauth2::default_scopes")]
+    #[serde(skip_serializing_if = "crate::oauth2::is_default_scopes")]
+    pub scopes: Vec<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Default, PartialEq, Eq, Clone)]
@@ -192,6 +201,8 @@ pub async fn load_config(config_file: &str) -> Result<(ConfigState, ConfigMap), 
     } else {
         Some(config.http_port)
     };
+    // If OpenID configuration url is set, override the auth, token and userinfo urls with the one gotten from the configuration url
+    openid_configuration(&mut config.openid_config).await;
     let mut hashmap: HashMap<String, HostType> =
         filter_services(&config.apps, &config.hostname, &config.domain)
             .map(|app| {
