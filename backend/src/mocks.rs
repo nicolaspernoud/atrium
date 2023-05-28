@@ -149,7 +149,7 @@ async fn admininfo() -> impl IntoResponse {
         r#"{
 			"displayName": "Ad MIN",
 			"memberOf": [
-				"CN=ADMINS",
+				"CN=ADMINS,other_infos_to_discard,",
 				"CN=OTHER_GROUP"
 			],
 			"id": "1",

@@ -174,19 +174,23 @@ class _LoginDialogState extends State<LoginDialog> {
           redirectToAppAfterAuth();
         }
       } catch (e) {
-        if (e is DioError && e.response?.statusCode == 401) {
-          setState(() {
-            errorMessage = tr(context, "login_failed");
-          });
-        } else {
-          setState(() {
-            errorMessage = tr(context, "could_not_reach_server");
-          });
+        if (e is DioError) {
+          if (e.response?.statusCode == 401) {
+            setState(() {
+              errorMessage = tr(context, "login_failed");
+            });
+          } else {
+            setState(() {
+              errorMessage = tr(context, "could_not_reach_server");
+            });
+          }
+          await Future.delayed(const Duration(seconds: 3));
+          if (mounted) {
+            setState(() {
+              errorMessage = "";
+            });
+          }
         }
-        await Future.delayed(const Duration(seconds: 3));
-        setState(() {
-          errorMessage = "";
-        });
       }
     }
   }

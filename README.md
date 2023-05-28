@@ -49,3 +49,9 @@ cargo +nightly udeps --all-targets
 cargo install cargo-unused-features
 unused-features analyze --bins --lib --tests && unused-features build-report --input "report.json" && unused-features prune --input "report.json"
 ```
+
+### Run flutter debug server to allow clipboard access
+
+```
+flutter run -d chrome --web-hostname atrium.127.0.0.1.nip.io --web-port 3000 --web-browser-flag "--unsafely-treat-insecure-origin-as-secure=http://atrium.127.0.0.1.nip.io:3000"
+```

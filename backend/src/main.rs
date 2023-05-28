@@ -41,15 +41,20 @@ fn main() -> Result<()> {
 #[tokio::main]
 async fn run() -> Result<()> {
     let debug_mode = Config::from_file(CONFIG_FILE).await?.debug_mode;
+    let ip_bind = if cfg!(windows) {
+        "0.0.0.0"
+    } else {
+        "[::]" // On linux bind to ipv6 binds to ipv4 as well
+    };
     if debug_mode {
         let mock1_listener =
-            std::net::TcpListener::bind("[::]:8081").expect("failed to bind to port");
+            std::net::TcpListener::bind(format!("{ip_bind}:8081")).expect("failed to bind to port");
         tokio::spawn(mock_proxied_server(mock1_listener));
         let mock2_listener =
-            std::net::TcpListener::bind("[::]:8082").expect("failed to bind to port");
+            std::net::TcpListener::bind(format!("{ip_bind}:8082")).expect("failed to bind to port");
         tokio::spawn(mock_proxied_server(mock2_listener));
         let mock_oauth2_listener =
-            std::net::TcpListener::bind("[::]:8090").expect("failed to bind to port");
+            std::net::TcpListener::bind(format!("{ip_bind}:8090")).expect("failed to bind to port");
         tokio::spawn(mock_oauth2_server(mock_oauth2_listener));
     }
 
@@ -130,13 +135,9 @@ async fn run() -> Result<()> {
                 .serve(app)
                 .await?;
         } else {
-            let addr = if cfg!(windows) {
-                format!("0.0.0.0:{}", server.port)
-            } else {
-                format!("[::]:{}", server.port) // On linux bind to ipv6 binds to ipv4 as well
-            }
-            .parse::<std::net::SocketAddr>()
-            .unwrap();
+            let addr = format!("{ip_bind}:{}", server.port)
+                .parse::<std::net::SocketAddr>()
+                .unwrap();
             axum_server::bind(addr).handle(handle).serve(app).await?;
         }
     }

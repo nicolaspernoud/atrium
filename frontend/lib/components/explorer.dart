@@ -313,7 +313,7 @@ class ExplorerState extends State<Explorer> {
                                 await showDialog(
                                     context: context,
                                     builder: (context) =>
-                                        ShareDialog(widget.url, file));
+                                        ShareDialog(widget.url, file, client));
                               }
                             });
                           },

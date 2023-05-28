@@ -13,7 +13,9 @@
         "--web-hostname",
         "atrium.127.0.0.1.nip.io",
         "--web-renderer",
-        "html"
+        "html",
+        "--web-port",
+        "3000"
       ]
     },
     {

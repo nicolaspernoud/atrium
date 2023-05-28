@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:atrium/components/whoami_popup.dart';
 import 'package:flutter/material.dart';
 import 'globals.dart';
 
@@ -12,11 +13,16 @@ Color colorFromPercent(double? percent) {
 }
 
 List<Widget> logoutAction = <Widget>[
-  IconButton(
-    icon: const Icon(Icons.logout),
-    onPressed: () {
-      App().cookie = "";
-    },
+  Row(
+    children: [
+      WhoAmIPopupWidget(),
+      IconButton(
+        icon: const Icon(Icons.logout),
+        onPressed: () {
+          App().cookie = "";
+        },
+      ),
+    ],
   ),
 ];
 

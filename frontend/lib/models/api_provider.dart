@@ -109,6 +109,11 @@ class ApiProvider {
     return davs;
   }
 
+  Future<UserModel> whoAmI() async {
+    final response = await _dio.get('/api/user/whoami');
+    return UserModel.fromJson(response.data);
+  }
+
   Future<List<AppModel>> getApps() async {
     final response = await _dio.get('/api/admin/apps');
     var appArray = response.data;
