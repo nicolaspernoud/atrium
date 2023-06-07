@@ -7,9 +7,9 @@ import 'package:atrium/components/sized_items_grid.dart';
 import 'package:atrium/components/login_dialog.dart';
 import 'package:atrium/components/webview.dart'
     if (dart.library.html) 'package:atrium/components/iframe_webview.dart';
+import 'package:atrium/components/user_dialog.dart';
 import 'package:atrium/i18n.dart';
 import 'package:atrium/models/api_provider.dart';
-import 'package:atrium/utils.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher_string.dart';
@@ -52,7 +52,7 @@ class _AppsListState extends State<AppsList> {
             Text(tr(context, "apps")),
           ],
         ),
-        actions: logoutAction,
+        actions: const [UserDialogOpener()],
       ),
       body: FutureBuilder(
           future: apps,

@@ -29,7 +29,7 @@ use super::{
 };
 use crate::davs::{dav_file::DavFile, headers::Overwrite};
 use async_walkdir::WalkDir;
-use async_zip::{Compression, ZipEntryBuilder, tokio::write::ZipFileWriter};
+use async_zip::{tokio::write::ZipFileWriter, Compression, ZipEntryBuilder};
 use chrono::{TimeZone, Utc};
 use futures::TryStreamExt;
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
@@ -50,7 +50,6 @@ use std::{
     io::Error,
     net::SocketAddr,
     path::{Path, PathBuf},
-    sync::Arc,
     time::SystemTime,
 };
 use tokio::{fs, io, io::AsyncWrite};
@@ -72,7 +71,7 @@ impl WebdavServer {
     }
 
     pub async fn call(
-        self: Arc<Self>,
+        &self,
         req: Request,
         addr: SocketAddr,
         dav: &Dav,
@@ -99,7 +98,7 @@ impl WebdavServer {
         Ok(res)
     }
 
-    pub async fn handle(self: Arc<Self>, mut req: Request, dav: &Dav) -> BoxResult<Response> {
+    pub async fn handle(&self, mut req: Request, dav: &Dav) -> BoxResult<Response> {
         let mut res = Response::default();
 
         let req_path = &req.uri().path();
@@ -1073,7 +1072,8 @@ async fn zip_dir<W: AsyncWrite + Unpin>(
 
             let builder = ZipEntryBuilder::new(filename.into(), Compression::Deflate);
             let entry_writer = writer.write_entry_stream(builder).await?;
-            let mut entry_writer_compat = tokio_util::compat::FuturesAsyncWriteCompatExt::compat_write(entry_writer);
+            let mut entry_writer_compat =
+                tokio_util::compat::FuturesAsyncWriteCompatExt::compat_write(entry_writer);
 
             file.copy_to(&mut entry_writer_compat).await?;
 

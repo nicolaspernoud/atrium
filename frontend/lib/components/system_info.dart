@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:atrium/components/login_dialog.dart';
+import 'package:atrium/components/user_dialog.dart';
 import 'package:atrium/i18n.dart';
 import 'package:atrium/models/api_provider.dart';
 import 'package:atrium/models/sysinfo.dart';
@@ -48,7 +49,7 @@ class _SystemInfoState extends State<SystemInfo> {
             Text(tr(context, "system_information")),
           ],
         ),
-        actions: logoutAction,
+        actions: const [UserDialogOpener()],
       ),
       body: Padding(
         padding: const EdgeInsets.all(8.0),

@@ -24,7 +24,7 @@ use crate::{
     },
     dir_server::dir_handler,
     middlewares::{cors_middleware, debug_cors_middleware, inject_security_headers},
-    oauth2::{oauth2_callback, oauth2_login, oauth2_available},
+    oauth2::{oauth2_available, oauth2_callback, oauth2_login},
     onlyoffice::{onlyoffice_callback, onlyoffice_page},
     sysinfo::system_info,
     users::{
@@ -91,6 +91,7 @@ impl Server {
             .merge(user_router)
             .route("/onlyoffice/save", post(onlyoffice_callback))
             .route("/onlyoffice", get(onlyoffice_page))
+            .route("/healthcheck", get(|| async { "OK" }))
             .fallback_service(get_service(ServeDir::new("web")).handle_error(error_500))
             .with_state(state.clone());
 

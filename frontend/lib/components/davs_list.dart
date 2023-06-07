@@ -5,6 +5,7 @@ import 'package:atrium/components/delete_dialog.dart';
 import 'package:atrium/components/explorer.dart';
 import 'package:atrium/components/login_dialog.dart';
 import 'package:atrium/components/sized_items_grid.dart';
+import 'package:atrium/components/user_dialog.dart';
 import 'package:atrium/globals.dart';
 import 'package:atrium/i18n.dart';
 import 'package:atrium/models/api_provider.dart';
@@ -50,7 +51,7 @@ class _DavsListState extends State<DavsList> {
             Text(tr(context, "files")),
           ],
         ),
-        actions: logoutAction,
+        actions: const [UserDialogOpener()],
       ),
       body: FutureBuilder(
           future: davs,

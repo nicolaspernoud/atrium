@@ -3,19 +3,18 @@ use axum::extract::FromRef;
 use axum_extra::extract::cookie::Key;
 use hyper_trust_dns::{RustlsHttpsConnector, TrustDnsResolver};
 use maxminddb::Reader;
-use once_cell::sync::Lazy;
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{Arc, OnceLock},
+};
 
-pub type OptionalMaxMindReader = Arc<Option<Reader<Vec<u8>>>>;
+pub type OptionalMaxMindReader = Option<&'static Reader<Vec<u8>>>;
 pub type ConfigMap = Arc<HashMap<String, HostType>>;
 pub type ConfigFile = Arc<String>;
 pub type ConfigState = Arc<Config>;
 pub type Client = hyper::client::Client<RustlsHttpsConnector>;
 
-pub static MAXMIND_READER: Lazy<OptionalMaxMindReader> = Lazy::new(|| {
-    let maxmind_reader = maxminddb::Reader::open_readfile("GeoLite2-City.mmdb").ok();
-    Arc::new(maxmind_reader)
-});
+pub static MAXMIND_READER: OnceLock<Reader<Vec<u8>>> = OnceLock::new();
 
 #[derive(Clone)]
 pub struct AppState {
@@ -33,6 +32,9 @@ impl AppState {
         config_map: ConfigMap,
         config_file: String,
     ) -> Self {
+        if let Ok(r) = maxminddb::Reader::open_readfile("GeoLite2-City.mmdb") {
+            MAXMIND_READER.get_or_init(|| r);
+        }
         AppState {
             key,
             config,

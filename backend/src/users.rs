@@ -22,7 +22,7 @@ use http::{header::CONTENT_LENGTH, request::Parts, HeaderValue, Request, StatusC
 use hyper::Body;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
-use std::{net::SocketAddr, sync::Arc};
+use std::net::SocketAddr;
 use time::{Duration, OffsetDateTime};
 use tracing::info;
 
@@ -177,7 +177,7 @@ where
                             login: basic.username().to_string(),
                             password: basic.password().to_string(),
                         },
-                        Arc::clone(&MAXMIND_READER),
+                        MAXMIND_READER.get(),
                         addr.0,
                     ) {
                         Ok(user) => Ok(user.1),
@@ -281,14 +281,13 @@ pub async fn local_auth(
     Json(payload): Json<LocalAuth>,
 ) -> Result<(PrivateCookieJar, Json<AuthResponse>), (StatusCode, &'static str)> {
     // Find the user in configuration
-    let (user, user_token) =
-        authenticate_local_user(&config, payload, Arc::clone(&MAXMIND_READER), addr)?;
+    let (user, user_token) = authenticate_local_user(&config, payload, MAXMIND_READER.get(), addr)?;
     let cookie = create_user_cookie(
         &user_token,
         hostname,
         &config,
         addr,
-        Arc::clone(&MAXMIND_READER),
+        MAXMIND_READER.get(),
         user,
     )?;
 
@@ -347,7 +346,7 @@ pub fn authenticate_local_user(
             info!(
                 "AUTHENTICATION ERROR for {} from {} : user does not exist",
                 payload.login,
-                city_from_ip(addr, Arc::clone(&reader))
+                city_from_ip(addr, reader)
             );
             (e, "user does not exist")
         })?;

@@ -20,11 +20,7 @@ pub fn city_from_ip(addr: SocketAddr, reader: OptionalMaxMindReader) -> String {
     } else if reader.is_none() {
         "unknown location (no geo ip database)".to_owned()
     } else {
-        match (*reader)
-            .as_ref()
-            .unwrap()
-            .lookup::<geoip2::City>(addr.ip())
-        {
+        match reader.unwrap().lookup::<geoip2::City>(addr.ip()) {
             Ok(city) => format!(
                 "{}, {}",
                 city.city.map_or(UNKNOWN_CITY, |c| c

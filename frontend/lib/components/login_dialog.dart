@@ -135,7 +135,10 @@ class _LoginDialogState extends State<LoginDialog> {
                 if (snapshot.hasData && snapshot.data == true) {
                   child = TextButton.icon(
                     icon: const Icon(Icons.login), // Your icon here
-                    label: const Text("OpenID Connect"), // Your text here
+                    label: const Padding(
+                      padding: EdgeInsets.all(12.0),
+                      child: Text("OpenID Connect"),
+                    ), // Your text here
                     onPressed: () {
                       openIdConnectLogin(context);
                       // If there is an ATRIUM_REDIRECT cookie set, redirect to the target
@@ -155,7 +158,10 @@ class _LoginDialogState extends State<LoginDialog> {
             ),
             TextButton.icon(
                 icon: const Icon(Icons.check_rounded), // Your icon here
-                label: const Text("OK"), // Your text here
+                label: const Padding(
+                  padding: EdgeInsets.all(12.0),
+                  child: Text("OK"),
+                ), // Your text here
                 onPressed: submitForm)
           ],
         ),

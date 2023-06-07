@@ -19,7 +19,7 @@ use oauth2::{
     HttpResponse, RedirectUrl, Scope, TokenResponse, TokenUrl,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use std::{collections::HashMap, net::SocketAddr};
 
 const STATE_COOKIE: &str = "ATRIUM_OAUTH2_STATE";
 
@@ -232,7 +232,7 @@ pub async fn oauth2_callback(
         hostname,
         &config,
         addr,
-        Arc::clone(&MAXMIND_READER),
+        MAXMIND_READER.get(),
         &user,
     )?;
 

@@ -434,3 +434,18 @@ async fn onlyoffice_page_test() {
     assert!(txt.contains("http://atrium.io"));
     assert!(txt.contains("http://onlyoffice.atrium.io"));
 }
+
+#[tokio::test]
+async fn healthcheck_test() {
+    // Arrange
+    let app = TestApp::spawn(None).await;
+    // Act
+    let response = app
+        .client
+        .get(format!("http://atrium.io:{}/healthcheck", app.port))
+        .send()
+        .await
+        .expect("failed to execute request");
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.text().await.unwrap(), "OK");
+}

@@ -1,9 +1,9 @@
 import 'package:atrium/components/create_edit_user.dart';
 import 'package:atrium/components/delete_dialog.dart';
 import 'package:atrium/components/login_dialog.dart';
+import 'package:atrium/components/user_dialog.dart';
 import 'package:atrium/i18n.dart';
 import 'package:atrium/models/api_provider.dart';
-import 'package:atrium/utils.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
@@ -43,7 +43,7 @@ class _UsersListState extends State<UsersList> {
             Text(tr(context, "users")),
           ],
         ),
-        actions: logoutAction,
+        actions: const [UserDialogOpener()],
       ),
       body: FutureBuilder(
           future: users,
