@@ -115,7 +115,6 @@ upload(String destPath, PlatformFile file, webdav.Client client,
 }
 
 openIdConnectLogin(BuildContext context) async {
-  Navigator.pop(context, 'OK');
   await Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (context) {
@@ -123,6 +122,9 @@ openIdConnectLogin(BuildContext context) async {
       },
     ),
   );
+  // ignore: use_build_context_synchronously
+  if (!context.mounted) return;
+  if (App().hasToken) Navigator.pop(context, 'OK');
 }
 
 void redirectToAppAfterAuth() {}

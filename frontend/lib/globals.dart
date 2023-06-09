@@ -9,7 +9,7 @@ import 'package:webdav_client/webdav_client.dart';
 import 'components/uploads.dart';
 
 class App extends ChangeNotifier {
-  late Preferences prefs;
+  Preferences prefs = Preferences();
   App._privateConstructor();
   final Uploads _uploads = Uploads();
 
@@ -91,7 +91,6 @@ class App extends ChangeNotifier {
   }
 
   Future init() async {
-    prefs = Preferences();
     if (kIsWeb || !Platform.environment.containsKey('FLUTTER_TEST')) {
       await prefs.read();
     }

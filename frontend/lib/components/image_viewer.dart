@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:atrium/components/explorer.dart';
 import 'package:flutter/material.dart';
@@ -59,6 +60,7 @@ class _ImageViewerState extends State<ImageViewer> {
               .then((value) => Uint8List.fromList(value))
           : null;
     } else if (i < index) {
+      index = max(i, 0);
       // Backward
       nextImage = currentImage;
       currentImage = previousImage;
@@ -69,6 +71,7 @@ class _ImageViewerState extends State<ImageViewer> {
           : null;
     } else {
       // Forward
+      index = min(i, files.length - 1);
       previousImage = currentImage;
       currentImage = nextImage;
       nextImage = i <= files.length - 2
@@ -119,9 +122,7 @@ class _ImageViewerState extends State<ImageViewer> {
           );
         },
         onPageChanged: (value) {
-          setState(() {
-            index = value;
-          });
+          setState(() {});
         });
     return Scaffold(
         appBar: AppBar(
@@ -131,21 +132,25 @@ class _ImageViewerState extends State<ImageViewer> {
           alignment: MainAxisAlignment.center,
           children: [
             IconButton(
-              onPressed: () {
-                pageController.previousPage(
-                  duration: const Duration(milliseconds: 350),
-                  curve: Curves.easeInOut,
-                );
-              },
+              onPressed: index == 0
+                  ? null
+                  : () {
+                      pageController.previousPage(
+                        duration: const Duration(milliseconds: 350),
+                        curve: Curves.easeInOut,
+                      );
+                    },
               icon: const Icon(Icons.arrow_left),
             ),
             IconButton(
-              onPressed: () {
-                pageController.nextPage(
-                  duration: const Duration(milliseconds: 350),
-                  curve: Curves.easeInOut,
-                );
-              },
+              onPressed: index == files.length - 1
+                  ? null
+                  : () {
+                      pageController.nextPage(
+                        duration: const Duration(milliseconds: 350),
+                        curve: Curves.easeInOut,
+                      );
+                    },
               icon: const Icon(Icons.arrow_right),
             ),
           ],

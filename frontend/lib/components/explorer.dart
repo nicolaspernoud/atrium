@@ -256,6 +256,8 @@ class ExplorerState extends State<Explorer> {
       }
     }
 
+    CancelToken cancelToken = CancelToken();
+
     return ScrollablePositionedList.builder(
       itemCount: list.length,
       itemBuilder: (context, index) {
@@ -276,7 +278,7 @@ class ExplorerState extends State<Explorer> {
           var type = fileType(file);
 
           return ListTile(
-            leading: widgetFromFileType(file, type),
+            leading: widgetFromFileType(file, type, cancelToken),
             tileColor: file.path! == foundFile ? Colors.grey[400] : null,
             title: Text(file.name ?? ''),
             subtitle: Text(formatTime(file.mTime) +
@@ -446,6 +448,7 @@ class ExplorerState extends State<Explorer> {
                             client: client, file: file, readWrite: readWrite)),
                   );
                 } else if (type == FileType.image) {
+                  cancelToken.cancel();
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -512,7 +515,7 @@ class ExplorerState extends State<Explorer> {
     );
   }
 
-  Widget widgetFromFileType(File file, FileType type) {
+  Widget widgetFromFileType(File file, FileType type, CancelToken cancelToken) {
     if (file.isDir != null && file.isDir!) {
       return const Icon(Icons.folder, size: 30);
     }
@@ -525,26 +528,18 @@ class ExplorerState extends State<Explorer> {
           height: 30,
           child: FutureBuilder<Uint8List>(
               future: client
-                  .read(file.path!)
+                  .read(file.path!, cancelToken: cancelToken)
                   .then((value) => Uint8List.fromList(value)),
               builder:
                   (BuildContext context, AsyncSnapshot<Uint8List> snapshot) {
-                Widget child;
                 if (snapshot.hasData) {
-                  child = Image(
-                      image:
-                          ResizeImage(MemoryImage(snapshot.data!), width: 30));
-                } else if (snapshot.hasError) {
-                  child = Padding(
-                    padding: const EdgeInsets.only(top: 16),
-                    child: Text('Error: ${snapshot.error}'),
-                  );
+                  return Center(
+                      child: Image(
+                          image: ResizeImage(MemoryImage(snapshot.data!),
+                              width: 30)));
                 } else {
-                  child = const CircularProgressIndicator();
+                  return const Icon(Icons.image, size: 30);
                 }
-                return Center(
-                  child: child,
-                );
               }),
         );
       case FileType.media:

@@ -41,7 +41,7 @@ git reset --hard main
 git push --force
 ```
 
-### Clean useless dependencies and features
+### Clean useless dependencies and features
 
 ```bash
 cargo install cargo-udeps --locked
