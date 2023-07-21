@@ -226,19 +226,7 @@ class ExplorerState extends State<Explorer> {
     } // Remove the ".." placeholder it it has been inserted before rebuild
 
     if (sortBy == SortBy.names) {
-      // Sort : folders first and then alphabetically
-      list.sort((a, b) {
-        if (a.isDir! && !(b.isDir!)) {
-          return -1;
-        }
-        if (!(a.isDir!) && (b.isDir!)) {
-          return 1;
-        }
-        if (a.name != null && b.name != null) {
-          return a.name!.compareTo(b.name!);
-        }
-        return 0;
-      });
+      list.sort(foldersFirstThenAlphabetically);
     } else {
       list.sort((a, b) => b.mTime!.compareTo(a.mTime!));
     }
@@ -735,4 +723,18 @@ FileType fileType(File? file) {
     return FileType.media;
   }
   return FileType.other;
+}
+
+// Sort : folders first and then alphabetically
+int foldersFirstThenAlphabetically(a, b) {
+  if (a.isDir! && !(b.isDir!)) {
+    return -1;
+  }
+  if (!(a.isDir!) && (b.isDir!)) {
+    return 1;
+  }
+  if (a.name != null && b.name != null) {
+    return a.name!.compareTo(b.name!);
+  }
+  return 0;
 }

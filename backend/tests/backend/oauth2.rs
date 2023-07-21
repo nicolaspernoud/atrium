@@ -1,6 +1,7 @@
 use atrium::{
     configuration::{Config, OpenIdConfig},
     mocks::mock_oauth2_server,
+    users::User,
 };
 use hyper::StatusCode;
 
@@ -28,6 +29,22 @@ async fn log_with_oidc_as_user() {
     assert!(response.status().is_success());
     assert!(response.url().as_str().contains("is_admin=false"));
     assert!(response.text().await.unwrap().contains("Auth OK"));
+
+    // Act and Assert : Test that the whoami route sends back who we are
+    let response = client
+        .get(format!("http://atrium.io:{}/api/user/whoami", app.port))
+        .header("Content-Type", "application/json")
+        .send()
+        .await
+        .expect("failed to execute request");
+    assert_eq!(response.status(), StatusCode::OK);
+    let user = response.json::<User>().await.unwrap();
+    assert_eq!(user.login, "USER");
+    assert_eq!(user.password, "REDACTED");
+    let info = user.info.unwrap();
+    assert_eq!(info.given_name, "Us");
+    assert_eq!(info.family_name, "ER");
+    assert_eq!(info.email, "user@atrium.io");
 }
 
 #[tokio::test]

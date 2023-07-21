@@ -45,6 +45,7 @@ impl Server {
 
         let debug_mode = config.0.debug_mode;
         let http_port = config.0.http_port;
+        let single_proxy = config.0.single_proxy;
 
         let state = AppState::new(
             axum_extra::extract::cookie::Key::from(
@@ -72,7 +73,7 @@ impl Server {
             .route("/api/admin/davs", get(get_davs).post(add_dav))
             .route("/api/admin/davs/:dav_id", delete(delete_dav));
 
-        let main_router: Router<()> = Router::new()
+        let main_router = Router::new()
             .route(
                 "/reload",
                 get(|| async move {
@@ -91,36 +92,45 @@ impl Server {
             .merge(user_router)
             .route("/onlyoffice/save", post(onlyoffice_callback))
             .route("/onlyoffice", get(onlyoffice_page))
-            .route("/healthcheck", get(|| async { "OK" }))
-            .fallback_service(get_service(ServeDir::new("web")).handle_error(error_500))
-            .with_state(state.clone());
+            .route("/healthcheck", get(|| async { "OK" }));
 
-        let proxy_router = proxy_handler.with_state(state.clone());
+        let router = if single_proxy {
+            let main_router = main_router
+                .fallback(proxy_handler)
+                .with_state(state.clone());
+            any(|_: Option<HostType>, request: Request<Body>| async move {
+                main_router.oneshot(request).await
+            })
+        } else {
+            let main_router = main_router
+                .fallback_service(get_service(ServeDir::new("web")).handle_error(error_500))
+                .with_state(state.clone());
+            let proxy_router = proxy_handler.with_state(state.clone());
+            let webdav_router = webdav_handler
+                .layer(middleware::from_fn_with_state(
+                    state.clone(),
+                    cors_middleware,
+                ))
+                .with_state(state.clone());
+            let dir_router = dir_handler.with_state(state.clone());
+            any(
+                |hostype: Option<HostType>, request: Request<Body>| async move {
+                    match hostype {
+                        Some(HostType::StaticApp(_)) => dir_router.oneshot(request).await,
+                        Some(HostType::ReverseApp(_)) => proxy_router.oneshot(request).await,
+                        Some(HostType::Dav(_)) => webdav_router.oneshot(request).await,
+                        None => main_router.oneshot(request).await,
+                    }
+                },
+            )
+        };
 
-        let webdav_router = webdav_handler
+        let mut router = router
             .layer(middleware::from_fn_with_state(
                 state.clone(),
-                cors_middleware,
+                inject_security_headers,
             ))
-            .with_state(state.clone());
-
-        let dir_router = dir_handler.with_state(state.clone());
-
-        let mut router = any(
-            |hostype: Option<HostType>, request: Request<Body>| async move {
-                match hostype {
-                    Some(HostType::StaticApp(_)) => dir_router.oneshot(request).await,
-                    Some(HostType::ReverseApp(_)) => proxy_router.oneshot(request).await,
-                    Some(HostType::Dav(_)) => webdav_router.oneshot(request).await,
-                    None => main_router.oneshot(request).await,
-                }
-            },
-        )
-        .layer(middleware::from_fn_with_state(
-            state.clone(),
-            inject_security_headers,
-        ))
-        .with_state(state);
+            .with_state(state);
 
         if debug_mode {
             router = router

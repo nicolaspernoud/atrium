@@ -2,6 +2,7 @@
 name = "atrium"
 version = "1.5.0"
 edition = "2021"
+license = "AGPL-3.0-or-later"
 
 [lib]
 path = "src/lib.rs"
@@ -29,13 +30,13 @@ headers = "0.3"
 http = "0.2"
 hyper = { version = "0.14", default-features = false }
 hyper-rustls = { version = "0.24", features = ["webpki-tokio", "http1", "http2"], default-features = false }
-hyper-trust-dns = { version = "0.5", default-features = false, features = ["dns-over-https-rustls", "rustls-http2", "rustls-webpki"] }
+hyper-trust-dns = { version = "0.5", default-features = false, features = ["dns-over-https-rustls", "rustls-http2", "rustls-webpki", "system-config"] }
 jsonwebtoken = { version = "8", default-features = false }
 maxminddb = "0.23"
 mime_guess = { default-features = false, version = "2.0" }
 oauth2 = { default-features = false, version = "4.1" }
 percent-encoding = { default-features = false, version = "2.1" }
-quick-xml = "0.28"
+quick-xml = "0.29"
 rand = { default-features = false, version = "0.8" }
 rustls = { default-features = false, version = "0.21" }
 rustls-acme = { version = "0.7.1", features = ["axum"], default-features = false }

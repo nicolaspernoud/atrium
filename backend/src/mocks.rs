@@ -130,9 +130,13 @@ async fn token() -> impl IntoResponse {
 
 async fn userinfo() -> impl IntoResponse {
     (
+        // Complete user infos
         [(header::CONTENT_TYPE, "application/json")],
         r#"{
 			"displayName": "Us ER",
+            "given_name": "Us",
+            "family_name": "ER",
+            "email": "user@atrium.io",
 			"memberOf": [
 				"CN=USERS",
 				"CN=OTHER_GROUP"
@@ -145,9 +149,9 @@ async fn userinfo() -> impl IntoResponse {
 
 async fn admininfo() -> impl IntoResponse {
     (
+        // No user infos, that should still work
         [(header::CONTENT_TYPE, "application/json")],
         r#"{
-			"displayName": "Ad MIN",
 			"memberOf": [
 				"CN=ADMINS,other_infos_to_discard,",
 				"CN=OTHER_GROUP"

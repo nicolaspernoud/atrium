@@ -180,7 +180,7 @@ class _LoginDialogState extends State<LoginDialog> {
           redirectToAppAfterAuth();
         }
       } catch (e) {
-        if (e is DioError) {
+        if (e is DioException) {
           if (e.response?.statusCode == 401) {
             setState(() {
               errorMessage = tr(context, "login_failed");

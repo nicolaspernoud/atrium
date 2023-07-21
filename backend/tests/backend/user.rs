@@ -335,18 +335,10 @@ async fn whoami_test() {
         .expect("failed to execute request");
     assert_eq!(response.status(), StatusCode::OK);
 
-    // Get XSRF token from response
-    let xsrf_token: String = response
-        .json::<atrium::users::AuthResponse>()
-        .await
-        .unwrap()
-        .xsrf_token;
-
     // Act and Assert : Test that the whoami route sends back who we are
     let response = app
         .client
         .get(format!("http://atrium.io:{}/api/user/whoami", app.port))
-        .header("xsrf-token", &xsrf_token)
         .header("Content-Type", "application/json")
         .send()
         .await

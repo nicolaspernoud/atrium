@@ -44,7 +44,7 @@ class MyLocalizations {
       "email": "Email",
       "failed_share_token": "Failed to generate a share token",
       "files": "Files",
-      "firstname": "First name",
+      "given_name": "First name",
       "forward_user_mail":
           "Forward authenticated user email to the proxied app using the Remote-User header",
       "host": "Host",
@@ -53,7 +53,7 @@ class MyLocalizations {
       "inject_security_headers": "Inject security headers",
       "is_proxy": "Is a proxy",
       "is_writable": "Is writable",
-      "lastname": "Last name",
+      "family_name": "Last name",
       "leave_empty_to_keep_current_password":
           "Leave empty to keep current password",
       "login_failed": "Login failed",
@@ -123,7 +123,7 @@ class MyLocalizations {
       "email": "Courriel",
       "failed_share_token": "Erreur lors de la génération du jeton de partage",
       "files": "Fichiers",
-      "firstname": "Prénom",
+      "given_name": "Prénom",
       "forward_user_mail":
           "Transférer le mail de l'utilisateur connecté à l'application cible via l'entête Remote-User",
       "host": "Hôte",
@@ -132,7 +132,7 @@ class MyLocalizations {
       "inject_security_headers": "Injecter des en-têtes pour la sécurité",
       "is_proxy": "Serveur proxy",
       "is_writable": "Accès en écriture",
-      "lastname": "Nom",
+      "family_name": "Nom",
       "leave_empty_to_keep_current_password":
           "Laisser vide pour garder le mot de passe actuel",
       "login_failed": "Erreur d'authentification",

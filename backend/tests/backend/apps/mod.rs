@@ -9,6 +9,7 @@ use std::{fs, net::TcpListener};
 
 mod proxy;
 mod remote_user;
+mod single_proxy;
 
 #[tokio::test]
 async fn secured_proxy_test() {
@@ -305,6 +306,7 @@ async fn redirect_test() {
         session_duration_days: None,
         onlyoffice_config: None,
         openid_config: None,
+        single_proxy: false,
     };
     config.to_file(&filepath).await.unwrap();
     app.client

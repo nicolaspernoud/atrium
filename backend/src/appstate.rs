@@ -43,7 +43,7 @@ impl AppState {
             client: hyper::Client::builder()
                 .http1_title_case_headers(true)
                 .build::<_, hyper::Body>(
-                    TrustDnsResolver::default().into_rustls_webpki_https_connector(),
+                    TrustDnsResolver::from_system_conf().into_rustls_webpki_https_connector(),
                 ),
         }
     }

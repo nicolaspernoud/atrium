@@ -39,13 +39,13 @@ pub struct UserInfo {
         default,
         deserialize_with = "string_trim"
     )]
-    pub firstname: String,
+    pub given_name: String,
     #[serde(
         skip_serializing_if = "is_default",
         default,
         deserialize_with = "string_trim"
     )]
-    pub lastname: String,
+    pub family_name: String,
     #[serde(
         skip_serializing_if = "is_default",
         default,
@@ -482,12 +482,12 @@ pub async fn list_services(
     ))
 }
 
-pub async fn whoami(token: UserToken) -> Json<User> {
+pub async fn whoami(token: UserTokenWithoutXSRFCheck) -> Json<User> {
     let user = User {
-        login: token.login,
+        login: token.0.login,
         password: REDACTED.to_owned(),
-        roles: token.roles,
-        info: token.info,
+        roles: token.0.roles,
+        info: token.0.info,
     };
     Json(user)
 }

@@ -30,8 +30,8 @@ jobs:
       - name: Run server
         run: |
           mkdir -p ./data/dir2
-          cargo build
-          MAIN_HOSTNAME=localhost cargo run &
+          cargo build --release
+          MAIN_HOSTNAME=localhost cargo run --release &
           sleep 5
       - name: Build litmus
         run: |

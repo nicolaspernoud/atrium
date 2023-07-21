@@ -57,8 +57,9 @@ class _SystemInfoState extends State<SystemInfo> {
             future: sysInfo,
             builder: (BuildContext context, AsyncSnapshot<SysInfo> snapshot) {
               if (snapshot.hasError &&
-                  snapshot.error is DioError &&
-                  (snapshot.error as DioError).response?.statusCode == 401) {
+                  snapshot.error is DioException &&
+                  (snapshot.error as DioException).response?.statusCode ==
+                      401) {
                 // If error is 401, we log and retry
                 Future.delayed(Duration.zero, () async {
                   await showLoginDialog(context, mounted);

@@ -109,8 +109,8 @@ class UserDialogOpenerState extends State<UserDialogOpener> {
         children: [
           Text('${tr(context, "login")}: ${user.login}'),
           Text('${tr(context, "roles")}: ${user.roles.join(", ")}'),
-          Text('${tr(context, "firstname")}: ${user.firstname}'),
-          Text('${tr(context, "lastname")}: ${user.lastname}'),
+          Text('${tr(context, "given_name")}: ${user.givenName}'),
+          Text('${tr(context, "family_name")}: ${user.familyName}'),
           Text('${tr(context, "email")}: ${user.email}'),
         ],
       );

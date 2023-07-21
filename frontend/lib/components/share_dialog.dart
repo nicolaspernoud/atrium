@@ -1,4 +1,5 @@
 import 'package:atrium/components/async_button.dart';
+import 'package:atrium/components/explorer.dart';
 import 'package:atrium/i18n.dart';
 import 'package:atrium/models/api_provider.dart';
 import 'package:flutter/material.dart';
@@ -122,6 +123,7 @@ class _ShareDialogState extends State<ShareDialog> {
   Future<String> downloadFolderAsHTMLList(File file,
       {int recursionLevel = 0}) async {
     var files = await widget.client.readDir(file.path!);
+    files.sort(foldersFirstThenAlphabetically);
 
     Future<String> fileList(File file) async {
       String content;

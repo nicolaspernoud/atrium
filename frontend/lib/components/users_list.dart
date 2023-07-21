@@ -56,8 +56,9 @@ class _UsersListState extends State<UsersList> {
                 return const Center(child: CircularProgressIndicator());
               case ConnectionState.done:
                 if (snapshot.hasError &&
-                    snapshot.error is DioError &&
-                    (snapshot.error as DioError).response?.statusCode == 401) {
+                    snapshot.error is DioException &&
+                    (snapshot.error as DioException).response?.statusCode ==
+                        401) {
                   // If error is 401, we log and retry
                   Future.delayed(Duration.zero, () async {
                     await showLoginDialog(context, mounted);

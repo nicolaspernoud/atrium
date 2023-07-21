@@ -1,8 +1,11 @@
+import 'dart:io';
 import 'package:atrium/globals.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 
 const authCookieName = "ATRIUM_AUTH";
 
@@ -23,7 +26,23 @@ class AppWebViewState extends State<AppWebView> {
   void initState() {
     super.initState();
     controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted);
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setNavigationDelegate(NavigationDelegate(
+        onNavigationRequest: (NavigationRequest request) {
+          return NavigationDecision.navigate;
+        },
+      ));
+    if (Platform.isAndroid) {
+      final androidController = controller.platform as AndroidWebViewController;
+      androidController.setOnShowFileSelector((params) async {
+        FilePickerResult? result = await FilePicker.platform.pickFiles();
+        if (result != null && result.files.single.path != null) {
+          File file = File(result.files.single.path!);
+          return [file.uri.toString()];
+        }
+        return [];
+      });
+    }
     initWebView();
   }
 

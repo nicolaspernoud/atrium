@@ -77,6 +77,8 @@ pub struct Config {
     pub domain: String,
     #[serde(default, skip_serializing_if = "is_default")]
     pub debug_mode: bool,
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub single_proxy: bool,
     #[serde(default = "http_port")]
     pub http_port: u16,
     #[serde(default)]
@@ -222,6 +224,13 @@ pub async fn load_config(config_file: &str) -> Result<(ConfigState, ConfigMap), 
                 }),
             )
             .collect();
+    // If atrium is in single proxy mode, insert an app matching on the main hostname
+    if config.single_proxy {
+        hashmap.insert(
+            config.hostname.clone(),
+            app_to_host_type(&config.apps[0], &config, port),
+        );
+    }
     // Insert apps subdomains
     for app in filter_services(&config.apps, &config.hostname, &config.domain) {
         for domain in app.subdomains.as_ref().unwrap_or(&Vec::new()) {
@@ -470,6 +479,7 @@ mod tests {
             session_duration_days: None,
             onlyoffice_config: None,
             openid_config: None,
+            single_proxy: false,
         };
 
         // Act

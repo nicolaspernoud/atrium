@@ -1,6 +1,7 @@
 hostname: atrium.127.0.0.1.nip.io # required : fully qualified domain name of the application, can be overridden with the environment variable MAIN_HOSTNAME
 #domain: 127.0.0.1.nip.io # optional : defaults to hostname, if set the CORS and CSP Headers will be set according to that domain # ! Important, if it is different to hostname, the apps and davs hosts must be FQDNs.
 debug_mode: true # optional, defaults to false : prints a lot of debug logs ; disable in production as it has a big performance impact
+single_proxy: false # optional, default to false : in single proxy mode, atrium will route only to the first app available, it is meant to secure a single proxied application with Open ID Connect
 http_port: 8080 # required, defaults to 8080 : http port to listen to if tls mode is not Auto
 tls_mode: No # required, defaults to No : use No for development/test http mode, Auto to generate Let's Encrypt certificates automatically (most common production usage) or ̀BehindProxy to use atrium behind a TLS offloading proxy
 letsencrypt_email: foo@bar.com # required if `tls_mode: Auto` is used : email for receiving Let's Encrypt information
@@ -21,7 +22,7 @@ openid_config: # optional : allow login with OpenID Connect
   roles_map: # required (if not present, it will be set to ADMINS: ADMINS, USERS: USERS) ; the role from memberOf (right side) that will be mapped to the atrium role (left side)
     ADMINS: ADMINS # atrium's ADMINS role is the only one recognized to alter configuration, it should probably be mapped somehow
     USERS: USERS # other roles can have arbitrary names, that are matched between users and services to control access
-  scopes: [login, memberOf, openid] # optional : the scopes claimed from the identity provider, will default to only "openid". The identity token from the userinfo endpoint MUST contains a "memberOf" array attribute containing the groups the user is member of, and a "login" attribute representing the login of the user.
+  scopes: [login, memberOf, openid, given_name, family_name, email] # optional : the scopes claimed from the identity provider, will default to only "openid". The identity token from the userinfo endpoint MUST contains a "memberOf" array attribute containing the groups the user is member of, and a "login" attribute representing the login of the user.
 apps: # optional : applications served by atrium
   - id: 1 # required : app id
     name: App 1 # required : app name
@@ -90,8 +91,8 @@ users: # optional : users allowed to log in with local authentication, if not pr
     roles: # optional : users roles
       - ADMINS
     info: # optional : additional information
-      firstname: Ad # optional
-      lastname: Min # optional
+      given_name: Ad # optional
+      family_name: Min # optional
       email: admin@atrium.io # optional
   - login: user
     password: $argon2id$v=19$m=4096,t=3,p=1$ZH9ZFCT6YjYQpxkNt3SQgQ$g3DQawMEWlU1rnMAserFAzUg3Lg2O80s8eH+PrvmUo0

@@ -21,7 +21,7 @@ class InterceptorsWrapper extends QueuedInterceptorsWrapper {
   }
 
   @override
-  void onError(DioError err, ErrorInterceptorHandler handler) {
+  void onError(DioException err, ErrorInterceptorHandler handler) {
     if (err.response != null &&
         (err.response!.statusCode == 401 || err.response!.statusCode == 403)) {
       App().cookie = "";
@@ -68,7 +68,7 @@ class ApiProvider {
     _dio.options.baseUrl = App().prefs.hostname;
     try {
       await _dio.get('/auth/oauth2available');
-    } on DioError catch (_) {
+    } on DioException catch (_) {
       return false;
     }
     return true;

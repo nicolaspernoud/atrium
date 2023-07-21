@@ -108,19 +108,19 @@ class CreateEditUserState extends State<CreateEditUser> {
                         },
                       ),
                       TextFormField(
-                        initialValue: widget.user.firstname,
+                        initialValue: widget.user.givenName,
                         decoration: InputDecoration(
-                            labelText: tr(context, "firstname")),
+                            labelText: tr(context, "given_name")),
                         onChanged: (value) {
-                          widget.user.firstname = value;
+                          widget.user.givenName = value;
                         },
                       ),
                       TextFormField(
-                        initialValue: widget.user.lastname,
-                        decoration:
-                            InputDecoration(labelText: tr(context, "lastname")),
+                        initialValue: widget.user.familyName,
+                        decoration: InputDecoration(
+                            labelText: tr(context, "family_name")),
                         onChanged: (value) {
-                          widget.user.lastname = value;
+                          widget.user.familyName = value;
                         },
                       ),
                       TextFormField(

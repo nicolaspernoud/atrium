@@ -2,7 +2,7 @@ use crate::{
     appstate::{ConfigState, MAXMIND_READER},
     configuration::OpenIdConfig,
     errors::ErrResponse,
-    users::{create_user_cookie, user_to_token, User, ADMINS_ROLE},
+    users::{create_user_cookie, user_to_token, User, UserInfo, ADMINS_ROLE},
     utils::select_entries_by_value,
 };
 use anyhow::Result;
@@ -86,10 +86,16 @@ async fn openid_configuration_internal(cfg: &mut Option<OpenIdConfig>) -> Result
 }
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct OAuthUser {
     pub login: String,
+    #[serde(rename = "memberOf")]
     pub member_of: Vec<String>,
+    #[serde(default)]
+    pub given_name: String,
+    #[serde(default)]
+    pub family_name: String,
+    #[serde(default)]
+    pub email: String,
 }
 
 fn oauth_client_internal(
@@ -223,7 +229,11 @@ pub async fn oauth2_callback(
         login: user_data.login,
         password: "".to_owned(),
         roles: mapped_roles,
-        ..Default::default()
+        info: Some(UserInfo {
+            given_name: user_data.given_name,
+            family_name: user_data.family_name,
+            email: user_data.email,
+        }),
     };
 
     let user_token = user_to_token(&user, &config);
@@ -238,12 +248,16 @@ pub async fn oauth2_callback(
 
     Ok((
         private_jar.add(cookie),
-        Redirect::to(&format!(
-            "/oauth2/oauth2.html?is_admin={}&xsrf_token={}&user={}",
-            user.roles.contains(&ADMINS_ROLE.to_owned()),
-            user_token.xsrf_token,
-            user.login
-        )),
+        if config.single_proxy {
+            Redirect::to("/")
+        } else {
+            Redirect::to(&format!(
+                "/oauth2/oauth2.html?is_admin={}&xsrf_token={}&user={}",
+                user.roles.contains(&ADMINS_ROLE.to_owned()),
+                user_token.xsrf_token,
+                user.login
+            ))
+        },
     ))
 }
 

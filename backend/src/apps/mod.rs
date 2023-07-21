@@ -146,8 +146,13 @@ pub async fn proxy_handler(
     {
         // Redirect to login page if user is not logged, write where to get back after login in a cookie
         if value.status() == StatusCode::UNAUTHORIZED {
-            if let Ok(hn) = HeaderValue::from_str(&config.full_domain()) {
+            if let Ok(mut hn) = HeaderValue::from_str(&config.full_domain()) {
                 *value.status_mut() = StatusCode::FOUND;
+                // If single proxy mode, redirect directly to IdP without passing through atrium main app
+                if config.single_proxy {
+                    hn = HeaderValue::from_str(&(config.full_domain() + "/auth/oauth2login"))
+                        .unwrap();
+                }
                 value.headers_mut().append(LOCATION, hn);
                 let cookie = Cookie::build(
                     "ATRIUM_REDIRECT",
@@ -174,7 +179,9 @@ pub async fn proxy_handler(
         _ => panic!("Service is not an app !"),
     };
 
-    remove_auth_cookie(&mut req)?;
+    if !config.single_proxy {
+        remove_auth_cookie(&mut req)?;
+    }
     insert_authenticated_user_mail_header(&app, user, &mut req)?;
 
     // If the target service contains a port, it is an internal service, inform the app that we are proxying to it

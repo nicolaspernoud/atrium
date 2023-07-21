@@ -333,6 +333,7 @@ pub fn create_default_config(
         davs,
         users,
         session_duration_days: None,
+        single_proxy: false,
         onlyoffice_config: Some(OnlyOfficeConfig {
             title: Some("AtriumOffice".to_owned()),
             server: "http://onlyoffice.atrium.io".to_owned(),
