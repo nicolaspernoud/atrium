@@ -43,7 +43,7 @@ use hyper::{
     },
     Body, Method, StatusCode, Uri,
 };
-use quick_xml::escape::escape;
+use quick_xml::{escape::escape, events::Event, Reader};
 use serde::Serialize;
 use std::{
     borrow::Cow,
@@ -62,6 +62,7 @@ pub type Response = hyper::Response<Body>;
 
 pub type BoxResult<T> = Result<T, Box<dyn std::error::Error>>;
 static APPLICATION_JSON: HeaderValue = HeaderValue::from_static("application/json");
+static ACCEPTED: HeaderValue = HeaderValue::from_static("accepted");
 
 pub struct WebdavServer {}
 
@@ -213,7 +214,8 @@ impl WebdavServer {
                 }
                 "PROPPATCH" => {
                     if is_file {
-                        self.handle_proppatch(req_path, &mut res).await?;
+                        let req_path = &(*req_path).to_owned();
+                        self.handle_proppatch(req, path, req_path, &mut res).await?;
                     } else {
                         status_not_found(&mut res);
                     }
@@ -301,8 +303,12 @@ impl WebdavServer {
         if let Some(h) = req.headers().get("X-OC-Mtime") {
             if let Ok(h) = h.to_str() {
                 if let Ok(t) = h.parse::<i64>() {
-                    // If it fails, we do nothing
-                    _ = filetime::set_file_mtime(path, filetime::FileTime::from_unix_time(t, 0));
+                    if filetime::set_file_mtime(path, filetime::FileTime::from_unix_time(t, 0))
+                        .is_ok()
+                    {
+                        // Respond with the appropriate header on success
+                        res.headers_mut().insert("X-OC-Mtime", ACCEPTED.to_owned());
+                    }
                 }
             }
         };
@@ -627,20 +633,75 @@ impl WebdavServer {
         Ok(())
     }
 
-    async fn handle_proppatch(&self, req_path: &str, res: &mut Response) -> BoxResult<()> {
-        let output = format!(
-            r#"<D:response>
-<D:href>{}</D:href>
-<D:propstat>
-<D:prop>
-</D:prop>
-<D:status>HTTP/1.1 403 Forbidden</D:status>
-</D:propstat>
-</D:response>"#,
-            req_path
-        );
+    async fn handle_proppatch(
+        &self,
+        req: Request,
+        path: &Path,
+        req_path: &str,
+        res: &mut Response,
+    ) -> BoxResult<()> {
+        let output: String;
+        if let Ok(modtime) = Self::extract_lastmodified_value(req).await {
+            filetime::set_file_mtime(path, filetime::FileTime::from_unix_time(modtime, 0))?;
+            output = format!(
+                r#"
+                    <D:response>
+                      <D:href>{req_path}</D:href>
+                      <D:propstat>
+                        <D:prop>
+                          <D:lastmodified xmlns="DAV:">{modtime}</D:lastmodified>
+                        </D:prop>
+                        <D:status>HTTP/1.1 200 OK</D:status>
+                      </D:propstat>
+                    </D:response>
+                "#
+            )
+        } else {
+            output = format!(
+                r#"
+                <D:response>
+                    <D:href>{req_path}</D:href>
+                    <D:propstat>
+                        <D:prop>
+                        </D:prop>
+                        <D:status>HTTP/1.1 403 Forbidden</D:status>
+                    </D:propstat>
+                </D:response>
+                "#
+            );
+        }
         res_multistatus(res, &output);
         Ok(())
+    }
+
+    async fn extract_lastmodified_value(req: Request) -> BoxResult<i64> {
+        let body = hyper::body::to_bytes(req.into_body()).await?;
+        let xml_body = String::from_utf8(body.to_vec())?;
+
+        let mut in_lastmodified_tag = false;
+        let mut lastmodified_value = String::new();
+
+        let mut reader = Reader::from_str(&xml_body);
+        loop {
+            match reader.read_event() {
+                Err(e) => return Err(Box::new(e)),
+                Ok(Event::Eof) => break,
+                Ok(Event::Start(e)) => {
+                    in_lastmodified_tag = e.name().as_ref() == b"lastmodified";
+                }
+                Ok(Event::End(_)) => {
+                    in_lastmodified_tag = false;
+                }
+                Ok(Event::Text(e)) => {
+                    if in_lastmodified_tag {
+                        lastmodified_value = e.unescape()?.into_owned();
+                        break;
+                    }
+                }
+                _ => (),
+            }
+        }
+        Ok(lastmodified_value.parse::<i64>()?)
     }
 
     async fn is_root_contained(&self, path: &Path, directory: &Path) -> bool {

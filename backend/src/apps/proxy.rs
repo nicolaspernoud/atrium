@@ -10,7 +10,7 @@ use hyper::upgrade::OnUpgrade;
 use hyper::{Body, Error, Request, Response, StatusCode};
 use std::net::IpAddr;
 use tokio::io::copy_bidirectional;
-use tracing::{debug, error};
+use tracing::debug;
 
 use crate::appstate::Client;
 
@@ -271,7 +271,10 @@ pub async fn call(
 
                     match copy_bidirectional(&mut response_upgraded, &mut request_upgraded).await {
                         Ok(_) => debug!("successfull copy between upgraded connections"),
-                        Err(_) => error!("failed copy between upgraded connections (EOF)"),
+                        Err(_) => debug!(
+                            "failed copy between upgraded connections (EOF), for client IP: {}",
+                            client_ip
+                        ),
                     }
                 });
                 Ok(response)

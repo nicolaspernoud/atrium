@@ -60,28 +60,31 @@ impl DavFile {
         }
     }
 
-    pub async fn copy_from<R>(mut self, reader: &mut R) -> Result<u64, Error>
+    pub async fn copy_from<R>(mut self, reader: &mut R) -> Result<(), Error>
     where
         R: AsyncRead + Unpin + ?Sized,
     {
         if let Some(key) = self.key {
             let mut enc_file = EncryptedStreamer::new(self.file, key);
-            enc_file.copy_from(reader).await
+            enc_file.copy_from(reader).await?;
+            enc_file.inner.flush().await
         } else {
-            io::copy(reader, &mut self.file).await
+            io::copy(reader, &mut self.file).await?;
+            self.file.flush().await
         }
     }
 
-    pub async fn copy_to<W>(mut self, writer: &mut W) -> Result<u64, Error>
+    pub async fn copy_to<W>(mut self, writer: &mut W) -> Result<(), Error>
     where
         W: AsyncWrite + Unpin + ?Sized,
     {
         if let Some(key) = self.key {
             let encrypted_file = EncryptedStreamer::new(self.file, key);
-            encrypted_file.copy_to(writer).await
+            encrypted_file.copy_to(writer).await.map(|_| ())?;
         } else {
-            io::copy(&mut self.file, writer).await
+            io::copy(&mut self.file, writer).await?;
         }
+        writer.flush().await
     }
 
     pub async fn into_body_sized(mut self, start: u64, max_length: u64) -> Result<Body, Error> {

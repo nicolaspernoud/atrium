@@ -25,7 +25,7 @@ class _MediaPlayerState extends State<MediaPlayer> {
     if (!kIsWeb) {
       headers = {"cookie": App().cookie, "xsrf-token": App().xsrfToken};
     }
-    _controller = VideoPlayerController.network(widget.uri,
+    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.uri),
         videoPlayerOptions: VideoPlayerOptions(mixWithOthers: false),
         httpHeaders: headers);
     _controller.addListener(() {

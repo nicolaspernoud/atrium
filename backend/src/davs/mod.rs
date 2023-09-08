@@ -75,13 +75,13 @@ pub async fn webdav_handler(
     };
 
     match WEBDAV_SERVER
-        .get_or_init(|| webdav_server::WebdavServer::new())
+        .get_or_init(webdav_server::WebdavServer::new)
         .call(req, addr, &dav)
         .await
     {
         Ok(response) => {
             if !UNLOGGED_METHODS
-                .get_or_init(|| unlogged_methods_init())
+                .get_or_init(unlogged_methods_init)
                 .contains(&method)
                 && query_str != "diskusage"
             {

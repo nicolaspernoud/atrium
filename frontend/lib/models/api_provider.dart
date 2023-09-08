@@ -196,11 +196,11 @@ class ApiProvider {
 
   Future<Response> _reloadConfigurationAndWaitUntilReady() async {
     await _dio.get('/reload');
-    const int maxRetries = 10;
+    const int maxRetries = 100;
     int retries = 0;
     while (retries < maxRetries) {
       try {
-        Response response = await _dio.get("/api/admin/apps");
+        Response response = await _dio.get("/healthcheck");
         return response;
       } catch (e) {
         retries++;

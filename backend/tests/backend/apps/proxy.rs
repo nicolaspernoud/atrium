@@ -178,7 +178,7 @@ async fn test_websocket() {
             );
             // Tungstenite will auto send a Pong as a response to a Ping
             websocket
-                .send(Message::Text("All done".to_string()))
+                .send(Message::Text("Handshake OK".to_string()))
                 .await
                 .unwrap();
         }
@@ -222,16 +222,16 @@ async fn test_websocket() {
 
     // Assert
     assert!(
-        matches!(&msg, Message::Pong(inner) if inner == "hello".as_bytes()),
-        "did not get pong, but {:?}",
+        matches!(&msg, Message::Text(inner) if inner == "Handshake OK"),
+        "did not get text, but {:?}",
         msg
     );
 
     let msg = client.next().await.unwrap().unwrap();
 
     assert!(
-        matches!(&msg, Message::Text(inner) if inner == "All done"),
-        "did not get text, but {:?}",
+        matches!(&msg, Message::Pong(inner) if inner == "hello".as_bytes()),
+        "did not get pong, but {:?}",
         msg
     );
 }

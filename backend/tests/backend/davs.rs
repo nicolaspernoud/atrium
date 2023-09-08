@@ -688,13 +688,45 @@ async fn propfind_file_encrypted() -> Result<()> {
 }
 
 #[tokio::test]
-async fn proppatch_file() -> Result<()> {
+async fn proppatch_file_no_modtime() -> Result<()> {
     let app = TestApp::spawn(None).await;
     let url = format!("http://files1.atrium.io:{}/dira/file1", app.port);
     let resp = proppatch(&app, &url).send().await?;
     assert_eq!(resp.status(), 207);
     let body = resp.text().await?;
     assert!(body.contains("<D:href>/dira/file1</D:href>"));
+    assert!(body.contains("<D:status>HTTP/1.1 403 Forbidden</D:status>"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn proppatch_file_modtime() -> Result<()> {
+    let app = TestApp::spawn(None).await;
+    let url = format!("http://files1.atrium.io:{}/dira/file1", app.port);
+    let resp = proppatch(&app, &url)
+        .body(
+            r#"
+                <?xml version="1.0" encoding="utf-8" ?>
+                <D:propertyupdate xmlns:D="DAV:">
+                    <D:set>
+                        <D:prop>
+                            <lastmodified xmlns="DAV:">405659400</lastmodified>
+                        </D:prop>
+                    </D:set>
+                </D:propertyupdate>
+            "#,
+        )
+        .send()
+        .await?;
+    assert_eq!(resp.status(), 207);
+    let body = resp.text().await?;
+    assert!(body.contains("<D:href>/dira/file1</D:href>"));
+    assert!(body.contains(r#"<D:lastmodified xmlns="DAV:">405659400</D:lastmodified>"#));
+    assert!(body.contains("<D:status>HTTP/1.1 200 OK</D:status>"));
+    let resp = propfind(&app, &url).send().await?;
+    assert_eq!(resp.status(), 207);
+    let body = resp.text().await?;
+    assert!(body.contains("09 Nov 1982"));
     Ok(())
 }
 

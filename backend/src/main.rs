@@ -7,8 +7,6 @@ use atrium::{
 use axum::{extract::Host, handler::HandlerWithoutStateExt, response::Redirect, BoxError};
 use axum_server::Handle;
 use http::{StatusCode, Uri};
-#[cfg(not(target_arch = "arm"))]
-use mimalloc::MiMalloc;
 use rustls::ServerConfig;
 use rustls_acme::{caches::DirCache, AcmeConfig};
 use std::{fs::File, net::SocketAddr, sync::Arc, time::Duration};
@@ -20,7 +18,7 @@ use tracing_subscriber::{fmt, fmt::time::OffsetTime, prelude::*};
 
 #[cfg(not(target_arch = "arm"))]
 #[global_allocator]
-static GLOBAL: MiMalloc = MiMalloc;
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 pub const CONFIG_FILE: &str = "atrium.yaml";
 

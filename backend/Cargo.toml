@@ -36,7 +36,7 @@ maxminddb = "0.23"
 mime_guess = { default-features = false, version = "2.0" }
 oauth2 = { default-features = false, version = "4.1" }
 percent-encoding = { default-features = false, version = "2.1" }
-quick-xml = "0.29"
+quick-xml = "0.30"
 rand = { default-features = false, version = "0.8" }
 rustls = { default-features = false, version = "0.21" }
 rustls-acme = { version = "0.7.1", features = ["axum"], default-features = false }
@@ -62,9 +62,9 @@ uuid = { version = "1.1", features = ["fast-rng", "v4"], default-features = fals
 mimalloc = "0.1"
 
 [dev-dependencies]
-async-tungstenite = { version = "0.22", features = ["tokio-runtime"] }
+async-tungstenite = { version = "0.23", features = ["tokio-runtime"] }
 reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls", "cookies", "stream"] }
-tungstenite = "0.19"
+tungstenite = "0.20"
 
 [profile.release_optimized]
 inherits = "release"

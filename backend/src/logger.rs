@@ -17,10 +17,8 @@ pub fn city_from_ip(addr: SocketAddr, reader: OptionalMaxMindReader) -> String {
         "localhost".to_owned()
     } else if addr.is_ipv4() && addr.ip().to_string().starts_with("192.168.") {
         "local network".to_owned()
-    } else if reader.is_none() {
-        "unknown location (no geo ip database)".to_owned()
-    } else {
-        match reader.unwrap().lookup::<geoip2::City>(addr.ip()) {
+    } else if let Some(reader) = reader {
+        match reader.lookup::<geoip2::City>(addr.ip()) {
             Ok(city) => format!(
                 "{}, {}",
                 city.city.map_or(UNKNOWN_CITY, |c| c
@@ -32,6 +30,8 @@ pub fn city_from_ip(addr: SocketAddr, reader: OptionalMaxMindReader) -> String {
             ),
             Err(_) => "unknown location".to_owned(),
         }
+    } else {
+        "unknown location (no geo ip database)".to_owned()
     };
     format!("{location} ({})", addr.ip())
 }

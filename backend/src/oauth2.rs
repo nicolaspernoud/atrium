@@ -221,7 +221,7 @@ pub async fn oauth2_callback(
     let user_roles = user_data
         .member_of
         .iter()
-        .map(|e| e.split(",").collect::<Vec<&str>>()[0].trim_start_matches("CN="))
+        .map(|e| e.split(',').collect::<Vec<&str>>()[0].trim_start_matches("CN="))
         .collect();
     let mapped_roles = select_entries_by_value(&oidc_config.roles_map.0, user_roles);
 
