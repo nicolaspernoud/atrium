@@ -16,7 +16,7 @@ use tower_http::services::ServeDir;
 
 use crate::{
     apps::{add_app, delete_app, get_apps, proxy_handler},
-    appstate::AppState,
+    appstate::{AppState, Client, InsecureSkipVerifyClient},
     configuration::{load_config, HostType},
     davs::{
         model::{add_dav, delete_dav, get_davs},
@@ -96,7 +96,7 @@ impl Server {
 
         let router = if single_proxy {
             let main_router = main_router
-                .fallback(proxy_handler)
+                .fallback(proxy_handler::<Client>)
                 .with_state(state.clone());
             any(|_: Option<HostType>, request: Request<Body>| async move {
                 main_router.oneshot(request).await
@@ -105,7 +105,9 @@ impl Server {
             let main_router = main_router
                 .fallback_service(get_service(ServeDir::new("web")).handle_error(error_500))
                 .with_state(state.clone());
-            let proxy_router = proxy_handler.with_state(state.clone());
+            let proxy_router = proxy_handler::<Client>.with_state(state.clone());
+            let unsecure_proxy_router =
+                proxy_handler::<InsecureSkipVerifyClient>.with_state(state.clone());
             let webdav_router = webdav_handler
                 .layer(middleware::from_fn_with_state(
                     state.clone(),
@@ -118,6 +120,9 @@ impl Server {
                     match hostype {
                         Some(HostType::StaticApp(_)) => dir_router.oneshot(request).await,
                         Some(HostType::ReverseApp(_)) => proxy_router.oneshot(request).await,
+                        Some(HostType::SkipVerifyReverseApp(_)) => {
+                            unsecure_proxy_router.oneshot(request).await
+                        }
                         Some(HostType::Dav(_)) => webdav_router.oneshot(request).await,
                         None => main_router.oneshot(request).await,
                     }

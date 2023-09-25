@@ -94,11 +94,16 @@ async fn subdomains_test() {
     // Assert
     assert!(response.status().is_success());
     assert!(!response.headers().contains_key("Content-Security-Policy"));
-    assert!(response
-        .text()
-        .await
-        .unwrap()
-        .contains("Hello world from mock server"));
+    let response_text = response.text().await.unwrap();
+    assert!(response_text.contains("Hello world from mock server"));
+    assert!(response_text.contains(&format!(
+        r#""host": "app1-subdomain1.app1.atrium.io:{}""#,
+        app.port
+    )));
+    assert!(response_text.contains(&format!(
+        r#""x-forwarded-host": "app1-subdomain1.app1.atrium.io:{}""#,
+        app.port
+    )));
 
     // Act
     let response = app
@@ -114,11 +119,16 @@ async fn subdomains_test() {
     // Assert
     assert!(response.status().is_success());
     assert!(!response.headers().contains_key("Content-Security-Policy"));
-    assert!(response
-        .text()
-        .await
-        .unwrap()
-        .contains("Hello world from mock server"));
+    let response_text = response.text().await.unwrap();
+    assert!(response_text.contains("Hello world from mock server"));
+    assert!(response_text.contains(&format!(
+        r#""host": "app1.subdomain2.app1.atrium.io:{}""#,
+        app.port
+    )));
+    assert!(response_text.contains(&format!(
+        r#""x-forwarded-host": "app1.subdomain2.app1.atrium.io:{}""#,
+        app.port
+    )));
 }
 
 #[tokio::test]

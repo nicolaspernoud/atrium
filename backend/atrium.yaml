@@ -19,6 +19,7 @@ openid_config: # optional : allow login with OpenID Connect
   token_url: http://localhost:8090/token # required if openid_configuration_url is not set : Identity Provider's token endpoint
   userinfo_url: http://localhost:8090/userinfo # required if openid_configuration_url is not set : Identity Provider's userinfo endpoint
   openid_configuration_url: http://localhost:8090/.well-known/openid-configuration # optional ; if set, the auth, token and userinfo urls will be set with the values fetched from a request to this endpoint
+  insecure_skip_verify: true # DANGEROUS !, optional, defaults to false : if true, connecting to identity provider will be done without checking server certificates
   roles_map: # required (if not present, it will be set to ADMINS: ADMINS, USERS: USERS) ; the role from memberOf (right side) that will be mapped to the atrium role (left side)
     ADMINS: ADMINS # atrium's ADMINS role is the only one recognized to alter configuration, it should probably be mapped somehow
     USERS: USERS # other roles can have arbitrary names, that are matched between users and services to control access
@@ -29,6 +30,7 @@ apps: # optional : applications served by atrium
     icon: web_asset # required : app icon reference
     color: 4292030255 # required : app color reference
     is_proxy: true # optional, defaults to false : if false, will serve target as a directory, if true will serve target as a reverse proxy
+    insecure_skip_verify: true # DANGEROUS !, optional, defaults to false : if true, proxying to an https server will be done without checking server certificates
     host: app1 # required : subdomain to serve the app from : for example it will respond at app1.atrium.127.0.0.1.nip.io with this configuration, if a fully qualified name is entered it will be served only if it matches (subdomain_without_dots).(hostname) pattern, that can be useful in advanced use cases where on atrium instances on different subdomains share their configuration file
     target: localhost:8081 # required : target to serve, if is_proxy == false, will serve a directory, if is_proxy == true, will reverse proxy a server, defaulting to http, https can be specified
     secured: false # optional, defaults to false : if true the app can only be accessed by a logged in user

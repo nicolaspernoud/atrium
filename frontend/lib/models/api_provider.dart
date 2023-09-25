@@ -126,7 +126,7 @@ class ApiProvider {
 
   Future<void> deleteApp(int id) async {
     await _dio.delete('/api/admin/apps/$id');
-    await _dio.get('/reload');
+    await _reloadConfigurationAndWaitUntilReady();
   }
 
   Future<void> createApp(AppModel app) async {
@@ -146,7 +146,7 @@ class ApiProvider {
 
   Future<void> deleteDav(int id) async {
     await _dio.delete('/api/admin/davs/$id');
-    await _dio.get('/reload');
+    await _reloadConfigurationAndWaitUntilReady();
   }
 
   Future<void> createDav(DavModel dav) async {
@@ -166,7 +166,7 @@ class ApiProvider {
 
   Future<void> deleteUser(String login) async {
     await _dio.delete('/api/admin/users/$login');
-    await _dio.get('/reload');
+    await _reloadConfigurationAndWaitUntilReady();
   }
 
   Future<void> createUser(UserModel user) async {

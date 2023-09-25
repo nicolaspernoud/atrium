@@ -13,6 +13,7 @@ class AppModel implements Model {
     this.icon = "web_asset",
     this.color = const Color(0xffd32f2f),
     this.isProxy = true,
+    this.insecureSkipVerify = false,
     this.host = "",
     this.subdomains = const [],
     this.target = "",
@@ -32,6 +33,7 @@ class AppModel implements Model {
   @override
   late Color color;
   late bool isProxy;
+  late bool insecureSkipVerify;
   @override
   late String host;
   late List<String> subdomains;
@@ -43,6 +45,7 @@ class AppModel implements Model {
   late List<String> roles;
   late bool injectSecurityHeaders;
   late bool forwardUserMail;
+  bool isDeleting = false;
 
   AppModel.fromJson(Map<String, dynamic> json) {
     id = json['id'];
@@ -50,6 +53,7 @@ class AppModel implements Model {
     icon = json['icon'] != "" ? json['icon'] : "web_asset";
     color = Color(json['color']);
     isProxy = json['is_proxy'] ?? false;
+    insecureSkipVerify = json['insecure_skip_verify'] ?? false;
     host = json['host'];
     subdomains = json['subdomains'] != null
         ? List.castFrom<dynamic, String>(json['subdomains'])
@@ -73,6 +77,7 @@ class AppModel implements Model {
     data['icon'] = icon;
     data['color'] = color.value;
     data['is_proxy'] = isProxy;
+    data['insecure_skip_verify'] = insecureSkipVerify;
     data['host'] = host;
     data['subdomains'] =
         subdomains.isNotEmpty && subdomains[0].isNotEmpty ? subdomains : null;

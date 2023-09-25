@@ -14,6 +14,7 @@ class UserModel {
   late String givenName;
   late String familyName;
   late String email;
+  bool isDeleting = false;
 
   UserModel.fromJson(Map<String, dynamic> json) {
     login = json['login'];

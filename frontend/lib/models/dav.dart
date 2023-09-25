@@ -30,6 +30,7 @@ class DavModel implements Model {
   late bool allowSymlinks;
   late List<String> roles;
   late String? passphrase;
+  bool isDeleting = false;
 
   DavModel.fromJson(Map<String, dynamic> json) {
     id = json['id'];

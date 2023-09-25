@@ -95,26 +95,51 @@ class CreateEditAppState extends State<CreateEditApp> {
                                 color: widget.app.color)),
                       ),
                     ),
-                    Row(
+                    Wrap(
                       children: [
-                        Checkbox(
-                          value: widget.app.isProxy,
-                          onChanged: (bool? value) async {
-                            if (value != null) {
-                              widget.app.isProxy = value;
-                              if (value == false) {
-                                widget.app.login = "";
-                                widget.app.password = "";
-                                widget.app.openpath = "";
-                              }
-                              setState((() {}));
-                            }
-                          },
+                        Row(
+                          children: [
+                            Checkbox(
+                              value: widget.app.isProxy,
+                              onChanged: (bool? value) async {
+                                if (value != null) {
+                                  widget.app.isProxy = value;
+                                  if (value == false) {
+                                    widget.app.login = "";
+                                    widget.app.password = "";
+                                    widget.app.openpath = "";
+                                    widget.app.insecureSkipVerify = false;
+                                  }
+                                  setState((() {}));
+                                }
+                              },
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Text(tr(context, "is_proxy")),
+                            ),
+                          ],
                         ),
-                        Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Text(tr(context, "is_proxy")),
-                        ),
+                        if (widget.app.isProxy) ...[
+                          Row(
+                            children: [
+                              Checkbox(
+                                value: widget.app.insecureSkipVerify,
+                                onChanged: (bool? value) async {
+                                  if (value != null) {
+                                    widget.app.insecureSkipVerify = value;
+                                    setState((() {}));
+                                  }
+                                },
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.all(16),
+                                child:
+                                    Text(tr(context, "insecure_skip_verify")),
+                              ),
+                            ],
+                          )
+                        ]
                       ],
                     ),
                     TextFormField(

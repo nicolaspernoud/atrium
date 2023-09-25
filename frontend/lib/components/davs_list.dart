@@ -92,162 +92,177 @@ class _DavsListState extends State<DavsList> {
                               border: Border(
                                   left:
                                       BorderSide(color: dav.color, width: 5))),
-                          child: InkWell(
-                            onTap: () {
-                              _openExplorer(context, dav);
-                            },
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 8),
-                                  child: Icon(
-                                    roundedIcons[dav.icon],
-                                    color: dav.color,
-                                    size: 70,
-                                    shadows: const <Shadow>[
-                                      Shadow(
-                                          color: Colors.black87,
-                                          blurRadius: 1.0,
-                                          offset: Offset(1, 1))
+                          child: dav.isDeleting
+                              ? const Center(child: DeletingSpinner())
+                              : InkWell(
+                                  onTap: () {
+                                    _openExplorer(context, dav);
+                                  },
+                                  child: Column(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 8),
+                                        child: Icon(
+                                          roundedIcons[dav.icon],
+                                          color: dav.color,
+                                          size: 70,
+                                          shadows: const <Shadow>[
+                                            Shadow(
+                                                color: Colors.black87,
+                                                blurRadius: 1.0,
+                                                offset: Offset(1, 1))
+                                          ],
+                                        ),
+                                      ),
+                                      Column(
+                                        children: [
+                                          FutureBuilder<DiskInfo>(
+                                            future: diskusage,
+                                            builder: (BuildContext context,
+                                                AsyncSnapshot<DiskInfo>
+                                                    snapshot) {
+                                              Widget child;
+                                              if (snapshot.hasData) {
+                                                child = Padding(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                      horizontal: 12),
+                                                  child: Column(children: [
+                                                    LinearProgressIndicator(
+                                                      value: snapshot
+                                                          .data?.spaceUsage,
+                                                      color: colorFromPercent(
+                                                          snapshot.data
+                                                              ?.spaceUsage),
+                                                      backgroundColor:
+                                                          Colors.grey[350],
+                                                    ),
+                                                    Text(
+                                                      snapshot
+                                                          .data!.usedSpaceLabel,
+                                                      textAlign:
+                                                          TextAlign.right,
+                                                    ),
+                                                  ]),
+                                                );
+                                              } else {
+                                                child =
+                                                    const SizedBox(height: 20);
+                                              }
+                                              return AnimatedSwitcher(
+                                                duration: const Duration(
+                                                    milliseconds: 250),
+                                                child: child,
+                                              );
+                                            },
+                                          ),
+                                          Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.spaceBetween,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.end,
+                                            children: [
+                                              Expanded(
+                                                child: Padding(
+                                                  padding: const EdgeInsets.all(
+                                                      12.0),
+                                                  child: Text(
+                                                    dav.name,
+                                                    overflow: TextOverflow.fade,
+                                                    style: const TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold),
+                                                  ),
+                                                ),
+                                              ),
+                                              if (App().isAdmin)
+                                                PopupMenuButton(
+                                                    itemBuilder:
+                                                        (BuildContext
+                                                                context) =>
+                                                            <PopupMenuEntry>[
+                                                              PopupMenuItem(
+                                                                  onTap: () {
+                                                                    WidgetsBinding
+                                                                        .instance
+                                                                        .addPostFrameCallback(
+                                                                            (_) async {
+                                                                      await Navigator.push(
+                                                                          context,
+                                                                          MaterialPageRoute(
+                                                                            builder: (context) =>
+                                                                                CreateEditDav(dav: dav, isNew: false),
+                                                                          ));
+                                                                      await _getData();
+                                                                      setState(
+                                                                          () {});
+                                                                    });
+                                                                  },
+                                                                  child: Row(
+                                                                    children: [
+                                                                      const Padding(
+                                                                        padding:
+                                                                            EdgeInsets.all(8.0),
+                                                                        child: Icon(
+                                                                            Icons.edit),
+                                                                      ),
+                                                                      Text(tr(
+                                                                          context,
+                                                                          "edit"))
+                                                                    ],
+                                                                  )),
+                                                              PopupMenuItem(
+                                                                  onTap: () {
+                                                                    WidgetsBinding
+                                                                        .instance
+                                                                        .addPostFrameCallback(
+                                                                            (_) async {
+                                                                      var confirmed =
+                                                                          await showDialog<
+                                                                              bool>(
+                                                                        context:
+                                                                            context,
+                                                                        builder:
+                                                                            (context) =>
+                                                                                DeleteDialog(dav.name),
+                                                                      );
+                                                                      if (confirmed!) {
+                                                                        setState(
+                                                                            () {
+                                                                          dav.isDeleting =
+                                                                              true;
+                                                                        });
+                                                                        await ApiProvider()
+                                                                            .deleteDav(dav.id);
+                                                                        await _getData();
+                                                                        setState(
+                                                                            () {});
+                                                                      }
+                                                                    });
+                                                                  },
+                                                                  child: Row(
+                                                                    children: [
+                                                                      const Padding(
+                                                                        padding:
+                                                                            EdgeInsets.all(8.0),
+                                                                        child: Icon(
+                                                                            Icons.delete_forever),
+                                                                      ),
+                                                                      Text(tr(
+                                                                          context,
+                                                                          "delete"))
+                                                                    ],
+                                                                  )),
+                                                            ])
+                                            ],
+                                          )
+                                        ],
+                                      ),
                                     ],
                                   ),
                                 ),
-                                Column(
-                                  children: [
-                                    FutureBuilder<DiskInfo>(
-                                      future: diskusage,
-                                      builder: (BuildContext context,
-                                          AsyncSnapshot<DiskInfo> snapshot) {
-                                        Widget child;
-                                        if (snapshot.hasData) {
-                                          child = Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 12),
-                                            child: Column(children: [
-                                              LinearProgressIndicator(
-                                                value:
-                                                    snapshot.data?.spaceUsage,
-                                                color: colorFromPercent(
-                                                    snapshot.data?.spaceUsage),
-                                                backgroundColor:
-                                                    Colors.grey[350],
-                                              ),
-                                              Text(
-                                                snapshot.data!.usedSpaceLabel,
-                                                textAlign: TextAlign.right,
-                                              ),
-                                            ]),
-                                          );
-                                        } else {
-                                          child = const SizedBox(height: 20);
-                                        }
-                                        return AnimatedSwitcher(
-                                          duration:
-                                              const Duration(milliseconds: 250),
-                                          child: child,
-                                        );
-                                      },
-                                    ),
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.end,
-                                      children: [
-                                        Expanded(
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(12.0),
-                                            child: Text(
-                                              dav.name,
-                                              overflow: TextOverflow.fade,
-                                              style: const TextStyle(
-                                                  fontWeight: FontWeight.bold),
-                                            ),
-                                          ),
-                                        ),
-                                        if (App().isAdmin)
-                                          PopupMenuButton(
-                                              itemBuilder: (BuildContext
-                                                      context) =>
-                                                  <PopupMenuEntry>[
-                                                    PopupMenuItem(
-                                                        onTap: () {
-                                                          WidgetsBinding
-                                                              .instance
-                                                              .addPostFrameCallback(
-                                                                  (_) async {
-                                                            await Navigator.push(
-                                                                context,
-                                                                MaterialPageRoute(
-                                                                  builder: (context) =>
-                                                                      CreateEditDav(
-                                                                          dav:
-                                                                              dav,
-                                                                          isNew:
-                                                                              false),
-                                                                ));
-                                                            await _getData();
-                                                            setState(() {});
-                                                          });
-                                                        },
-                                                        child: Row(
-                                                          children: [
-                                                            const Padding(
-                                                              padding:
-                                                                  EdgeInsets
-                                                                      .all(8.0),
-                                                              child: Icon(
-                                                                  Icons.edit),
-                                                            ),
-                                                            Text(tr(context,
-                                                                "edit"))
-                                                          ],
-                                                        )),
-                                                    PopupMenuItem(
-                                                        onTap: () {
-                                                          WidgetsBinding
-                                                              .instance
-                                                              .addPostFrameCallback(
-                                                                  (_) async {
-                                                            var confirmed =
-                                                                await showDialog<
-                                                                    bool>(
-                                                              context: context,
-                                                              builder: (context) =>
-                                                                  DeleteDialog(
-                                                                      dav.name),
-                                                            );
-                                                            if (confirmed!) {
-                                                              await ApiProvider()
-                                                                  .deleteDav(
-                                                                      dav.id);
-                                                              await _getData();
-                                                              setState(() {});
-                                                            }
-                                                          });
-                                                        },
-                                                        child: Row(
-                                                          children: [
-                                                            const Padding(
-                                                              padding:
-                                                                  EdgeInsets
-                                                                      .all(8.0),
-                                                              child: Icon(Icons
-                                                                  .delete_forever),
-                                                            ),
-                                                            Text(tr(context,
-                                                                "delete"))
-                                                          ],
-                                                        )),
-                                                  ])
-                                      ],
-                                    )
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
                         ),
                       );
                     },

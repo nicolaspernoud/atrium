@@ -4,17 +4,17 @@ use axum::{
     middleware,
     response::{Html, IntoResponse, Redirect},
     routing::{get, post},
-    Router,
+    Extension, Router,
 };
-use http::{header, HeaderMap, StatusCode};
+use http::{header, HeaderMap, HeaderValue, StatusCode};
 use serde::Deserialize;
 use std::net::TcpListener;
 
 pub async fn mock_proxied_server(listener: TcpListener) {
     let port = listener.local_addr().unwrap().port();
-    let message = format!("Hello world from mock server on port {port}!");
     let app = Router::new()
-        .route("/", get(move || async { message }))
+        .route("/", get(message))
+        .layer(Extension(port))
         .route("/foo", get(move || async { "bar" }))
         .route("/headers", get(headers))
         .route(
@@ -27,6 +27,23 @@ pub async fn mock_proxied_server(listener: TcpListener) {
         .serve(app.into_make_service())
         .await
         .unwrap();
+}
+
+async fn message(port: Extension<u16>, headers: HeaderMap) -> impl IntoResponse {
+    format!(
+        r#"
+        Hello world from mock server on port {}!
+        "host": {:?}
+        "x-forwarded-host": {:?}
+        "#,
+        *port,
+        headers
+            .get("host")
+            .unwrap_or(&HeaderValue::from_static("no host header")),
+        headers
+            .get("x-forwarded-host")
+            .unwrap_or(&HeaderValue::from_static("no x-forwarded-host header"))
+    )
 }
 
 async fn headers(headers: HeaderMap) -> impl IntoResponse {

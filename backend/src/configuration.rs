@@ -49,6 +49,8 @@ pub struct OpenIdConfig {
     #[serde(default = "crate::oauth2::default_scopes")]
     #[serde(skip_serializing_if = "crate::oauth2::is_default_scopes")]
     pub scopes: Vec<String>,
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub insecure_skip_verify: bool,
 }
 
 #[derive(Deserialize, Serialize, Debug, Default, PartialEq, Eq, Clone)]
@@ -210,7 +212,7 @@ pub async fn load_config(config_file: &str) -> Result<(ConfigState, ConfigMap), 
             .map(|app| {
                 (
                     format!("{}.{}", trim_host(&app.host), config.hostname),
-                    app_to_host_type(app, &config, port),
+                    app_to_host_type(app, port),
                 )
             })
             .chain(
@@ -228,7 +230,7 @@ pub async fn load_config(config_file: &str) -> Result<(ConfigState, ConfigMap), 
     if config.single_proxy {
         hashmap.insert(
             config.hostname.clone(),
-            app_to_host_type(&config.apps[0], &config, port),
+            app_to_host_type(&config.apps[0], port),
         );
     }
     // Insert apps subdomains
@@ -236,7 +238,7 @@ pub async fn load_config(config_file: &str) -> Result<(ConfigState, ConfigMap), 
         for domain in app.subdomains.as_ref().unwrap_or(&Vec::new()) {
             hashmap.insert(
                 format!("{}.{}.{}", domain, trim_host(&app.host), config.hostname),
-                app_to_host_type(app, &config, port),
+                app_to_host_type(app, port),
             );
         }
     }
@@ -247,13 +249,15 @@ pub(crate) fn trim_host(host: &str) -> String {
     host.split_once('.').unwrap_or((host, "")).0.to_owned()
 }
 
-fn app_to_host_type(app: &App, config: &Config, port: Option<u16>) -> HostType {
+fn app_to_host_type(app: &App, port: Option<u16>) -> HostType {
     if app.is_proxy {
-        HostType::ReverseApp(Box::new(AppWithUri::from_app_domain_and_http_port(
-            app.clone(),
-            &config.hostname,
-            port,
-        )))
+        if app.insecure_skip_verify {
+            return HostType::SkipVerifyReverseApp(Box::new(AppWithUri::from_app(
+                app.clone(),
+                port,
+            )));
+        }
+        HostType::ReverseApp(Box::new(AppWithUri::from_app(app.clone(), port)))
     } else {
         HostType::StaticApp(app.clone())
     }
@@ -305,6 +309,7 @@ fn filter_services<'a, T: Service + 'a>(
 pub enum HostType {
     StaticApp(App),
     ReverseApp(Box<AppWithUri>),
+    SkipVerifyReverseApp(Box<AppWithUri>),
     Dav(Dav),
 }
 
@@ -312,6 +317,7 @@ impl HostType {
     pub fn host(&self) -> &str {
         match self {
             HostType::ReverseApp(app) => &app.inner.host,
+            HostType::SkipVerifyReverseApp(app) => &app.inner.host,
             HostType::Dav(dav) => &dav.host,
             HostType::StaticApp(app) => &app.host,
         }
@@ -320,6 +326,7 @@ impl HostType {
     pub fn roles(&self) -> &Vec<String> {
         match self {
             HostType::ReverseApp(app) => &app.inner.roles,
+            HostType::SkipVerifyReverseApp(app) => &app.inner.roles,
             HostType::Dav(dav) => &dav.roles,
             HostType::StaticApp(app) => &app.roles,
         }
@@ -328,6 +335,7 @@ impl HostType {
     pub fn secured(&self) -> bool {
         match self {
             HostType::ReverseApp(app) => app.inner.secured,
+            HostType::SkipVerifyReverseApp(app) => app.inner.secured,
             HostType::Dav(dav) => dav.secured,
             HostType::StaticApp(app) => app.secured,
         }
@@ -336,6 +344,7 @@ impl HostType {
     pub fn inject_security_headers(&self) -> bool {
         match self {
             HostType::ReverseApp(app) => app.inner.inject_security_headers,
+            HostType::SkipVerifyReverseApp(app) => app.inner.secured,
             HostType::Dav(_dav) => true,
             HostType::StaticApp(app) => app.inject_security_headers,
         }

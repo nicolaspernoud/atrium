@@ -10,7 +10,7 @@ use axum::{
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use base64ct::Encoding;
 use headers::HeaderValue;
-use http::header::{AUTHORIZATION, COOKIE, SET_COOKIE};
+use http::header::{AUTHORIZATION, COOKIE, HOST, SET_COOKIE};
 use hyper::{header::LOCATION, Body, StatusCode, Uri};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
@@ -18,11 +18,13 @@ use tracing::error;
 
 use crate::{
     apps::proxy::ProxyError,
-    appstate::{Client, ConfigFile, ConfigState},
+    appstate::{ConfigFile, ConfigState},
     configuration::{config_or_error, HostType},
     users::{check_authorization, AdminToken, UserTokenWithoutXSRFCheck, AUTH_COOKIE},
     utils::{is_default, option_vec_trim_remove_empties, string_trim, vec_trim_remove_empties},
 };
+
+use self::proxy::HyperClient;
 
 mod proxy;
 
@@ -38,6 +40,8 @@ pub struct App {
     pub color: usize,
     #[serde(default, skip_serializing_if = "is_default")]
     pub is_proxy: bool,
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub insecure_skip_verify: bool,
     #[serde(deserialize_with = "string_trim")]
     pub host: String,
     #[serde(deserialize_with = "string_trim")]
@@ -84,29 +88,17 @@ pub struct App {
 pub struct AppWithUri {
     pub inner: App,
     pub app_scheme: Scheme,
-    pub app_authority: Authority,
     pub forward_scheme: Scheme,
     pub forward_authority: Authority,
 }
 
 impl AppWithUri {
-    pub fn from_app_domain_and_http_port(inner: App, domain: &str, port: Option<u16>) -> Self {
+    pub fn from_app(inner: App, port: Option<u16>) -> Self {
         let app_scheme = if port.is_some() {
             Scheme::HTTP
         } else {
             Scheme::HTTPS
         };
-        let mut app_authority = if inner.host.contains(domain) {
-            inner.host.clone()
-        } else {
-            format!("{}.{}", inner.host, domain)
-        };
-        if let Some(port) = port {
-            app_authority.push_str(&format!(":{}", port));
-        }
-        let app_authority = app_authority
-            .parse()
-            .expect("could not work out authority from app configuration");
         let forward_scheme = if inner.target.starts_with("https://") {
             Scheme::HTTPS
         } else {
@@ -124,20 +116,19 @@ impl AppWithUri {
         Self {
             inner,
             app_scheme,
-            app_authority,
             forward_scheme,
             forward_authority,
         }
     }
 }
 
-pub async fn proxy_handler(
+pub async fn proxy_handler<S: HyperClient>(
     user: Option<UserTokenWithoutXSRFCheck>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     app: HostType,
     Host(hostname): Host,
     State(config): State<ConfigState>,
-    State(client): State<Client>,
+    State(client): State<S>,
     mut req: Request<Body>,
 ) -> Result<Response<Body>, ProxyError> {
     let domain = hostname.split(':').next().unwrap_or_default();
@@ -176,6 +167,7 @@ pub async fn proxy_handler(
 
     let app = match app {
         HostType::ReverseApp(app) => app,
+        HostType::SkipVerifyReverseApp(app) => app,
         _ => panic!("Service is not an app !"),
     };
 
@@ -186,14 +178,18 @@ pub async fn proxy_handler(
 
     // If the target service contains a port, it is an internal service, inform the app that we are proxying to it
     if app.forward_authority.port().is_some() {
-        req.headers_mut().insert(
-            "X-Forwarded-Host",
-            HeaderValue::from_str(app.app_authority.as_ref()).unwrap(),
-        );
+        req.headers_mut()
+            .insert("X-Forwarded-Host", HeaderValue::from_str(&hostname)?);
+        req.headers_mut()
+            .insert(HOST, HeaderValue::from_str(&hostname)?);
         req.headers_mut().insert(
             "X-Forwarded-Proto",
-            HeaderValue::from_str(app.app_scheme.as_ref()).unwrap(),
+            HeaderValue::from_str(app.app_scheme.as_ref())?,
         );
+    } else {
+        // If not rewrite the host header to fool the target service into thinking it is not behind a proxy
+        req.headers_mut()
+            .insert(HOST, HeaderValue::from_str(app.forward_authority.as_str())?);
     }
 
     // If the app contains basic auth information, forge a basic auth header
@@ -248,7 +244,9 @@ pub async fn proxy_handler(
                 // if so, replace the target service host with the front service host
                 let mut parts = location_uri.into_parts();
                 parts.scheme = Some(app.app_scheme);
-                parts.authority = Some(app.app_authority);
+                if let Ok(authority) = hostname.parse::<Authority>() {
+                    parts.authority = Some(authority);
+                }
                 let uri = Uri::from_parts(parts).unwrap();
 
                 response

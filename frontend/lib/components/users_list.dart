@@ -102,36 +102,41 @@ class _UsersListState extends State<UsersList> {
             leading: const Icon(Icons.account_circle),
             title: Text(user.login),
             subtitle: Text(user.roles.join(",")),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                    icon: const Icon(Icons.edit),
-                    onPressed: () async {
-                      await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) =>
-                                CreateEditUser(user: user, isNew: false),
-                          ));
-                      await _getData();
-                      setState(() {});
-                    }),
-                IconButton(
-                    icon: const Icon(Icons.delete_forever),
-                    onPressed: () async {
-                      var confirmed = await showDialog<bool>(
-                        context: context,
-                        builder: (context) => DeleteDialog(user.login),
-                      );
-                      if (confirmed!) {
-                        await ApiProvider().deleteUser(user.login);
-                        await _getData();
-                        setState(() {});
-                      }
-                    }),
-              ],
-            ),
+            trailing: user.isDeleting
+                ? const DeletingSpinner()
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                          icon: const Icon(Icons.edit),
+                          onPressed: () async {
+                            await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) =>
+                                      CreateEditUser(user: user, isNew: false),
+                                ));
+                            await _getData();
+                            setState(() {});
+                          }),
+                      IconButton(
+                          icon: const Icon(Icons.delete_forever),
+                          onPressed: () async {
+                            var confirmed = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => DeleteDialog(user.login),
+                            );
+                            if (confirmed!) {
+                              setState(() {
+                                user.isDeleting = true;
+                              });
+                              await ApiProvider().deleteUser(user.login);
+                              await _getData();
+                              setState(() {});
+                            }
+                          }),
+                    ],
+                  ),
           );
         });
   }

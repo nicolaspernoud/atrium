@@ -47,7 +47,7 @@ async fn no_atrium_cookie() {
     // Assert that we get the request headers reflected in the response
     assert_eq!(response.status(), 200);
     let response_text = response.text().await.unwrap();
-    assert!(response_text.contains(r#""host": "localhost""#));
+    assert!(response_text.contains(r#""host": "secured-app.atrium.io"#));
 
     // Assert that we DO NOT get the authentication cookie header reflected in the response
     assert!(!response_text.contains(AUTH_COOKIE));
@@ -83,7 +83,7 @@ async fn remote_user_removed() {
     // Assert that we get the request headers reflected in the response
     assert_eq!(response.status(), 200);
     let response_text = response.text().await.unwrap();
-    assert!(response_text.contains(r#""host": "localhost""#));
+    assert!(response_text.contains(r#""host": "secured-app.atrium.io"#));
     assert!(response_text.contains("PlayingFair"));
 
     // Assert that we DO NOT get the remote user in the response
@@ -121,7 +121,7 @@ async fn remote_user_populated() {
     // Assert that we get the request headers reflected in the response
     assert_eq!(response.status(), 200);
     let response_text = response.text().await.unwrap();
-    assert!(response_text.contains(r#""host": "localhost""#));
+    assert!(response_text.contains(r#""host": "app2.atrium.io"#));
 
     // Assert that we only get the remote user populated by atrium in the response
     assert!(response_text.contains("admin@atrium.io"));

@@ -71,7 +71,8 @@ async fn openid_configuration_internal(cfg: &mut Option<OpenIdConfig>) -> Result
         .as_ref()
         .ok_or(anyhow::Error::msg("no open id configuration url"))?;
 
-    let client = hyper_client();
+    // Unwrap is ok since we tested before that the option was Some...
+    let client = hyper_client(cfg.as_ref().unwrap().insecure_skip_verify);
     let req = Request::builder().uri(url).body(Body::empty())?;
     let res = client.request(req).await?;
 
@@ -186,12 +187,12 @@ pub async fn oauth2_callback(
     // Get an auth token
     let token = oauth_client
         .exchange_code(AuthorizationCode::new(query.code.clone()))
-        .request_async(hyper_oauth2_client)
+        .request_async(|r| hyper_oauth2_client(oidc_config.insecure_skip_verify, r))
         .await
         .map_err(|_| ErrResponse::S500("could not get OAuth2 token"))?;
 
     // Fetch user data
-    let client = hyper_client();
+    let client = hyper_client(oidc_config.insecure_skip_verify);
 
     let userinfo_uri = oidc_config
         .userinfo_url
@@ -261,18 +262,28 @@ pub async fn oauth2_callback(
     ))
 }
 
-fn hyper_client() -> Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>> {
-    let https = HttpsConnectorBuilder::new()
-        .with_webpki_roots()
-        .https_or_http()
-        .enable_http1()
-        .build();
+fn hyper_client(
+    insecure_skip_verify: bool,
+) -> Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>> {
+    let https;
+
+    if insecure_skip_verify {
+        https = HttpsConnectorBuilder::new()
+            .with_tls_config(crate::appstate::get_rustls_config_dangerous());
+    } else {
+        https = HttpsConnectorBuilder::new().with_webpki_roots();
+    }
+
+    let https = https.https_or_http().enable_http1().build();
     let client: Client<_, hyper::Body> = Client::builder().build(https);
     client
 }
 
-pub async fn hyper_oauth2_client(request: HttpRequest) -> Result<HttpResponse, ErrResponse> {
-    let client = hyper_client();
+pub async fn hyper_oauth2_client(
+    insecure_skip_verify: bool,
+    request: HttpRequest,
+) -> Result<HttpResponse, ErrResponse> {
+    let client = hyper_client(insecure_skip_verify);
 
     let mut req = Request::builder()
         .uri(request.url.as_str())

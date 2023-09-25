@@ -3,7 +3,7 @@
 use axum::response::IntoResponse;
 use http::uri::{Authority, Scheme};
 use http::Uri;
-use hyper::header::{HeaderMap, HeaderName, HeaderValue, HOST};
+use hyper::header::{HeaderMap, HeaderName, HeaderValue};
 use hyper::http::header::{InvalidHeaderValue, ToStrError};
 use hyper::http::uri::InvalidUri;
 use hyper::upgrade::OnUpgrade;
@@ -12,7 +12,7 @@ use std::net::IpAddr;
 use tokio::io::copy_bidirectional;
 use tracing::debug;
 
-use crate::appstate::Client;
+use crate::appstate::{Client, InsecureSkipVerifyClient};
 
 static CONNECTION_HEADER: HeaderName = HeaderName::from_static("connection");
 static TE_HEADER: HeaderName = HeaderName::from_static("te");
@@ -151,10 +151,6 @@ fn create_proxied_request<B>(
 
     debug!("Setting headers of proxied request");
 
-    request
-        .headers_mut()
-        .insert(HOST, HeaderValue::from_str(forward_authority.host())?);
-
     let mut request_parts = request.uri().clone().into_parts();
     request_parts.scheme = Some(forward_scheme);
     request_parts.authority = Some(forward_authority.clone());
@@ -207,13 +203,16 @@ fn create_proxied_request<B>(
     Ok(request)
 }
 
-pub async fn call(
+pub async fn call<S>(
     client_ip: IpAddr,
     forward_scheme: Scheme,
     forward_authority: &Authority,
     mut request: Request<Body>,
-    client: Client,
-) -> Result<Response<Body>, ProxyError> {
+    client: S,
+) -> Result<Response<Body>, ProxyError>
+where
+    S: HyperClient,
+{
     debug!(
         "Received proxy call from {} to {}, client: {}",
         request.uri().to_string(),
@@ -293,5 +292,21 @@ pub async fn call(
         let proxied_response = create_proxied_response(response);
         debug!("Responding to call with response");
         Ok(proxied_response)
+    }
+}
+
+pub trait HyperClient {
+    fn request(&self, req: Request<Body>) -> hyper::client::ResponseFuture;
+}
+
+impl HyperClient for Client {
+    fn request(&self, req: Request<Body>) -> hyper::client::ResponseFuture {
+        self.request(req)
+    }
+}
+
+impl HyperClient for InsecureSkipVerifyClient {
+    fn request(&self, req: Request<Body>) -> hyper::client::ResponseFuture {
+        self.request(req)
     }
 }

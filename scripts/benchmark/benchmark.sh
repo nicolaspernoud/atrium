@@ -1,8 +1,8 @@
 #!/bin/bash
 
 WD="$(
-    cd "$(dirname "$0")"
-    pwd -P
+  cd "$(dirname "$0")"
+  pwd -P
 )"
 
 mkdir $WD/reports
@@ -17,6 +17,11 @@ test_proxy() {
     exit 1
   fi
 }
+
+pkill actix_backend
+pkill atrium
+docker stop nginx_bench
+docker rm nginx_bench
 
 #####################################################################
 #                            INSTALL RWRK                           #
@@ -44,9 +49,9 @@ sleep 2
 
 # Start proxy
 docker run -d --name nginx_bench \
-    -v ${WD}/nginx_default.conf:/etc/nginx/conf.d/default.conf \
-    --net=host \
-    nginx
+  -v ${WD}/nginx_default.conf:/etc/nginx/conf.d/default.conf \
+  --net=host \
+  nginx
 sleep 2
 
 # Test proxy
@@ -89,9 +94,9 @@ docker build --platform linux/amd64 -t atrium_bench .
 
 # Start proxy
 docker run -d --name atrium_bench \
-    -v ${WD}/atrium.yaml:/app/atrium.yaml \
-    --net=host \
-    atrium_bench
+  -v ${WD}/atrium.yaml:/app/atrium.yaml \
+  --net=host \
+  atrium_bench
 sleep 2
 
 # Test proxy

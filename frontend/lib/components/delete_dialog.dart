@@ -29,7 +29,7 @@ class _DeleteDialogState extends State<DeleteDialog> {
                 onPressed: () => Navigator.pop(context, true),
                 child: Padding(
                   padding: const EdgeInsets.all(12.0),
-                  child: Text(tr(context, "ok")),
+                  child: Text(tr(context, "delete")),
                 ),
               ),
               ElevatedButton(
@@ -46,6 +46,22 @@ class _DeleteDialogState extends State<DeleteDialog> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class DeletingSpinner extends StatelessWidget {
+  const DeletingSpinner({
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      width: 30,
+      height: 30,
+      child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(Colors.grey)),
     );
   }
 }
