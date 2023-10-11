@@ -437,6 +437,9 @@ where
 }
 
 pub fn decrypted_size(enc_size: u64) -> u64 {
+    if enc_size == 0 {
+        return 0;
+    }
     let number_of_chunks = {
         let enc_size_without_nonce = enc_size - NONCE_SIZE as u64;
         let d = enc_size_without_nonce / ENCRYPTED_CHUNK_SIZE as u64;
@@ -491,6 +494,7 @@ mod tests {
         let encrypted_chunk_size = ENCRYPTED_CHUNK_SIZE as u64;
         let plain_chunk_size = PLAIN_CHUNK_SIZE as u64;
 
+        assert_eq!(decrypted_size(0), 0);
         assert_eq!(decrypted_size(nonce_size + encryption_overhead), 0);
         assert_eq!(
             decrypted_size(nonce_size + 3 * encrypted_chunk_size),

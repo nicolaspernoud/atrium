@@ -297,7 +297,17 @@ impl WebdavServer {
 
         let mut body_reader = StreamReader::new(body_with_io_error);
 
-        file.copy_from(&mut body_reader).await?;
+        match file.copy_from(&mut body_reader).await {
+            Ok(()) => (),
+            Err(_) => {
+                *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+                *res.body_mut() = Body::from("error writing file");
+                error!("WARNING: The file creation on {}{} encountered an error. The file was not created or was deleted !",
+                &req.headers().get(http::header::HOST).unwrap_or(&HeaderValue::from_static("<no host>")).to_str().unwrap_or_default(), &req.uri());
+                let _ = fs::remove_file(path).await;
+                return Ok(());
+            }
+        };
 
         // If the X-OC-Mtime header is present, alter the file modified time according to that header's value.
         if let Some(h) = req.headers().get("X-OC-Mtime") {

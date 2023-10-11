@@ -265,14 +265,11 @@ pub async fn oauth2_callback(
 fn hyper_client(
     insecure_skip_verify: bool,
 ) -> Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>> {
-    let https;
-
-    if insecure_skip_verify {
-        https = HttpsConnectorBuilder::new()
-            .with_tls_config(crate::appstate::get_rustls_config_dangerous());
+    let https = if insecure_skip_verify {
+        HttpsConnectorBuilder::new().with_tls_config(crate::appstate::get_rustls_config_dangerous())
     } else {
-        https = HttpsConnectorBuilder::new().with_webpki_roots();
-    }
+        HttpsConnectorBuilder::new().with_webpki_roots()
+    };
 
     let https = https.https_or_http().enable_http1().build();
     let client: Client<_, hyper::Body> = Client::builder().build(https);
