@@ -16,9 +16,13 @@ use axum::{
     response::{IntoResponse, Response},
     Extension, Json, RequestPartsExt, TypedHeader,
 };
-use axum_extra::extract::cookie::{Cookie, Key, PrivateCookieJar};
+use axum_extra::extract::cookie::{Cookie, Key, PrivateCookieJar, SameSite};
 use headers::{authorization::Basic, Authorization, HeaderName};
-use http::{header::CONTENT_LENGTH, request::Parts, HeaderValue, Request, StatusCode};
+use http::{
+    header::{CONTENT_LENGTH, LOCATION, SET_COOKIE},
+    request::Parts,
+    HeaderValue, Request, StatusCode,
+};
 use hyper::Body;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
@@ -300,6 +304,18 @@ pub async fn local_auth(
     ))
 }
 
+pub async fn logout(
+    jar: PrivateCookieJar,
+    Host(hostname): Host,
+) -> Result<PrivateCookieJar, ErrResponse> {
+    let domain = domain_from_hostname(hostname)?;
+    let cookie = Cookie::build(AUTH_COOKIE, "")
+        .path("/")
+        .domain(domain)
+        .finish();
+    Ok(jar.remove(cookie))
+}
+
 pub(crate) fn create_user_cookie(
     user_token: &UserToken,
     hostname: String,
@@ -310,11 +326,7 @@ pub(crate) fn create_user_cookie(
 ) -> Result<Cookie<'static>, ErrResponse> {
     let encoded = serde_json::to_string(user_token)
         .map_err(|_| ErrResponse::S500("could not encode user"))?;
-    let domain = hostname
-        .split(':')
-        .next()
-        .ok_or(ErrResponse::S500("could not find domain"))?
-        .to_owned();
+    let domain = domain_from_hostname(hostname)?;
     let cookie = Cookie::build(AUTH_COOKIE, encoded)
         .domain(domain)
         .path("/")
@@ -329,6 +341,15 @@ pub(crate) fn create_user_cookie(
         city_from_ip(addr, reader)
     );
     Ok(cookie)
+}
+
+fn domain_from_hostname(hostname: String) -> Result<String, ErrResponse> {
+    let domain = hostname
+        .split(':')
+        .next()
+        .ok_or(ErrResponse::S500("could not find domain"))?
+        .to_owned();
+    Ok(domain)
 }
 
 pub fn authenticate_local_user(
@@ -586,29 +607,25 @@ pub fn check_user_has_role_or_forbid(
     target: &HostType,
     hostname: &str,
     path: &str,
-) -> Option<Response<Body>> {
+) -> Result<(), Response<Body>> {
     if let Some(user) = user {
         if !check_user_has_role(user, target.roles())
             || (user.share.is_some()
                 && (user.share.as_ref().unwrap().path != path
                     || user.share.as_ref().unwrap().hostname != hostname))
         {
-            return Some(
-                Response::builder()
-                    .status(StatusCode::FORBIDDEN)
-                    .body(Body::empty())
-                    .unwrap(),
-            );
+            return Err(Response::builder()
+                .status(StatusCode::FORBIDDEN)
+                .body(Body::empty())
+                .unwrap());
         }
-        return None;
+        return Ok(());
     }
-    Some(
-        Response::builder()
-            .status(StatusCode::UNAUTHORIZED)
-            .header(&WWWAUTHENTICATE, r#"Basic realm="server""#)
-            .body(Body::empty())
-            .unwrap(),
-    )
+    Err(Response::builder()
+        .status(StatusCode::UNAUTHORIZED)
+        .header(&WWWAUTHENTICATE, r#"Basic realm="server""#)
+        .body(Body::empty())
+        .unwrap())
 }
 
 pub fn check_authorization(
@@ -616,13 +633,54 @@ pub fn check_authorization(
     user: &Option<&UserToken>,
     hostname: &str,
     path: &str,
-) -> Option<Response<Body>> {
+) -> Result<(), Response<Body>> {
     if app.secured() {
-        if let Some(response) = check_user_has_role_or_forbid(user, app, hostname, path) {
-            return Some(response);
-        }
+        check_user_has_role_or_forbid(user, app, hostname, path)?
     }
-    None
+    Ok(())
+}
+
+pub fn authorized_or_redirect_to_login(
+    app: &HostType,
+    user: &Option<UserTokenWithoutXSRFCheck>,
+    hostname: &str,
+    req: &Request<Body>,
+    config: &std::sync::Arc<crate::configuration::Config>,
+) -> Result<(), Response<Body>> {
+    let domain = hostname.split(':').next().unwrap_or_default();
+    if let Err(mut value) =
+        check_authorization(app, &user.as_ref().map(|u| &u.0), domain, req.uri().path())
+    {
+        // Redirect to login page if user is not logged, write where to get back after login in a cookie
+        if value.status() == StatusCode::UNAUTHORIZED {
+            if let Ok(mut hn) = HeaderValue::from_str(&config.full_domain()) {
+                *value.status_mut() = StatusCode::FOUND;
+                // If single proxy mode, redirect directly to IdP without passing through atrium main app
+                if config.single_proxy {
+                    hn = HeaderValue::from_str(&(config.full_domain() + "/auth/oauth2login"))
+                        .unwrap();
+                }
+                value.headers_mut().append(LOCATION, hn);
+                let cookie = Cookie::build(
+                    "ATRIUM_REDIRECT",
+                    format!("{}://{hostname}", config.scheme()),
+                )
+                .domain(config.domain.clone())
+                .path("/")
+                .same_site(SameSite::Lax)
+                .secure(false)
+                .max_age(time::Duration::seconds(60))
+                .http_only(false)
+                .finish();
+                value.headers_mut().append(
+                    SET_COOKIE,
+                    HeaderValue::from_str(&format!("{cookie}")).unwrap(),
+                );
+            }
+        }
+        return Err(value);
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -667,7 +725,7 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(user, &target, "", "").is_some());
+        assert!(check_user_has_role_or_forbid(user, &target, "", "").is_err());
     }
 
     #[test]
@@ -683,7 +741,7 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(&Some(&user), &target, "", "").is_none());
+        assert!(check_user_has_role_or_forbid(&Some(&user), &target, "", "").is_ok());
     }
 
     #[test]
@@ -699,7 +757,7 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(&Some(&user), &target, "", "").is_none());
+        assert!(check_user_has_role_or_forbid(&Some(&user), &target, "", "").is_ok());
     }
 
     #[test]
@@ -715,7 +773,7 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(&Some(&user), &target, "", "").is_some());
+        assert!(check_user_has_role_or_forbid(&Some(&user), &target, "", "").is_err());
     }
 
     #[test]
@@ -728,7 +786,7 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(&Some(&user), &target, "", "").is_some());
+        assert!(check_user_has_role_or_forbid(&Some(&user), &target, "", "").is_err());
     }
 
     #[test]
@@ -743,7 +801,7 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(&Some(&user), &target, "", "").is_some());
+        assert!(check_user_has_role_or_forbid(&Some(&user), &target, "", "").is_err());
     }
 
     #[test]
@@ -755,6 +813,6 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(&Some(&user), &target, "", "").is_some());
+        assert!(check_user_has_role_or_forbid(&Some(&user), &target, "", "").is_err());
     }
 }

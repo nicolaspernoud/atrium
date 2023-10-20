@@ -7,10 +7,9 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use axum_extra::extract::cookie::{Cookie, SameSite};
 use base64ct::Encoding;
 use headers::HeaderValue;
-use http::header::{AUTHORIZATION, COOKIE, HOST, SET_COOKIE};
+use http::header::{AUTHORIZATION, COOKIE, HOST};
 use hyper::{header::LOCATION, Body, StatusCode, Uri};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
@@ -20,7 +19,7 @@ use crate::{
     apps::proxy::ProxyError,
     appstate::{ConfigFile, ConfigState},
     configuration::{config_or_error, HostType},
-    users::{check_authorization, AdminToken, UserTokenWithoutXSRFCheck, AUTH_COOKIE},
+    users::{authorized_or_redirect_to_login, AdminToken, UserTokenWithoutXSRFCheck, AUTH_COOKIE},
     utils::{is_default, option_vec_trim_remove_empties, string_trim, vec_trim_remove_empties},
 };
 
@@ -131,38 +130,8 @@ pub async fn proxy_handler<S: HyperClient>(
     State(client): State<S>,
     mut req: Request<Body>,
 ) -> Result<Response<Body>, ProxyError> {
-    let domain = hostname.split(':').next().unwrap_or_default();
-    if let Some(mut value) =
-        check_authorization(&app, &user.as_ref().map(|u| &u.0), domain, req.uri().path())
-    {
-        // Redirect to login page if user is not logged, write where to get back after login in a cookie
-        if value.status() == StatusCode::UNAUTHORIZED {
-            if let Ok(mut hn) = HeaderValue::from_str(&config.full_domain()) {
-                *value.status_mut() = StatusCode::FOUND;
-                // If single proxy mode, redirect directly to IdP without passing through atrium main app
-                if config.single_proxy {
-                    hn = HeaderValue::from_str(&(config.full_domain() + "/auth/oauth2login"))
-                        .unwrap();
-                }
-                value.headers_mut().append(LOCATION, hn);
-                let cookie = Cookie::build(
-                    "ATRIUM_REDIRECT",
-                    format!("{}://{hostname}", config.scheme()),
-                )
-                .domain(config.domain.clone())
-                .path("/")
-                .same_site(SameSite::Lax)
-                .secure(false)
-                .max_age(time::Duration::seconds(60))
-                .http_only(false)
-                .finish();
-                value.headers_mut().append(
-                    SET_COOKIE,
-                    HeaderValue::from_str(&format!("{cookie}")).unwrap(),
-                );
-            }
-        }
-        return Ok(value);
+    if let Err(e) = authorized_or_redirect_to_login(&app, &user, &hostname, &req, &config) {
+        return Ok(e);
     }
 
     let app = match app {

@@ -113,6 +113,7 @@ impl TestApp {
             .resolve("app2-altered.atrium.io", main_addr)
             .resolve("secured-app.atrium.io", main_addr)
             .resolve("static-app.atrium.io", main_addr)
+            .resolve("secured-static-app.atrium.io", main_addr)
             .resolve("files1.atrium.io", main_addr)
             .resolve("files2.atrium.io", main_addr)
             .resolve("files3.atrium.io", main_addr)
@@ -218,6 +219,22 @@ pub fn create_default_config(
             is_proxy: false,
             host: "static-app".to_owned(),
             target: "tests/data".to_owned(),
+            secured: false,
+            login: "".to_owned(),
+            password: "".to_owned(),
+            openpath: "".to_owned(),
+            roles: vec!["ADMINS".to_owned()],
+            inject_security_headers: true,
+            ..Default::default()
+        },
+        App {
+            id: 5,
+            name: "Secured Static App".to_owned(),
+            icon: "web_asset".to_owned(),
+            color: 4292030255,
+            is_proxy: false,
+            host: "secured-static-app".to_owned(),
+            target: "tests/data".to_owned(),
             secured: true,
             login: "".to_owned(),
             password: "".to_owned(),
@@ -275,7 +292,7 @@ pub fn create_default_config(
             id: 4,
             host: "secured-files".to_owned(),
             directory: format!("./data/{id}/dir3"),
-            writable: false,
+            writable: true,
             name: "Secured Files".to_owned(),
             icon: "folder".to_owned(),
             color: 4292030255,

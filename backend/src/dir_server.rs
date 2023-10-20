@@ -1,26 +1,35 @@
-use crate::configuration::HostType;
+use crate::{
+    appstate::ConfigState,
+    configuration::HostType,
+    users::{authorized_or_redirect_to_login, UserTokenWithoutXSRFCheck},
+};
 use axum::{
     body::{boxed, Body, BoxBody},
-    http::{Request, Response, StatusCode, Uri},
+    extract::{Host, State},
+    http::{Request, Response, StatusCode},
 };
 use tower::ServiceExt;
 use tower_http::services::ServeDir;
 
 pub async fn dir_handler(
-    uri: Uri,
+    user: Option<UserTokenWithoutXSRFCheck>,
     app: HostType,
-) -> Result<Response<BoxBody>, (StatusCode, String)> {
+    Host(hostname): Host,
+    State(config): State<ConfigState>,
+    req: Request<Body>,
+) -> Result<Response<BoxBody>, Response<Body>> {
+    authorized_or_redirect_to_login(&app, &user, &hostname, &req, &config)?;
+
     let app = match app {
         HostType::StaticApp(app) => app,
         _ => panic!("Service is not a static app !"),
     };
-    let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
 
     match ServeDir::new(app.target).oneshot(req).await {
         Ok(res) => Ok(res.map(boxed)),
-        Err(err) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Something went wrong: {}", err),
-        )),
+        Err(err) => Err(Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .body(format!("Something went wrong: {}", err).into())
+            .unwrap()),
     }
 }

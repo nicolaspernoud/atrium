@@ -52,7 +52,7 @@ pub async fn webdav_handler(
     let domain = hostname.split(':').next().unwrap_or_default();
 
     if method != Method::OPTIONS {
-        if let Some(access_denied_resp) =
+        if let Err(access_denied_resp) =
             check_authorization(&dav, &user.as_ref(), domain, req.uri().path())
         {
             tokio::spawn(async move {

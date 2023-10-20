@@ -29,7 +29,7 @@ use crate::{
     sysinfo::system_info,
     users::{
         add_user, cookie_to_body, delete_user, get_share_token, get_users, list_services,
-        local_auth, whoami,
+        local_auth, logout, whoami,
     },
 };
 
@@ -87,6 +87,7 @@ impl Server {
             .route("/auth/oauth2login", get(oauth2_login))
             .route("/auth/oauth2callback", get(oauth2_callback))
             .route("/auth/oauth2available", get(oauth2_available))
+            .route("/auth/logout", get(logout))
             // We use merge instead of nest as it is still a little bit faster
             .merge(admin_router)
             .merge(user_router)

@@ -576,15 +576,15 @@ fn proppatch(app: &TestApp, url: &str) -> reqwest::RequestBuilder {
     app.client
         .request(Method::from_bytes(b"PROPPATCH").unwrap(), url)
 }
-fn mkcol(app: &TestApp, url: &str) -> reqwest::RequestBuilder {
+pub(crate) fn mkcol(app: &TestApp, url: &str) -> reqwest::RequestBuilder {
     app.client
         .request(Method::from_bytes(b"MKCOL").unwrap(), url)
 }
-fn copy(app: &TestApp, url: &str) -> reqwest::RequestBuilder {
+pub(crate) fn copy(app: &TestApp, url: &str) -> reqwest::RequestBuilder {
     app.client
         .request(Method::from_bytes(b"COPY").unwrap(), url)
 }
-fn mv(app: &TestApp, url: &str) -> reqwest::RequestBuilder {
+pub(crate) fn mv(app: &TestApp, url: &str) -> reqwest::RequestBuilder {
     app.client
         .request(Method::from_bytes(b"MOVE").unwrap(), url)
 }

@@ -8,6 +8,7 @@ use axum::{
 };
 use maxminddb::geoip2;
 use std::net::SocketAddr;
+// use tokio::io::AsyncWriteExt;
 
 const UNKNOWN_CITY: &str = "unknown city";
 const UNKNOWN_COUNTRY: &str = "unknown country";
@@ -50,6 +51,52 @@ pub async fn print_request_response(
         parts.headers,
         body.0
     );
+
+    /* UNCOMMENT THIS TO WRITE TESTS ALMOST AUTOMATICALLY
+    let request_to_test = format!(
+        r#"
+    #[tokio::test]
+    async fn test_() -> Result<()> {{
+        let app = TestApp::spawn(None).await;
+        let url = format!("http://{}:{{}}{}", app.port);
+        let resp = app
+        .client
+        .request(
+            {},
+            url,
+        )
+        {}
+        .body(b"{}".to_vec()).send().await?;
+    "#,
+        parts
+            .headers
+            .get("host")
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .split(":")
+            .collect::<Vec<&str>>()[0],
+        parts.uri,
+        parts.method,
+        parts
+            .headers
+            .iter()
+            .map(|h| { format!(".header({:?}, {:?})", h.0, h.1) })
+            .collect::<Vec<String>>()
+            .join("\n"),
+        body.0
+    );
+
+    let mut file = tokio::fs::OpenOptions::new()
+        .write(true)
+        .append(true)
+        .create(true)
+        .open("my_test.rs")
+        .await
+        .unwrap();
+    file.write_all(request_to_test.as_bytes()).await.unwrap();
+    */
+
     let req = Request::from_parts(parts, Body::from(body.1));
 
     let res = next.run(req).await;
@@ -62,6 +109,35 @@ pub async fn print_request_response(
         parts.headers,
         body.0
     );
+
+    /* UNCOMMENT THIS TO WRITE TESTS ALMOST AUTOMATICALLY
+    let response_to_test = format!(
+        r#"
+        assert_eq!(resp.status(), {});
+        {}
+        let body = resp.text().await?;
+        assert!(body.contains("{}"));
+        Ok(())
+    }}
+    "#,
+        parts.status.as_u16(),
+        parts
+            .headers
+            .iter()
+            .map(|h| {
+                format!(
+                    "assert_eq!(resp.headers().get({:?}).unwrap().to_str().unwrap(), {:?});",
+                    h.0, h.1
+                )
+            })
+            .collect::<Vec<String>>()
+            .join("\n"),
+        body.0
+    );
+
+    file.write_all(response_to_test.as_bytes()).await.unwrap();
+    */
+
     let res = Response::from_parts(parts, Body::from(body.1));
 
     Ok(res)

@@ -1,4 +1,3 @@
-import 'package:atrium/globals.dart';
 import 'package:atrium/i18n.dart';
 import 'package:atrium/models/api_provider.dart';
 import 'package:atrium/models/user.dart';
@@ -63,7 +62,7 @@ class UserDialogOpenerState extends State<UserDialogOpener> {
                 TextButton.icon(
                   onPressed: () {
                     Navigator.of(context).pop();
-                    App().cookie = "";
+                    ApiProvider().logout();
                   },
                   icon: const Icon(
                     Icons.logout,

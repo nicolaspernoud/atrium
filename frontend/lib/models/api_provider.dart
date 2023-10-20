@@ -64,6 +64,19 @@ class ApiProvider {
     }
   }
 
+  Future logout() async {
+    _dio.options.baseUrl = App().prefs.hostname;
+    final response = await _dio.get(
+      '/auth/logout',
+    );
+    if (response.statusCode == 200) {
+      App().cookie = "";
+      App().isAdmin = false;
+      App().xsrfToken = "";
+      App().prefs.username = "UNLOGGED_USER";
+    }
+  }
+
   Future<bool> hasOIDC() async {
     _dio.options.baseUrl = App().prefs.hostname;
     try {

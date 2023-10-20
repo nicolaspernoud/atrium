@@ -304,7 +304,7 @@ async fn get_system_info_test() {
         .unwrap()
         .xsrf_token;
 
-    // Get the a share token for an host which the user has the rights for
+    // Test the system info route
     let response = app
         .client
         .get(format!(
@@ -347,4 +347,36 @@ async fn whoami_test() {
     let user = response.json::<User>().await.unwrap();
     assert_eq!(user.login, "user");
     assert_eq!(user.password, "REDACTED");
+}
+
+#[tokio::test]
+async fn logout_test() {
+    // Arrange
+    let app = TestApp::spawn(None).await;
+    // Log as user
+    let response = app
+        .client
+        .post(format!("http://atrium.io:{}/auth/local", app.port))
+        .body(r#"{"login":"user","password":"password"}"#)
+        .header("Content-Type", "application/json")
+        .send()
+        .await
+        .expect("failed to execute request");
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // Test that we can log out
+    let response = app
+        .client
+        .get(format!("http://atrium.io:{}/auth/logout", app.port))
+        .send()
+        .await
+        .expect("failed to execute request");
+    assert_eq!(response.status(), StatusCode::OK);
+    assert!(response
+        .headers()
+        .get("set-cookie")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .contains("ATRIUM_AUTH=; Path=/; Domain=atrium.io; Max-Age=0;"));
 }

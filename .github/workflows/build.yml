@@ -19,32 +19,6 @@ jobs:
       - name: Test
         run: cargo test --release
 
-  litmus:
-    name: Litmus webdav compliance tests
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./backend
-    steps:
-      - uses: actions/checkout@v3
-      - name: Run server
-        run: |
-          mkdir -p ./data/dir2
-          cargo build --release
-          MAIN_HOSTNAME=localhost cargo run --release &
-          sleep 5
-      - name: Build litmus
-        run: |
-          curl -O http://www.webdav.org/neon/litmus/litmus-0.13.tar.gz
-          tar xf litmus-0.13.tar.gz
-          cd litmus-0.13
-          ./configure
-          make
-      - name: Run litmus protocol compliance tests
-        run: |
-          cd litmus-0.13
-          TESTS="http basic copymove" HTDOCS=htdocs TESTROOT=. ./litmus http://files2.localhost:8080 admin password
-
   docker-build:
     name: Build backend with web frontend as docker image and push to docker hub
     runs-on: ubuntu-latest

@@ -10,6 +10,7 @@ use std::{fs, net::TcpListener};
 mod proxy;
 mod remote_user;
 mod single_proxy;
+mod static_app;
 
 #[tokio::test]
 async fn secured_proxy_test() {
@@ -129,53 +130,6 @@ async fn subdomains_test() {
         r#""x-forwarded-host": "app1.subdomain2.app1.atrium.io:{}""#,
         app.port
     )));
-}
-
-#[tokio::test]
-async fn static_test() {
-    // Arrange
-    let app = TestApp::spawn(None).await;
-
-    println!(
-        "Current directory is: {:?}",
-        std::env::current_dir().unwrap()
-    );
-
-    // Act
-    let response = app
-        .client
-        .get(format!("http://static-app.atrium.io:{}", app.port))
-        .send()
-        .await
-        .expect("failed to execute request");
-
-    // Assert
-    assert!(response.status().is_success());
-    assert!(response
-        .text()
-        .await
-        .unwrap()
-        .contains("This is statically served !"));
-
-    // Act
-    let response = app
-        .client
-        .get(format!(
-            "http://static-app.atrium.io:{}/lorem.txt",
-            app.port
-        ))
-        .send()
-        .await
-        .expect("failed to execute request");
-
-    // Assert
-    assert!(response.status().is_success());
-    assert!(response.headers().contains_key("Content-Security-Policy"));
-    assert!(response
-        .text()
-        .await
-        .unwrap()
-        .contains("Lorem ipsum dolor sit amet"));
 }
 
 #[tokio::test]
