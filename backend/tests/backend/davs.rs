@@ -1211,6 +1211,13 @@ async fn secured_dav_basic_auth_and_token_test() {
         .await
         .expect("failed to execute request");
     assert!(response.status().is_success());
+    // Try to access app with an empty token passed as query, must fail
+    let response = client
+        .get(format!("http://secured-files.atrium.io:{}?token", app.port))
+        .send()
+        .await
+        .expect("failed to execute request");
+    assert!(response.status() == 401);
     // Try to access app with the token passed as query : must succeed
     let response = client
         .get(format!(

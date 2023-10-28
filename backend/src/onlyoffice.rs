@@ -1,6 +1,6 @@
 use crate::appstate::ConfigState;
 use crate::errors::ErrResponse;
-use crate::utils::{is_default, raw_query_pairs};
+use crate::utils::{is_default, query_pairs_or_error};
 use axum::extract::{RawQuery, State};
 use axum::response::IntoResponse;
 use axum::{response::Html, Json};
@@ -61,7 +61,7 @@ pub async fn onlyoffice_page(
     State(config): State<ConfigState>,
     RawQuery(query): RawQuery,
 ) -> Result<Html<String>, (StatusCode, &'static str)> {
-    let ooq = raw_query_pairs(query.as_deref())?;
+    let ooq = query_pairs_or_error(query.as_deref())?;
     let file = ooq.get("file").ok_or(QUERY_ERROR)?;
     let share_token = ooq.get("share_token").ok_or(QUERY_ERROR)?;
     let mtime = ooq.get("mtime").ok_or(QUERY_ERROR)?;

@@ -198,3 +198,7 @@ class _OpenIdWebViewState extends State<OpenIdWebView> {
     return NavigationDecision.navigate;
   }
 }
+
+bool isWebDesktop() {
+  return false;
+}

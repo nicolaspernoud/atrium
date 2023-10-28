@@ -1,3 +1,4 @@
+
 import 'package:atrium/components/delete_dialog.dart';
 import 'package:atrium/components/image_viewer.dart';
 import 'package:atrium/components/media_player.dart';
@@ -452,7 +453,7 @@ class ExplorerState extends State<Explorer> {
                     context,
                     MaterialPageRoute(
                         builder: (context) => PdfViewer(
-                            client: client, url: widget.url, file: file)),
+                            client: client, url: widget.url, file: file, color: widget.dav.color)),
                   );
                 } else if (type == FileType.document) {
                   // Get a share token for this document

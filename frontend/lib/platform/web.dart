@@ -5,6 +5,7 @@ import 'package:atrium/globals.dart';
 import 'package:dio/browser.dart';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:webdav_client/webdav_client.dart' as webdav;
 import 'package:atrium/models/api_provider.dart';
@@ -97,4 +98,10 @@ void redirectToAppAfterAuth() {
       window.location.href = redirectTo;
     }
   }
+}
+
+bool isWebDesktop() {
+  return kIsWeb &&
+      !window.navigator.userAgent.contains("Safari/6") &&
+      defaultTargetPlatform != TargetPlatform.android;
 }

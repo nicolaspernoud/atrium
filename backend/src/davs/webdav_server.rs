@@ -27,7 +27,10 @@ use super::{
     headers::Depth,
     model::Dav,
 };
-use crate::davs::{dav_file::DavFile, headers::Overwrite};
+use crate::{
+    davs::{dav_file::DavFile, headers::Overwrite},
+    utils::extract_query_pairs,
+};
 use async_walkdir::WalkDir;
 use async_zip::{tokio::write::ZipFileWriter, Compression, ZipEntryBuilder};
 use chrono::{TimeZone, Utc};
@@ -118,7 +121,7 @@ impl WebdavServer {
 
         let path = path.as_path();
 
-        let query = req.uri().query().unwrap_or_default();
+        let query = extract_query_pairs(req.uri().query().unwrap_or_default());
 
         let (is_miss, is_dir, is_file, size) = match fs::metadata(path).await.ok() {
             Some(meta) => (false, meta.is_dir(), meta.is_file(), meta.len()),
@@ -143,9 +146,9 @@ impl WebdavServer {
         match method {
             Method::GET | Method::HEAD => {
                 if is_dir {
-                    if let Some(stripped) = query.strip_prefix("q=") {
+                    if let Some(search_str) = query.get("q") {
                         if allow_search {
-                            let q = decode_uri(stripped).unwrap_or_default();
+                            let q = decode_uri(search_str).unwrap_or_default();
                             self.handle_query_dir(
                                 path,
                                 &q,
@@ -156,13 +159,14 @@ impl WebdavServer {
                             )
                             .await?;
                         }
-                    } else if query.starts_with("diskusage") {
+                    } else if query.get("diskusage").is_some() {
                         self.handle_disk_usage(path, &mut res).await?;
                     } else {
                         self.handle_zip_dir(path, head_only, &mut res, key).await?;
                     }
                 } else if is_file {
-                    self.handle_send_file(path, headers, head_only, &mut res, key)
+                    let inline = query.get("inline").is_some();
+                    self.handle_send_file(path, headers, head_only, &mut res, key, inline)
                         .await?;
                 } else {
                     status_not_found(&mut res);
@@ -436,6 +440,7 @@ impl WebdavServer {
         head_only: bool,
         res: &mut Response,
         key: Option<[u8; 32]>,
+        inline_file: bool,
     ) -> BoxResult<()> {
         let file = DavFile::open(path, key).await?;
 
@@ -485,14 +490,21 @@ impl WebdavServer {
         }
 
         let filename = get_file_name(path)?;
-        res.headers_mut().insert(
-            CONTENT_DISPOSITION,
-            HeaderValue::from_str(&format!(
-                "attachment; filename=\"{}\"",
-                encode_uri(filename),
-            ))
-            .unwrap(),
-        );
+        if inline_file {
+            res.headers_mut().insert(
+                CONTENT_DISPOSITION,
+                HeaderValue::from_str("inline").unwrap(),
+            );
+        } else {
+            res.headers_mut().insert(
+                CONTENT_DISPOSITION,
+                HeaderValue::from_str(&format!(
+                    "attachment; filename=\"{}\"",
+                    encode_uri(filename),
+                ))
+                .unwrap(),
+            );
+        }
 
         res.headers_mut().typed_insert(AcceptRanges::bytes());
 

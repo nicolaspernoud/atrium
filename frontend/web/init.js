@@ -1,9 +1,8 @@
 // The value below is altered by the docker image build
 let serviceWorkerVersion = null;
 
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  "https://cdn.jsdelivr.net/npm/pdfjs-dist@2.12.313/build/pdf.worker.min.js";
-window.pdfRenderOptions = {
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@2.12.313/build/pdf.worker.min.js";
+pdfRenderOptions = {
   cMapUrl: "https://cdn.jsdelivr.net/npm/pdfjs-dist@2.12.313/cmaps/",
   cMapPacked: true,
 };

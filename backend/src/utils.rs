@@ -68,22 +68,26 @@ pub(crate) fn is_default<T: Default + PartialEq>(t: &T) -> bool {
 
 const QUERY_ERROR: (StatusCode, &str) = (StatusCode::INTERNAL_SERVER_ERROR, "query is empty");
 
-pub fn raw_query_pairs(
+pub fn query_pairs_or_error(
     query: Option<&str>,
 ) -> Result<std::collections::HashMap<&str, &str>, (StatusCode, &'static str)> {
     let query = query.ok_or(QUERY_ERROR)?;
     if query.is_empty() {
         return Err(QUERY_ERROR);
     }
+    let ooq = extract_query_pairs(query);
+    Ok(ooq)
+}
+
+pub fn extract_query_pairs(query: &str) -> HashMap<&str, &str> {
     let mut ooq = std::collections::HashMap::new();
     let query: Vec<&str> = query.split('&').collect();
     for keyvalue in query {
         let kv: Vec<&str> = keyvalue.split('=').collect();
-        if kv.len() >= 2 && !kv[1].is_empty() {
-            ooq.insert(kv[0], kv[1]);
-        }
+        let value = if kv.len() >= 2 { kv[1] } else { "" };
+        ooq.insert(kv[0], value);
     }
-    Ok(ooq)
+    ooq
 }
 
 pub fn select_entries_by_value(
@@ -106,7 +110,7 @@ mod tests {
     use std::collections::HashMap;
 
     use crate::utils::{
-        option_string_trim, option_vec_trim_remove_empties, raw_query_pairs,
+        option_string_trim, option_vec_trim_remove_empties, query_pairs_or_error,
         select_entries_by_value, string_trim, vec_trim_remove_empties,
     };
     use serde::Deserialize;
@@ -181,7 +185,7 @@ mod tests {
     #[test]
     fn test_query_pairs_ok() {
         let query = Some("a=1&b=2&c=3");
-        let qp = raw_query_pairs(query).unwrap();
+        let qp = query_pairs_or_error(query).unwrap();
         assert_eq!(qp.get("a").unwrap(), &"1");
         assert_eq!(qp.get("c").unwrap(), &"3");
     }
@@ -189,23 +193,23 @@ mod tests {
     #[test]
     fn test_query_pairs_none() {
         let query = None;
-        let qp = raw_query_pairs(query);
+        let qp = query_pairs_or_error(query);
         assert!(qp.is_err());
     }
 
     #[test]
     fn test_query_pairs_empty() {
         let query = Some("");
-        let qp = raw_query_pairs(query);
+        let qp = query_pairs_or_error(query);
         assert!(qp.is_err());
     }
 
     #[test]
     fn test_query_pairs_empty_value() {
         let query = Some("a=1&b=2&c=");
-        let qp = raw_query_pairs(query).unwrap();
+        let qp = query_pairs_or_error(query).unwrap();
         assert_eq!(qp.get("a").unwrap(), &"1");
-        assert!(qp.get("c").is_none());
+        assert!(qp.get("c").unwrap().is_empty());
     }
 
     #[test]

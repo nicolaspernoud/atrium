@@ -6,7 +6,9 @@ use crate::{
     errors::ErrResponse,
     headers::XSRFToken,
     logger::city_from_ip,
-    utils::{is_default, random_string, raw_query_pairs, string_trim, vec_trim_remove_empties},
+    utils::{
+        is_default, query_pairs_or_error, random_string, string_trim, vec_trim_remove_empties,
+    },
 };
 use argon2::{password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use axum::{
@@ -148,7 +150,7 @@ where
 
         // OR Try to get user_token from the query
         if let Ok(query) = RawQuery::from_request_parts(parts, state).await {
-            if let Some(Some(password)) = raw_query_pairs(query.0.as_deref())
+            if let Some(Some(password)) = query_pairs_or_error(query.0.as_deref())
                 .ok()
                 .map(|hm| hm.get("token").map(|v| v.to_owned()))
             {
