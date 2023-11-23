@@ -8,8 +8,7 @@ import '../i18n.dart';
 class CreateEditUser extends StatefulWidget {
   final UserModel user;
   final bool isNew;
-  const CreateEditUser({Key? key, required this.user, required this.isNew})
-      : super(key: key);
+  const CreateEditUser({super.key, required this.user, required this.isNew});
 
   @override
   CreateEditUserState createState() => CreateEditUserState();

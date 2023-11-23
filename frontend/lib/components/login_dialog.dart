@@ -19,10 +19,10 @@ Future<void> showLoginDialog(BuildContext context, bool mounted) async {
 
 class LoginDialog extends StatefulWidget {
   const LoginDialog({
-    Key? key,
+    super.key,
     required this.formKey,
     required this.mounted,
-  }) : super(key: key);
+  });
 
   final GlobalKey<FormState> formKey;
 

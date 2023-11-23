@@ -10,7 +10,7 @@ import 'package:flutter/material.dart';
 import '../models/user.dart';
 
 class UsersList extends StatefulWidget {
-  const UsersList({Key? key}) : super(key: key);
+  const UsersList({super.key});
 
   @override
   State<UsersList> createState() => _UsersListState();

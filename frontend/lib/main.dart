@@ -4,6 +4,7 @@ import 'package:atrium/components/users_list.dart';
 import 'package:atrium/components/welcome_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:atrium/i18n.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 
@@ -22,7 +23,7 @@ Future<void> main() async {
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -39,13 +40,19 @@ class MyApp extends StatelessWidget {
           Locale('fr', ''),
         ],
         theme: ThemeData(
-          primarySwatch: Colors.indigo,
-        ));
+            colorSchemeSeed: Colors.indigo,
+            scaffoldBackgroundColor: Colors.grey.shade50,
+            cardTheme:
+                const CardTheme(elevation: 2, surfaceTintColor: Colors.white),
+            appBarTheme: AppBarTheme(
+              backgroundColor: Colors.indigo,
+              foregroundColor: Colors.grey.shade50,
+            )));
   }
 }
 
 class HomePage extends StatefulWidget {
-  const HomePage({Key? key}) : super(key: key);
+  const HomePage({super.key});
 
   @override
   State<HomePage> createState() => _HomePageState();

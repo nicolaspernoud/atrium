@@ -18,7 +18,7 @@ import '../models/dav.dart';
 import 'icons.dart';
 
 class DavsList extends StatefulWidget {
-  const DavsList({Key? key}) : super(key: key);
+  const DavsList({super.key});
 
   @override
   State<DavsList> createState() => _DavsListState();
@@ -86,7 +86,6 @@ class _DavsListState extends State<DavsList> {
                       return Card(
                         clipBehavior: Clip.antiAlias,
                         margin: const EdgeInsets.all(8.0),
-                        elevation: 2,
                         child: Container(
                           decoration: BoxDecoration(
                               border: Border(

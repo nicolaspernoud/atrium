@@ -19,7 +19,7 @@ import '../models/app.dart';
 import 'icons.dart';
 
 class AppsList extends StatefulWidget {
-  const AppsList({Key? key}) : super(key: key);
+  const AppsList({super.key});
 
   @override
   State<AppsList> createState() => _AppsListState();
@@ -85,7 +85,6 @@ class _AppsListState extends State<AppsList> {
                       var app = list[index];
                       return Card(
                         margin: const EdgeInsets.all(8.0),
-                        elevation: 2,
                         clipBehavior: Clip.antiAlias,
                         child: Container(
                           decoration: BoxDecoration(

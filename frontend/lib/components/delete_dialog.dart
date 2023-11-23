@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 class DeleteDialog extends StatefulWidget {
   final String name;
-  const DeleteDialog(this.name, {Key? key}) : super(key: key);
+  const DeleteDialog(this.name, {super.key});
 
   @override
   State<DeleteDialog> createState() => _DeleteDialogState();

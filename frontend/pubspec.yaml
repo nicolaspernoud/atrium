@@ -34,12 +34,15 @@ dependencies:
     sdk: flutter
 
   dio: ^5.0.0
-  file_picker: ^5.2.2
+  file_picker: ^6.1.1
   filesize: ^2.0.1
   flutter_colorpicker: ^1.0.3
-  flutter_local_notifications: ^15.1.1
+  flutter_local_notifications: ^16.1.0
   path_provider: ^2.0.11
-  pdfx: ^2.4.0
+  pdfx:
+    git:
+      url: "https://github.com/ScerIO/packages.flutter"
+      path: packages/pdfx
   provider: ^6.0.4
   shared_preferences: ^2.0.15
   url_launcher: ^6.1.5
@@ -62,7 +65,7 @@ dev_dependencies:
   # activated in the `analysis_options.yaml` file located at the root of your
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
-  flutter_lints: ^2.0.0
+  flutter_lints: ^3.0.1
 
 flutter_icons: # generate with `flutter pub run flutter_launcher_icons:main`.
   android: "launcher_icon"

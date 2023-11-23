@@ -10,7 +10,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 
 class SystemInfo extends StatefulWidget {
-  const SystemInfo({Key? key}) : super(key: key);
+  const SystemInfo({super.key});
 
   @override
   State<SystemInfo> createState() => _SystemInfoState();
@@ -78,7 +78,6 @@ class _SystemInfoState extends State<SystemInfo> {
                 Padding(
                   padding: const EdgeInsets.all(8.0),
                   child: Card(
-                    elevation: 2,
                     child: Padding(
                       padding: const EdgeInsets.all(10.0),
                       child: ListTile(
@@ -96,7 +95,6 @@ class _SystemInfoState extends State<SystemInfo> {
                 Padding(
                   padding: const EdgeInsets.all(8.0),
                   child: Card(
-                    elevation: 2,
                     child: Padding(
                       padding: const EdgeInsets.all(10.0),
                       child: ListTile(
@@ -114,7 +112,6 @@ class _SystemInfoState extends State<SystemInfo> {
                 Padding(
                   padding: const EdgeInsets.all(8.0),
                   child: Card(
-                    elevation: 2,
                     child: Padding(
                       padding: const EdgeInsets.all(10.0),
                       child: ListTile(

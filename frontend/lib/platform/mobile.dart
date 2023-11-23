@@ -4,6 +4,7 @@ import 'package:atrium/globals.dart';
 import 'package:atrium/i18n.dart';
 import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:path_provider/path_provider.dart';
@@ -88,6 +89,36 @@ download(String url, webdav.Client client, webdav.File file,
   });
   NotificationsPlugin()
       .showProgressNotification(successTitle, file.name!, id, 100, 100);
+}
+
+Future webDownload(String url, String fileName) async {
+  final dio = Dio();
+  dio.interceptors.add(InterceptorsWrapper());
+  try {
+    var id = Random().nextInt(9999);
+    Response response = await dio.get(
+      url,
+      onReceiveProgress: (c, t) {
+        NotificationsPlugin()
+            .showProgressNotification(fileName, "atrium", id, c, t);
+      },
+      options: Options(
+          responseType: ResponseType.bytes,
+          followRedirects: false,
+          validateStatus: (status) {
+            return status != null && status < 500;
+          }),
+    );
+    String? dir = await getDownloadPath();
+    File file = File('$dir/$fileName');
+    var raf = file.openSync(mode: FileMode.write);
+    raf.writeFromSync(response.data);
+    await raf.close();
+  } catch (e) {
+    if (kDebugMode) {
+      print(e);
+    }
+  }
 }
 
 Future<String?> getDownloadPath() async {

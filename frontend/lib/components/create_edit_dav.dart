@@ -11,8 +11,7 @@ import 'icons.dart';
 class CreateEditDav extends StatefulWidget {
   final DavModel dav;
   final bool isNew;
-  const CreateEditDav({Key? key, required this.dav, required this.isNew})
-      : super(key: key);
+  const CreateEditDav({super.key, required this.dav, required this.isNew});
 
   @override
   CreateEditDavState createState() => CreateEditDavState();

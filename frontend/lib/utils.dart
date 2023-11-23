@@ -16,3 +16,46 @@ String generateRandomString(int length) {
   return List.generate(length,
       (index) => availableChars[random.nextInt(availableChars.length)]).join();
 }
+
+enum FileType { text, document, image, media, pdf, other }
+
+FileType fileTypeFromExt(String ext) {
+  if (ext == "pdf") return FileType.pdf;
+  if ([
+    "csv",
+    "json",
+    "log",
+    "md",
+    "nfo",
+    "py",
+    "sh",
+    "srt",
+    "txt",
+    "yaml",
+    "yml",
+  ].contains(ext)) return FileType.text;
+  if (["docx", "doc", "odt", "xlsx", "xls", "ods", "pptx", "ppt", "opd"]
+      .contains(ext)) return FileType.document;
+  if ([
+    "apng",
+    "avif",
+    "bmp",
+    "cur",
+    "gif",
+    "ico",
+    "jfif",
+    "jpeg",
+    "jpg",
+    "pjp",
+    "pjpeg",
+    "png",
+    "svg",
+    "tif",
+    "tiff",
+    "webp"
+  ].contains(ext)) return FileType.image;
+  if (["mp3", "wav", "ogg", "mp4", "avi", "mkv", "m4v", "webm"].contains(ext)) {
+    return FileType.media;
+  }
+  return FileType.other;
+}

@@ -1,4 +1,3 @@
-
 import 'package:atrium/components/delete_dialog.dart';
 import 'package:atrium/components/image_viewer.dart';
 import 'package:atrium/components/media_player.dart';
@@ -12,8 +11,9 @@ import 'package:atrium/i18n.dart';
 import 'package:atrium/models/api_provider.dart';
 import 'package:atrium/models/dav.dart';
 import 'package:atrium/models/pathitem.dart';
+import 'package:atrium/utils.dart';
 import 'package:dio/dio.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:file_picker/file_picker.dart' as file_picker;
 import 'package:filesize/filesize.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -36,10 +36,9 @@ class Explorer extends StatefulWidget {
   late final DavModel dav;
   final bool readWrite;
   // ignore: prefer_const_constructors_in_immutables
-  Explorer({Key? key, required this.dav})
+  Explorer({super.key, required this.dav})
       : url = modelUrl(dav),
-        readWrite = dav.writable,
-        super(key: key);
+        readWrite = dav.writable;
 
   @override
   ExplorerState createState() => ExplorerState();
@@ -162,8 +161,8 @@ class ExplorerState extends State<Explorer> {
                 : IconButton(
                     icon: const Icon(Icons.upload),
                     onPressed: () async {
-                      FilePickerResult? result =
-                          await FilePicker.platform.pickFiles(
+                      file_picker.FilePickerResult? result =
+                          await file_picker.FilePicker.platform.pickFiles(
                         allowMultiple: true,
                         withReadStream: true,
                       );
@@ -453,7 +452,10 @@ class ExplorerState extends State<Explorer> {
                     context,
                     MaterialPageRoute(
                         builder: (context) => PdfViewer(
-                            client: client, url: widget.url, file: file, color: widget.dav.color)),
+                            client: client,
+                            url: widget.url,
+                            file: file,
+                            color: widget.dav.color)),
                   );
                 } else if (type == FileType.document) {
                   // Get a share token for this document
@@ -680,50 +682,10 @@ String? joinQueryParameters(Map<String, String> params) {
       .join('&');
 }
 
-enum FileType { text, document, image, media, pdf, other }
-
 FileType fileType(File? file) {
   if (file == null || file.name == null) return FileType.other;
   var ext = file.name!.split(".").last.toLowerCase();
-
-  if (ext == "pdf") return FileType.pdf;
-  if ([
-    "csv",
-    "json",
-    "log",
-    "md",
-    "nfo",
-    "py",
-    "sh",
-    "srt",
-    "txt",
-    "yaml",
-    "yml",
-  ].contains(ext)) return FileType.text;
-  if (["docx", "doc", "odt", "xlsx", "xls", "ods", "pptx", "ppt", "opd"]
-      .contains(ext)) return FileType.document;
-  if ([
-    "apng",
-    "avif",
-    "bmp",
-    "cur",
-    "gif",
-    "ico",
-    "jfif",
-    "jpeg",
-    "jpg",
-    "pjp",
-    "pjpeg",
-    "png",
-    "svg",
-    "tif",
-    "tiff",
-    "webp"
-  ].contains(ext)) return FileType.image;
-  if (["mp3", "wav", "ogg", "mp4", "avi", "mkv", "m4v", "webm"].contains(ext)) {
-    return FileType.media;
-  }
-  return FileType.other;
+  return fileTypeFromExt(ext);
 }
 
 // Sort : folders first and then alphabetically

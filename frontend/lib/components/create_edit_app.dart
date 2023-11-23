@@ -11,8 +11,7 @@ import 'icons.dart';
 class CreateEditApp extends StatefulWidget {
   final AppModel app;
   final bool isNew;
-  const CreateEditApp({Key? key, required this.app, required this.isNew})
-      : super(key: key);
+  const CreateEditApp({super.key, required this.app, required this.isNew});
 
   @override
   CreateEditAppState createState() => CreateEditAppState();

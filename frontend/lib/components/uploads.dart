@@ -10,7 +10,7 @@ import 'package:atrium/platform/mobile.dart'
     if (dart.library.html) 'package:atrium/platform/web.dart';
 
 class UploadsList extends StatefulWidget {
-  const UploadsList({Key? key}) : super(key: key);
+  const UploadsList({super.key});
   @override
   State<UploadsList> createState() => _UploadsListState();
 }

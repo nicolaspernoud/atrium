@@ -78,8 +78,7 @@ class _MediaPlayerState extends State<MediaPlayer> {
 }
 
 class _ControlsOverlay extends StatelessWidget {
-  const _ControlsOverlay({Key? key, required this.controller})
-      : super(key: key);
+  const _ControlsOverlay({required this.controller});
 
   static const List<double> _playbackRates = <double>[
     0.25,

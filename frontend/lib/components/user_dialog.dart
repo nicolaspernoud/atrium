@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class UserDialogOpener extends StatefulWidget {
-  const UserDialogOpener({Key? key}) : super(key: key);
+  const UserDialogOpener({super.key});
 
   @override
   UserDialogOpenerState createState() => UserDialogOpenerState();

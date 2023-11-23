@@ -1,17 +1,18 @@
 import 'dart:math';
 import 'dart:typed_data';
 import 'package:atrium/components/explorer.dart';
+import 'package:atrium/utils.dart';
 import 'package:flutter/material.dart';
 import 'package:webdav_client/webdav_client.dart';
 
 class ImageViewer extends StatefulWidget {
   const ImageViewer({
-    Key? key,
+    super.key,
     required this.client,
     required this.url,
     required this.files,
     required this.index,
-  }) : super(key: key);
+  });
 
   final Client client;
   final String url;

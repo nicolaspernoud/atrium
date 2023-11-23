@@ -11,8 +11,7 @@ class ShareDialog extends StatefulWidget {
   final String url;
   final File file;
   final Client client;
-  const ShareDialog(this.url, this.file, this.client, {Key? key})
-      : super(key: key);
+  const ShareDialog(this.url, this.file, this.client, {super.key});
 
   @override
   State<ShareDialog> createState() => _ShareDialogState();

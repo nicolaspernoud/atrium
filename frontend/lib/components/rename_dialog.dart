@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 class RenameDialog extends StatefulWidget {
   final String name;
-  const RenameDialog(this.name, {Key? key}) : super(key: key);
+  const RenameDialog(this.name, {super.key});
 
   @override
   State<RenameDialog> createState() => _RenameDialogState();

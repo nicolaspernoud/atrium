@@ -18,7 +18,7 @@ async_zip = { features = ["deflate", "tokio"], default-features = false, version
 async-stream = "0.3"
 async-walkdir = "0.2"
 axum = { version = "0.6.15", features = ["query", "json", "http2", "tokio", "headers"], default-features = false }
-axum-extra = { version = "0.7", features = ["cookie-private"], default-features = false }
+axum-extra = { version = "0.8", features = ["cookie-private"], default-features = false }
 axum-server = "0.5"
 base64ct = { version = "1.5", features = ["alloc"] }
 chacha20poly1305 = { version = "0.10", features = ["stream"], default-features = false }
@@ -31,12 +31,12 @@ http = "0.2"
 hyper = { version = "0.14", default-features = false }
 hyper-rustls = { version = "0.24", features = ["webpki-tokio", "http1", "http2"], default-features = false }
 hyper-trust-dns = { version = "0.5", default-features = false, features = ["dns-over-https-rustls", "rustls-http2", "rustls-webpki", "system-config"] }
-jsonwebtoken = { version = "8", default-features = false }
+jsonwebtoken = { version = "9", default-features = false }
 maxminddb = "0.23"
 mime_guess = { default-features = false, version = "2.0" }
 oauth2 = { default-features = false, version = "4.1" }
 percent-encoding = { default-features = false, version = "2.1" }
-quick-xml = "0.30"
+quick-xml = "0.31"
 rand = { default-features = false, version = "0.8" }
 rustls = { default-features = false, version = "0.21" }
 rustls-acme = { version = "0.7.1", features = ["axum"], default-features = false }

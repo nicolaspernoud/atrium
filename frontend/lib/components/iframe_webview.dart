@@ -9,7 +9,7 @@ import 'dart:ui' as ui;
 
 class AppWebView extends StatefulWidget {
   final String initialUrl;
-  const AppWebView({Key? key, required this.initialUrl}) : super(key: key);
+  const AppWebView({super.key, required this.initialUrl});
 
   @override
   State<AppWebView> createState() => _AppWebViewState();
