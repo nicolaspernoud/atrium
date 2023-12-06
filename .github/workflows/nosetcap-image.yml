@@ -1,0 +1,26 @@
+on:
+  push:
+    branches:
+      - main
+
+name: Build backend with web frontend with no setcap
+jobs:
+  docker-build:
+    name: Build backend with web frontend with no setcap as docker image and push to docker hub
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code Checkout
+        uses: actions/checkout@v3
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Login to docker hub
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+      - name: Build the image
+        run: |
+          sed -i '/^RUN setcap/d' Dockerfile && \
+          docker buildx build --push \
+              --tag nicolaspernoud/atrium:nosetcap \
+              --platform linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64 \
+              .

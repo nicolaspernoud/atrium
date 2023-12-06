@@ -269,7 +269,7 @@ class _DavsListState extends State<DavsList> {
             }
           }),
       floatingActionButton: App().isAdmin
-          ? FloatingActionButton(
+          ? FloatingActionButton.small(
               child: const Icon(Icons.add),
               onPressed: () async {
                 var davs = await ApiProvider().getDavs();

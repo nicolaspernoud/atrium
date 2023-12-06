@@ -73,7 +73,7 @@ class _UsersListState extends State<UsersList> {
                 return _buildListView(context, snapshot.data ?? []);
             }
           }),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.small(
           child: const Icon(Icons.add),
           onPressed: () async {
             var user = UserModel();

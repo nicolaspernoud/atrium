@@ -146,45 +146,46 @@ class ExplorerState extends State<Explorer> {
               }),
         if (readWrite)
           Consumer<App>(builder: (context, app, child) {
-            return app.hasUploads
-                ? IconButton(
-                    icon: const Icon(Icons.playlist_add_check),
-                    onPressed: () {
-                      showModalBottomSheet<void>(
-                        context: context,
-                        builder: (BuildContext context) {
-                          return const UploadsList();
-                        },
-                      );
-                    },
-                  )
-                : IconButton(
-                    icon: const Icon(Icons.upload),
-                    onPressed: () async {
-                      file_picker.FilePickerResult? result =
-                          await file_picker.FilePicker.platform.pickFiles(
-                        allowMultiple: true,
-                        withReadStream: true,
-                      );
-                      if (result != null) {
-                        for (var file in result.files) {
-                          app.pushUpload(client, file, dirPath);
-                        }
-                        while (app.uploads
-                            .where(
-                                (element) => element.status == Status.pending)
-                            .isNotEmpty) {
-                          var currentUpload = await app.uploadOne();
-                          // We refresh the view only if we are still in the same directory
-                          if (currentUpload != null &&
-                              dirPath == currentUpload.destPath) {
-                            setState(() {
-                              _getData();
-                            });
-                          }
+            return Row(children: [
+              IconButton(
+                  icon: const Icon(Icons.upload),
+                  onPressed: () async {
+                    file_picker.FilePickerResult? result =
+                        await file_picker.FilePicker.platform.pickFiles(
+                      allowMultiple: true,
+                      withReadStream: true,
+                    );
+                    if (result != null) {
+                      for (var file in result.files) {
+                        app.pushUpload(client, file, dirPath);
+                      }
+                      while (app.uploads
+                          .where((element) => element.status == Status.pending)
+                          .isNotEmpty) {
+                        var currentUpload = await app.uploadOne();
+                        // We refresh the view only if we are still in the same directory
+                        if (currentUpload != null &&
+                            dirPath == currentUpload.destPath) {
+                          setState(() {
+                            _getData();
+                          });
                         }
                       }
-                    });
+                    }
+                  }),
+              if (app.hasUploads)
+                IconButton(
+                  icon: const Icon(Icons.playlist_add_check),
+                  onPressed: () {
+                    showModalBottomSheet<void>(
+                      context: context,
+                      builder: (BuildContext context) {
+                        return const UploadsList();
+                      },
+                    );
+                  },
+                ),
+            ]);
           }),
         if (_copyMoveStatus != CopyMoveStatus.none)
           IconButton(

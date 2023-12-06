@@ -4,7 +4,6 @@ import 'package:atrium/components/users_list.dart';
 import 'package:atrium/components/welcome_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:atrium/i18n.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 
@@ -40,14 +39,18 @@ class MyApp extends StatelessWidget {
           Locale('fr', ''),
         ],
         theme: ThemeData(
-            colorSchemeSeed: Colors.indigo,
-            scaffoldBackgroundColor: Colors.grey.shade50,
-            cardTheme:
-                const CardTheme(elevation: 2, surfaceTintColor: Colors.white),
-            appBarTheme: AppBarTheme(
-              backgroundColor: Colors.indigo,
-              foregroundColor: Colors.grey.shade50,
-            )));
+          colorScheme: ColorScheme.fromSeed(
+              seedColor: Colors.indigo,
+              background: Colors.grey.shade50,
+              surfaceTint: Colors.white),
+          cardTheme: const CardTheme(elevation: 2),
+          appBarTheme: AppBarTheme(
+            backgroundColor: Colors.indigo,
+            foregroundColor: Colors.grey.shade50,
+            elevation: 4,
+            shadowColor: Theme.of(context).shadowColor,
+          ),
+        ));
   }
 }
 

@@ -246,7 +246,7 @@ class _AppsListState extends State<AppsList> {
             }
           }),
       floatingActionButton: App().isAdmin
-          ? FloatingActionButton(
+          ? FloatingActionButton.small(
               child: const Icon(Icons.add),
               onPressed: () async {
                 var apps = await ApiProvider().getApps();
