@@ -409,9 +409,14 @@ async fn healthcheck_test() {
     let response = app
         .client
         .get(format!("http://atrium.io:{}/healthcheck", app.port))
+        .header("Origin", "http://anywhere.io")
         .send()
         .await
         .expect("failed to execute request");
     assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.headers()["Access-Control-Allow-Origin"],
+        "http://anywhere.io"
+    );
     assert_eq!(response.text().await.unwrap(), "OK");
 }

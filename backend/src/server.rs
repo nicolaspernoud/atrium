@@ -93,7 +93,13 @@ impl Server {
             .merge(user_router)
             .route("/onlyoffice/save", post(onlyoffice_callback))
             .route("/onlyoffice", get(onlyoffice_page))
-            .route("/healthcheck", get(|| async { "OK" }));
+            .route(
+                "/healthcheck",
+                get(|| async { "OK" }).layer(middleware::from_fn_with_state(
+                    state.clone(),
+                    debug_cors_middleware,
+                )),
+            );
 
         let router = if single_proxy {
             let main_router = main_router
