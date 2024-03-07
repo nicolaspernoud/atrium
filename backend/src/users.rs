@@ -613,13 +613,13 @@ pub fn check_user_has_role_or_forbid(
     if let Some(user) = user {
         if !check_user_has_role(user, target.roles())
             || (user.share.is_some()
-                && (user.share.as_ref().unwrap().path != path
+                && (user.share.as_ref().unwrap().path
+                    != urlencoding::decode(path)
+                        .to_owned()
+                        .map_err(|_| forbidden())?
                     || user.share.as_ref().unwrap().hostname != hostname))
         {
-            return Err(Response::builder()
-                .status(StatusCode::FORBIDDEN)
-                .body(Body::empty())
-                .unwrap());
+            return Err(forbidden());
         }
         return Ok(());
     }
@@ -628,6 +628,13 @@ pub fn check_user_has_role_or_forbid(
         .header(&WWWAUTHENTICATE, r#"Basic realm="server""#)
         .body(Body::empty())
         .unwrap())
+}
+
+fn forbidden() -> http::Response<Body> {
+    Response::builder()
+        .status(StatusCode::FORBIDDEN)
+        .body(Body::empty())
+        .unwrap()
 }
 
 pub fn check_authorization(
