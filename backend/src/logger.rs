@@ -9,6 +9,7 @@ use axum::{
 use maxminddb::geoip2;
 use std::net::SocketAddr;
 // use tokio::io::AsyncWriteExt;
+use http_body_util::BodyExt;
 
 const UNKNOWN_CITY: &str = "unknown city";
 const UNKNOWN_COUNTRY: &str = "unknown country";
@@ -41,7 +42,7 @@ pub fn city_from_ip(addr: SocketAddr, reader: OptionalMaxMindReader) -> String {
 pub async fn print_request_response(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     req: Request<Body>,
-    next: Next<Body>,
+    next: Next,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let (parts, body) = req.into_parts();
 
@@ -148,15 +149,16 @@ where
     B: axum::body::HttpBody<Data = Bytes>,
     B::Error: std::fmt::Display,
 {
-    let bytes = match hyper::body::to_bytes(body).await {
-        Ok(bytes) => bytes,
-        Err(err) => {
-            return Err((
+    let bytes = body
+        .collect()
+        .await
+        .map_err(|e| {
+            (
                 StatusCode::BAD_REQUEST,
-                format!("failed to read body: {}", err),
-            ));
-        }
-    };
+                format!("failed to read body: {}", e),
+            )
+        })?
+        .to_bytes();
 
     let body_str = std::str::from_utf8(&bytes).unwrap_or("NOT UTF-8 (probably binary)");
 

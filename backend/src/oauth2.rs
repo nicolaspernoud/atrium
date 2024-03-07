@@ -7,13 +7,19 @@ use crate::{
 };
 use anyhow::Result;
 use axum::{
+    body::Body,
     extract::{ConnectInfo, Host, Query, State},
     response::{IntoResponse, Redirect},
 };
 use axum_extra::extract::{cookie::Cookie, CookieJar, PrivateCookieJar};
-use http::{header::AUTHORIZATION, HeaderValue, Request, StatusCode, Uri};
-use hyper::{Body, Client};
+use http::{header::AUTHORIZATION, HeaderValue, Method, Request, StatusCode, Uri};
+use http_body_util::BodyExt;
+use hyper::body::Buf;
 use hyper_rustls::HttpsConnectorBuilder;
+use hyper_util::{
+    client::legacy::{connect::HttpConnector, Client},
+    rt::TokioExecutor,
+};
 use oauth2::{
     basic::BasicClient, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, HttpRequest,
     HttpResponse, RedirectUrl, Scope, TokenResponse, TokenUrl,
@@ -76,8 +82,8 @@ async fn openid_configuration_internal(cfg: &mut Option<OpenIdConfig>) -> Result
     let req = Request::builder().uri(url).body(Body::empty())?;
     let res = client.request(req).await?;
 
-    let data = hyper::body::to_bytes(res.into_body()).await?;
-    let urls: OpenIdUrls = serde_json::from_slice(&data)?;
+    let body = res.into_body().collect().await?.aggregate();
+    let urls: OpenIdUrls = serde_json::from_reader(body.reader())?;
 
     // Unwrap is ok since we tested before that the option was Some...
     cfg.as_mut().unwrap().auth_url = urls.authorization_endpoint;
@@ -162,6 +168,7 @@ pub struct AuthRequest {
     pub state: String,
 }
 
+/* TEMPORARY
 pub async fn oauth2_callback(
     Query(query): Query<AuthRequest>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
@@ -206,16 +213,19 @@ pub async fn oauth2_callback(
                 |_| ErrResponse::S500("could not create bearer header from access token"),
             )?,
         )
-        .body(hyper::Body::empty())
+        .body(Body::empty())
         .map_err(|_| ErrResponse::S500("could not create user info request"))?;
     let res = client
         .request(req)
         .await
         .map_err(|_| ErrResponse::S500("could not make user info request"))?;
-    let user_data = hyper::body::to_bytes(res.into_body())
+    let user_data = res
+        .into_body()
+        .collect()
         .await
-        .map_err(|_| ErrResponse::S500("could not get user info response body"))?;
-    let user_data: OAuthUser = serde_json::from_slice(&user_data)
+        .map_err(|_| ErrResponse::S500("could not get user info response body"))?
+        .aggregate();
+    let user_data: OAuthUser = serde_json::from_reader(user_data.reader())
         .map_err(|_| ErrResponse::S500("could not retrieve user from user info endpoint"))?;
 
     // Map roles
@@ -262,9 +272,11 @@ pub async fn oauth2_callback(
     ))
 }
 
+ */
+
 fn hyper_client(
     insecure_skip_verify: bool,
-) -> Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>> {
+) -> Client<hyper_rustls::HttpsConnector<HttpConnector>, Body> {
     let https = if insecure_skip_verify {
         HttpsConnectorBuilder::new().with_tls_config(crate::appstate::get_rustls_config_dangerous())
     } else {
@@ -272,10 +284,11 @@ fn hyper_client(
     };
 
     let https = https.https_or_http().enable_http1().build();
-    let client: Client<_, hyper::Body> = Client::builder().build(https);
+    let client: Client<_, Body> = Client::builder(TokioExecutor::new()).build(https);
     client
 }
 
+/* TEMPORARY
 pub async fn hyper_oauth2_client(
     insecure_skip_verify: bool,
     request: HttpRequest,
@@ -299,9 +312,12 @@ pub async fn hyper_oauth2_client(
         .map_err(|_| ErrResponse::S500("could not make OAuth2 request"))?;
     let status_code = res.status();
     let headers = std::mem::take(res.headers_mut());
-    let body = hyper::body::to_bytes(res.into_body())
+    let body = res
+        .into_body()
+        .collect()
         .await
-        .map_err(|_| ErrResponse::S500("could not get body from OAuth2 response"))?;
+        .map_err(|_| ErrResponse::S500("could not get body from OAuth2 response"))?
+        .to_bytes();
 
     Ok(HttpResponse {
         status_code,
@@ -309,3 +325,4 @@ pub async fn hyper_oauth2_client(
         body: body.into(),
     })
 }
+*/

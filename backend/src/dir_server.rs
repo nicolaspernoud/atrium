@@ -4,9 +4,10 @@ use crate::{
     users::{authorized_or_redirect_to_login, UserTokenWithoutXSRFCheck},
 };
 use axum::{
-    body::{boxed, Body, BoxBody},
+    body::Body,
     extract::{Host, State},
     http::{Request, Response, StatusCode},
+    response::IntoResponse,
 };
 use tower::ServiceExt;
 use tower_http::services::ServeDir;
@@ -17,7 +18,7 @@ pub async fn dir_handler(
     Host(hostname): Host,
     State(config): State<ConfigState>,
     req: Request<Body>,
-) -> Result<Response<BoxBody>, Response<Body>> {
+) -> Result<impl IntoResponse, Response<Body>> {
     authorized_or_redirect_to_login(&app, &user, &hostname, &req, &config)?;
 
     let app = match app {
@@ -26,7 +27,7 @@ pub async fn dir_handler(
     };
 
     match ServeDir::new(app.target).oneshot(req).await {
-        Ok(res) => Ok(res.map(boxed)),
+        Ok(res) => Ok(res),
         Err(err) => Err(Response::builder()
             .status(StatusCode::INTERNAL_SERVER_ERROR)
             .body(format!("Something went wrong: {}", err).into())

@@ -8,7 +8,7 @@ use axum::{
 };
 use http::{header, HeaderMap, HeaderValue, StatusCode};
 use serde::Deserialize;
-use std::net::TcpListener;
+use tokio::net::TcpListener;
 
 pub async fn mock_proxied_server(listener: TcpListener) {
     let port = listener.local_addr().unwrap().port();
@@ -22,11 +22,9 @@ pub async fn mock_proxied_server(listener: TcpListener) {
             get(move || async { StatusCode::SWITCHING_PROTOCOLS }),
         );
 
-    axum::Server::from_tcp(listener)
-        .expect("failed to build mock server")
-        .serve(app.into_make_service())
+    axum::serve(listener, app)
         .await
-        .unwrap();
+        .expect("failed to build mock server");
 }
 
 async fn message(port: Extension<u16>, headers: HeaderMap) -> impl IntoResponse {
@@ -64,11 +62,9 @@ pub async fn mock_oauth2_server(listener: TcpListener) {
             debug_cors_middleware(req, next)
         }));
 
-    axum::Server::from_tcp(listener)
-        .expect("failed to build mock server")
-        .serve(app.into_make_service())
+    axum::serve(listener, app)
         .await
-        .unwrap();
+        .expect("failed to build mock server");
 }
 
 async fn well_known_openid(Host(host): Host) -> impl IntoResponse {

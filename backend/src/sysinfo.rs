@@ -5,10 +5,11 @@ use std::{
     path::PathBuf,
     sync::{Mutex, OnceLock},
 };
-use sysinfo::{CpuExt, DiskExt, System, SystemExt};
+use sysinfo::{CpuRefreshKind, Disks, MemoryRefreshKind, RefreshKind, System};
 use tokio::task;
 
 static SYSTEM_INFO: OnceLock<Mutex<System>> = OnceLock::new();
+static DISKS_INFO: OnceLock<Mutex<Disks>> = OnceLock::new();
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SystemInfo {
@@ -28,12 +29,11 @@ pub struct DiskInfo {
 
 pub async fn disk_info(path: PathBuf) -> Result<DiskInfo, &'static str> {
     let disksinfo: Result<Vec<DiskInfo>, &str> = task::spawn_blocking(|| {
-        let sys = SYSTEM_INFO.get_or_init(|| Mutex::new(System::new_all()));
-        let mut sys = sys.lock().map_err(|_| "could not lock system info")?;
+        let disks = DISKS_INFO.get_or_init(|| Mutex::new(Disks::new_with_refreshed_list()));
+        let mut disks = disks.lock().map_err(|_| "could not lock disks info")?;
 
-        sys.refresh_disks();
-        let disksinfo = sys
-            .disks()
+        disks.refresh_list();
+        let disksinfo = disks
             .iter()
             .map(|disk| DiskInfo {
                 name: disk.name().to_str().unwrap_or_default().to_owned(),
@@ -78,12 +78,16 @@ pub async fn system_info(_user: UserToken) -> Result<Json<SystemInfo>, ErrRespon
         let mut sys = sys
             .lock()
             .map_err(|_| ErrResponse::S500("could not lock system info"))?;
-        sys.refresh_system();
+        sys.refresh_specifics(
+            RefreshKind::new()
+                .with_memory(MemoryRefreshKind::new().with_ram())
+                .with_cpu(CpuRefreshKind::new().with_cpu_usage()),
+        );
         Ok(SystemInfo {
             total_memory: sys.total_memory(),
             used_memory: sys.used_memory(),
             cpu_usage: sys.global_cpu_info().cpu_usage(),
-            uptime: sys.uptime(),
+            uptime: System::uptime(),
         })
     })
     .await

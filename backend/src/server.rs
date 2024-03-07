@@ -1,4 +1,5 @@
 use axum::{
+    body::Body,
     handler::Handler,
     middleware,
     response::{Html, IntoResponse},
@@ -7,7 +8,7 @@ use axum::{
 };
 
 use http::StatusCode;
-use hyper::{Body, Request};
+use hyper::Request;
 use tokio::sync::broadcast::Sender;
 
 use tower::ServiceExt;
@@ -24,7 +25,7 @@ use crate::{
     },
     dir_server::dir_handler,
     middlewares::{cors_middleware, debug_cors_middleware, inject_security_headers},
-    oauth2::{oauth2_available, oauth2_callback, oauth2_login},
+    oauth2::{oauth2_available, /*oauth2_callback,*/ oauth2_login},
     onlyoffice::{onlyoffice_callback, onlyoffice_page},
     sysinfo::system_info,
     users::{
@@ -85,7 +86,7 @@ impl Server {
             )
             .route("/auth/local", post(local_auth))
             .route("/auth/oauth2login", get(oauth2_login))
-            .route("/auth/oauth2callback", get(oauth2_callback))
+            /* TEMPORARY .route("/auth/oauth2callback", get(oauth2_callback))*/
             .route("/auth/oauth2available", get(oauth2_available))
             .route("/auth/logout", get(logout))
             // We use merge instead of nest as it is still a little bit faster

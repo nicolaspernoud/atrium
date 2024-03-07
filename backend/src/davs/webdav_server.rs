@@ -33,18 +33,19 @@ use crate::{
 };
 use async_walkdir::WalkDir;
 use async_zip::{tokio::write::ZipFileWriter, Compression, ZipEntryBuilder};
+use axum::body::Body;
 use chrono::{TimeZone, Utc};
-use futures::TryStreamExt;
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
 use headers::{
     AcceptRanges, ContentType, HeaderMap, HeaderMapExt, IfModifiedSince, IfNoneMatch, IfRange,
     Range,
 };
+use http_body_util::BodyExt;
 use hyper::{
     header::{
         HeaderValue, CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, RANGE,
     },
-    Body, Method, StatusCode, Uri,
+    Method, StatusCode, Uri,
 };
 use quick_xml::{escape::escape, events::Event, Reader};
 use serde::Serialize;
@@ -102,7 +103,7 @@ impl WebdavServer {
         Ok(res)
     }
 
-    pub async fn handle(&self, mut req: Request, dav: &Dav) -> BoxResult<Response> {
+    pub async fn handle(&self, req: Request, dav: &Dav) -> BoxResult<Response> {
         let mut res = Response::default();
 
         let req_path = &req.uri().path();
@@ -229,7 +230,7 @@ impl WebdavServer {
                         status_forbid(&mut res);
                     } else if !is_miss {
                         status_method_not_allowed(&mut res);
-                    } else if axum::body::HttpBody::data(&mut req).await.is_some() {
+                    } else if !req.into_body().collect().await?.to_bytes().is_empty() {
                         *res.status_mut() = StatusCode::UNSUPPORTED_MEDIA_TYPE;
                         *res.body_mut() = Body::from("Unsupported Media Type");
                     } else {
@@ -281,7 +282,7 @@ impl WebdavServer {
     async fn handle_upload(
         &self,
         path: &Path,
-        mut req: Request,
+        req: Request,
         res: &mut Response,
         key: Option<[u8; 32]>,
     ) -> BoxResult<()> {
@@ -295,9 +296,13 @@ impl WebdavServer {
             }
         };
 
-        let body_with_io_error = req
-            .body_mut()
-            .map_err(|err| io::Error::new(io::ErrorKind::Other, err));
+        let (parts, body) = req.into_parts();
+
+        let body_stream = body.into_data_stream();
+
+        let body_with_io_error = body_stream.map(|result| {
+            result.map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))
+        });
 
         let mut body_reader = StreamReader::new(body_with_io_error);
 
@@ -307,14 +312,14 @@ impl WebdavServer {
                 *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
                 *res.body_mut() = Body::from("error writing file");
                 error!("WARNING: The file creation on {}{} encountered an error. The file was not created or was deleted !",
-                &req.headers().get(http::header::HOST).unwrap_or(&HeaderValue::from_static("<no host>")).to_str().unwrap_or_default(), &req.uri());
+                parts.headers.get(http::header::HOST).unwrap_or(&HeaderValue::from_static("<no host>")).to_str().unwrap_or_default(), parts.uri);
                 let _ = fs::remove_file(path).await;
                 return Ok(());
             }
         };
 
         // If the X-OC-Mtime header is present, alter the file modified time according to that header's value.
-        if let Some(h) = req.headers().get("X-OC-Mtime") {
+        if let Some(h) = parts.headers.get("X-OC-Mtime") {
             if let Ok(h) = h.to_str() {
                 if let Ok(t) = h.parse::<i64>() {
                     if filetime::set_file_mtime(path, filetime::FileTime::from_unix_time(t, 0))
@@ -429,7 +434,7 @@ impl WebdavServer {
             }
         });
         let reader = Streamer::new(reader, BUF_SIZE);
-        *res.body_mut() = Body::wrap_stream(reader.into_stream());
+        *res.body_mut() = Body::from_stream(reader.into_stream());
         Ok(())
     }
 
@@ -697,7 +702,7 @@ impl WebdavServer {
     }
 
     async fn extract_lastmodified_value(req: Request) -> BoxResult<i64> {
-        let body = hyper::body::to_bytes(req.into_body()).await?;
+        let body = req.into_body().collect().await?.to_bytes();
         let xml_body = String::from_utf8(body.to_vec())?;
 
         let mut in_lastmodified_tag = false;
