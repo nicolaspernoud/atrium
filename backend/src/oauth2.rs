@@ -25,7 +25,7 @@ use oauth2::{
     EndpointSet, HttpRequest, HttpResponse, RedirectUrl, Scope, TokenResponse, TokenUrl,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, net::SocketAddr, pin::Pin};
+use std::{collections::HashMap, net::SocketAddr, ops::Deref, pin::Pin};
 
 const STATE_COOKIE: &str = "ATRIUM_OAUTH2_STATE";
 
@@ -78,9 +78,9 @@ async fn openid_configuration_internal(cfg: &mut Option<OpenIdConfig>) -> Result
         .ok_or(anyhow::Error::msg("no open id configuration url"))?;
 
     // Unwrap is ok since we tested before that the option was Some...
-    let client = HyperClient::new(cfg.as_ref().unwrap().insecure_skip_verify);
+    let client = HyperOAuth2Client::new(cfg.as_ref().unwrap().insecure_skip_verify);
     let req = Request::builder().uri(url).body(Body::empty())?;
-    let res = client.client.request(req).await?;
+    let res = client.request(req).await?;
 
     let body = res.into_body().collect().await?.aggregate();
     let urls: OpenIdUrls = serde_json::from_reader(body.reader())?;
@@ -176,15 +176,14 @@ pub struct AuthRequest {
     pub state: String,
 }
 
-#[axum_macros::debug_handler]
 pub async fn oauth2_callback(
     Query(query): Query<AuthRequest>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     jar: CookieJar,
-    //private_jar: PrivateCookieJar,
+    private_jar: PrivateCookieJar,
     State(config): State<ConfigState>,
     Host(hostname): Host,
-) -> Result<(CookieJar, Redirect), ErrResponse> {
+) -> Result<(PrivateCookieJar, Redirect), ErrResponse> {
     if config.openid_config.is_none() {
         return Err(ErrResponse::S500("OpenID configuration is not available"));
     }
@@ -199,7 +198,7 @@ pub async fn oauth2_callback(
         return Err(ErrResponse::S403("OAuth2 state does not match"));
     }
 
-    let client = HyperClient::new(oidc_config.insecure_skip_verify);
+    let client = HyperOAuth2Client::new(oidc_config.insecure_skip_verify);
     // Get an auth token
     let token = oauth_client
         .exchange_code(AuthorizationCode::new(query.code.clone()))
@@ -207,10 +206,8 @@ pub async fn oauth2_callback(
         .await
         .map_err(|_| ErrResponse::S500("could not get OAuth2 token"))?;
 
-    return Ok((jar, Redirect::to("uri")));
-
     // Fetch user data
-    /*let userinfo_uri = oidc_config
+    let userinfo_uri = oidc_config
         .userinfo_url
         .parse::<Uri>()
         .map_err(|_| ErrResponse::S500("could not parse oidc user info url"))?;
@@ -225,7 +222,6 @@ pub async fn oauth2_callback(
         .body(Body::empty())
         .map_err(|_| ErrResponse::S500("could not create user info request"))?;
     let res = client
-        .client
         .request(req)
         .await
         .map_err(|_| ErrResponse::S500("could not make user info request"))?;
@@ -279,14 +275,20 @@ pub async fn oauth2_callback(
                 user.login
             ))
         },
-    ))*/
+    ))
 }
 
-struct HyperClient {
-    client: Client<hyper_rustls::HttpsConnector<HttpConnector>, Body>,
+struct HyperOAuth2Client(Client<hyper_rustls::HttpsConnector<HttpConnector>, Body>);
+
+impl Deref for HyperOAuth2Client {
+    type Target = Client<hyper_rustls::HttpsConnector<HttpConnector>, Body>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
-impl HyperClient {
+impl HyperOAuth2Client {
     fn new(insecure_skip_verify: bool) -> Self {
         let https = if insecure_skip_verify {
             HttpsConnectorBuilder::new()
@@ -297,36 +299,25 @@ impl HyperClient {
 
         let https = https.https_or_http().enable_http1().build();
         let client: Client<_, Body> = Client::builder(TokioExecutor::new()).build(https);
-        Self { client }
+        Self(client)
     }
 }
 
-impl<'c> AsyncHttpClient<'c> for HyperClient {
+impl<'c> AsyncHttpClient<'c> for HyperOAuth2Client {
     type Error = ErrResponse;
+    type Future = Pin<
+        Box<dyn std::future::Future<Output = Result<HttpResponse, Self::Error>> + Send + Sync + 'c>,
+    >;
 
-    fn call(
-        &'c self,
-        request: HttpRequest,
-    ) -> Pin<Box<dyn std::future::Future<Output = Result<HttpResponse, Self::Error>> + 'c>> {
-        let mut req = Request::builder()
-            .uri(request.uri())
-            .method(request.method());
-
-        for (name, value) in request.headers().iter() {
-            req = req.header(name.as_str(), value.as_bytes());
-        }
-
+    fn call(&'c self, request: HttpRequest) -> Self::Future {
         Box::pin(async move {
-            let req = req
-                .body(Body::from(request.body().to_vec()))
-                .map_err(|_| ErrResponse::S500("could not create OAuth2 request"))?;
+            let (parts, body) = request.into_parts();
+            let req = Request::from_parts(parts, Body::from(body.to_vec()));
             let res = self
-                .client
                 .request(req)
                 .await
                 .map_err(|_| ErrResponse::S500("could not make OAuth2 request"))?;
             let (parts, body) = res.into_parts();
-
             let body = body
                 .collect()
                 .await
@@ -334,12 +325,5 @@ impl<'c> AsyncHttpClient<'c> for HyperClient {
                 .to_bytes();
             Ok(HttpResponse::from_parts(parts, body.to_vec()))
         })
-            as Pin<
-                Box<
-                    dyn std::future::Future<Output = Result<HttpResponse, Self::Error>>
-                        + Send
-                        + Sync,
-                >,
-            >
     }
 }

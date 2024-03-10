@@ -95,7 +95,7 @@ class _ShareDialogState extends State<ShareDialog> {
                       Clipboard.setData(ClipboardData(
                           text: await downloadSingleFile(widget.file.path!)));
                     }
-                    if (!mounted) return;
+                    if (!context.mounted) return; 
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                         content: Text(tr(context, "share_url_copied"))));
                   } on Exception {
