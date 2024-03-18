@@ -7,19 +7,25 @@ use crate::{
 };
 use anyhow::Result;
 use axum::{
+    body::Body,
     extract::{ConnectInfo, Host, Query, State},
     response::{IntoResponse, Redirect},
 };
-use axum_extra::extract::{cookie::Cookie, CookieJar, PrivateCookieJar};
+use axum_extra::extract::cookie::{Cookie, CookieJar, PrivateCookieJar};
 use http::{header::AUTHORIZATION, HeaderValue, Request, StatusCode, Uri};
-use hyper::{Body, Client};
+use http_body_util::BodyExt;
+use hyper::body::Buf;
 use hyper_rustls::HttpsConnectorBuilder;
+use hyper_util::{
+    client::legacy::{connect::HttpConnector, Client},
+    rt::TokioExecutor,
+};
 use oauth2::{
-    basic::BasicClient, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, HttpRequest,
-    HttpResponse, RedirectUrl, Scope, TokenResponse, TokenUrl,
+    AsyncHttpClient, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, EndpointNotSet,
+    EndpointSet, HttpRequest, HttpResponse, RedirectUrl, Scope, TokenResponse, TokenUrl,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, net::SocketAddr};
+use std::{collections::HashMap, net::SocketAddr, ops::Deref, pin::Pin};
 
 const STATE_COOKIE: &str = "ATRIUM_OAUTH2_STATE";
 
@@ -72,12 +78,12 @@ async fn openid_configuration_internal(cfg: &mut Option<OpenIdConfig>) -> Result
         .ok_or(anyhow::Error::msg("no open id configuration url"))?;
 
     // Unwrap is ok since we tested before that the option was Some...
-    let client = hyper_client(cfg.as_ref().unwrap().insecure_skip_verify);
+    let client = HyperOAuth2Client::new(cfg.as_ref().unwrap().insecure_skip_verify);
     let req = Request::builder().uri(url).body(Body::empty())?;
     let res = client.request(req).await?;
 
-    let data = hyper::body::to_bytes(res.into_body()).await?;
-    let urls: OpenIdUrls = serde_json::from_slice(&data)?;
+    let body = res.into_body().collect().await?.aggregate();
+    let urls: OpenIdUrls = serde_json::from_reader(body.reader())?;
 
     // Unwrap is ok since we tested before that the option was Some...
     cfg.as_mut().unwrap().auth_url = urls.authorization_endpoint;
@@ -99,17 +105,25 @@ pub struct OAuthUser {
     pub email: String,
 }
 
+type BasicClient = oauth2::basic::BasicClient<
+    EndpointSet,
+    EndpointNotSet,
+    EndpointNotSet,
+    EndpointNotSet,
+    EndpointSet,
+>;
+
 fn oauth_client_internal(
     config: OpenIdConfig,
     redirect_url: String,
 ) -> Result<BasicClient, oauth2::url::ParseError> {
-    Ok(BasicClient::new(
-        ClientId::new(config.client_id),
-        Some(ClientSecret::new(config.client_secret)),
-        AuthUrl::new(config.auth_url)?,
-        Some(TokenUrl::new(config.token_url)?),
+    Ok(
+        oauth2::basic::BasicClient::new(ClientId::new(config.client_id))
+            .set_client_secret(ClientSecret::new(config.client_secret))
+            .set_auth_uri(AuthUrl::new(config.auth_url)?)
+            .set_token_uri(TokenUrl::new(config.token_url)?)
+            .set_redirect_uri(RedirectUrl::new(redirect_url)?),
     )
-    .set_redirect_uri(RedirectUrl::new(redirect_url)?))
 }
 
 fn oauth_client(config: OpenIdConfig, redirect_url: String) -> Result<BasicClient, ErrResponse> {
@@ -184,16 +198,15 @@ pub async fn oauth2_callback(
         return Err(ErrResponse::S403("OAuth2 state does not match"));
     }
 
+    let client = HyperOAuth2Client::new(oidc_config.insecure_skip_verify);
     // Get an auth token
     let token = oauth_client
         .exchange_code(AuthorizationCode::new(query.code.clone()))
-        .request_async(|r| hyper_oauth2_client(oidc_config.insecure_skip_verify, r))
+        .request_async(&client)
         .await
         .map_err(|_| ErrResponse::S500("could not get OAuth2 token"))?;
 
     // Fetch user data
-    let client = hyper_client(oidc_config.insecure_skip_verify);
-
     let userinfo_uri = oidc_config
         .userinfo_url
         .parse::<Uri>()
@@ -206,16 +219,19 @@ pub async fn oauth2_callback(
                 |_| ErrResponse::S500("could not create bearer header from access token"),
             )?,
         )
-        .body(hyper::Body::empty())
+        .body(Body::empty())
         .map_err(|_| ErrResponse::S500("could not create user info request"))?;
     let res = client
         .request(req)
         .await
         .map_err(|_| ErrResponse::S500("could not make user info request"))?;
-    let user_data = hyper::body::to_bytes(res.into_body())
+    let user_data = res
+        .into_body()
+        .collect()
         .await
-        .map_err(|_| ErrResponse::S500("could not get user info response body"))?;
-    let user_data: OAuthUser = serde_json::from_slice(&user_data)
+        .map_err(|_| ErrResponse::S500("could not get user info response body"))?
+        .aggregate();
+    let user_data: OAuthUser = serde_json::from_reader(user_data.reader())
         .map_err(|_| ErrResponse::S500("could not retrieve user from user info endpoint"))?;
 
     // Map roles
@@ -262,50 +278,52 @@ pub async fn oauth2_callback(
     ))
 }
 
-fn hyper_client(
-    insecure_skip_verify: bool,
-) -> Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>> {
-    let https = if insecure_skip_verify {
-        HttpsConnectorBuilder::new().with_tls_config(crate::appstate::get_rustls_config_dangerous())
-    } else {
-        HttpsConnectorBuilder::new().with_webpki_roots()
-    };
+struct HyperOAuth2Client(Client<hyper_rustls::HttpsConnector<HttpConnector>, Body>);
 
-    let https = https.https_or_http().enable_http1().build();
-    let client: Client<_, hyper::Body> = Client::builder().build(https);
-    client
+impl Deref for HyperOAuth2Client {
+    type Target = Client<hyper_rustls::HttpsConnector<HttpConnector>, Body>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
-pub async fn hyper_oauth2_client(
-    insecure_skip_verify: bool,
-    request: HttpRequest,
-) -> Result<HttpResponse, ErrResponse> {
-    let client = hyper_client(insecure_skip_verify);
+impl HyperOAuth2Client {
+    fn new(insecure_skip_verify: bool) -> Self {
+        let https = if insecure_skip_verify {
+            HttpsConnectorBuilder::new()
+                .with_tls_config(crate::appstate::get_rustls_config_dangerous())
+        } else {
+            HttpsConnectorBuilder::new().with_webpki_roots()
+        };
 
-    let mut req = Request::builder()
-        .uri(request.url.as_str())
-        .method(request.method);
-
-    for (name, value) in &request.headers {
-        req = req.header(name.as_str(), value.as_bytes());
+        let https = https.https_or_http().enable_http1().build();
+        let client: Client<_, Body> = Client::builder(TokioExecutor::new()).build(https);
+        Self(client)
     }
+}
 
-    let req = req
-        .body(Body::from(request.body))
-        .map_err(|_| ErrResponse::S500("could not create OAuth2 request"))?;
-    let mut res = client
-        .request(req)
-        .await
-        .map_err(|_| ErrResponse::S500("could not make OAuth2 request"))?;
-    let status_code = res.status();
-    let headers = std::mem::take(res.headers_mut());
-    let body = hyper::body::to_bytes(res.into_body())
-        .await
-        .map_err(|_| ErrResponse::S500("could not get body from OAuth2 response"))?;
+impl<'c> AsyncHttpClient<'c> for HyperOAuth2Client {
+    type Error = ErrResponse;
+    type Future = Pin<
+        Box<dyn std::future::Future<Output = Result<HttpResponse, Self::Error>> + Send + Sync + 'c>,
+    >;
 
-    Ok(HttpResponse {
-        status_code,
-        headers,
-        body: body.into(),
-    })
+    fn call(&'c self, request: HttpRequest) -> Self::Future {
+        Box::pin(async move {
+            let (parts, body) = request.into_parts();
+            let req = Request::from_parts(parts, Body::from(body.to_vec()));
+            let res = self
+                .request(req)
+                .await
+                .map_err(|_| ErrResponse::S500("could not make OAuth2 request"))?;
+            let (parts, body) = res.into_parts();
+            let body = body
+                .collect()
+                .await
+                .map_err(|_| ErrResponse::S500("could not get body from OAuth2 response"))?
+                .to_bytes();
+            Ok(HttpResponse::from_parts(parts, body.to_vec()))
+        })
+    }
 }

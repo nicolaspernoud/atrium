@@ -276,7 +276,7 @@ class _DavsListState extends State<DavsList> {
                 var maxId =
                     davs.isNotEmpty ? davs.map((e) => e.id).reduce(max) : 0;
                 var dav = DavModel(id: maxId + 1);
-                if (!mounted) return;
+                if (!context.mounted) return;
                 await Navigator.push(
                     context,
                     MaterialPageRoute(

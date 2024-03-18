@@ -475,7 +475,7 @@ class ExplorerState extends State<Explorer> {
                       'share_token': shareToken!
                     }),
                   );
-                  if (!mounted) return;
+                  if (!context.mounted) return;
                   Navigator.of(context)
                       .push(MaterialPageRoute<void>(builder: (context) {
                     return Scaffold(
@@ -490,7 +490,7 @@ class ExplorerState extends State<Explorer> {
                         shareWith: "media_player", shareForDays: 1);
                     uri = '$uri?token=$shareToken';
                   }
-                  if (!mounted) return;
+                  if (!context.mounted) return;
                   Navigator.push(
                       context,
                       MaterialPageRoute(

@@ -1,6 +1,6 @@
 use reqwest::Client;
 use std::{fs, net::SocketAddr, sync::Once};
-use tokio::sync::broadcast;
+use tokio::{net::TcpListener, sync::broadcast};
 use tracing::info;
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
@@ -49,19 +49,23 @@ impl TestApp {
         install_tracing();
         let id = random_string(16);
         create_test_tree(&id).ok();
-        let main_listener =
-            std::net::TcpListener::bind("127.0.0.1:0").expect("failed to bind to random port");
+        let main_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("failed to bind to random port");
 
         let main_addr = (main_listener).local_addr().unwrap();
         let main_port = main_addr.port();
-        let mock1_listener =
-            std::net::TcpListener::bind("127.0.0.1:0").expect("failed to bind to random port");
+        let mock1_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("failed to bind to random port");
         let mock1_port = mock1_listener.local_addr().unwrap().port();
-        let mock2_listener =
-            std::net::TcpListener::bind("127.0.0.1:0").expect("failed to bind to random port");
+        let mock2_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("failed to bind to random port");
         let mock2_port = mock2_listener.local_addr().unwrap().port();
-        let mock_oauth2_listener =
-            std::net::TcpListener::bind("127.0.0.1:0").expect("failed to bind to random port");
+        let mock_oauth2_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("failed to bind to random port");
         let mock_oauth2_port = mock_oauth2_listener.local_addr().unwrap().port();
 
         let mut config = config.unwrap_or_else(|| {
@@ -92,14 +96,16 @@ impl TestApp {
                 let app = Server::build(&fp, tx.clone())
                     .await
                     .expect("could not build server from configuration");
-                let server = axum::Server::bind(&main_addr)
-                    .serve(
-                        app.router
-                            .into_make_service_with_connect_info::<SocketAddr>(),
-                    )
-                    .with_graceful_shutdown(async move {
-                        rx.recv().await.expect("Could not receive reload command!");
-                    });
+                let server = axum::serve(
+                    TcpListener::bind(main_addr)
+                        .await
+                        .expect("could not create listener"),
+                    app.router
+                        .into_make_service_with_connect_info::<SocketAddr>(),
+                )
+                .with_graceful_shutdown(async move {
+                    rx.recv().await.expect("Could not receive reload command!");
+                });
                 server_status.send(()).expect("could not send message");
                 server.await.expect("could not start server");
             }

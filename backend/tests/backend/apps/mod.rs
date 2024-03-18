@@ -2,10 +2,11 @@ use atrium::{apps::App, configuration::TlsMode};
 use axum::{response::Redirect, routing::get, Router};
 use http::StatusCode;
 use hyper::header::LOCATION;
+use tokio::net::TcpListener;
 use tracing::info;
 
 use crate::helpers::TestApp;
-use std::{fs, net::TcpListener};
+use std::fs;
 
 mod proxy;
 mod remote_user;
@@ -193,14 +194,17 @@ async fn redirect_test() {
     // Create base test app
     let mut app = TestApp::spawn(None).await;
     // Spawn 3 targets with different redirect behaviors
-    let fwdtoredirect_listener =
-        std::net::TcpListener::bind("127.0.0.1:0").expect("failed to bind to random port");
+    let fwdtoredirect_listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("failed to bind to random port");
     let fwdtoredirect_port = fwdtoredirect_listener.local_addr().unwrap().port();
-    let relativeredirect_listener =
-        std::net::TcpListener::bind("127.0.0.1:0").expect("failed to bind to random port");
+    let relativeredirect_listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("failed to bind to random port");
     let relativeredirect_port = relativeredirect_listener.local_addr().unwrap().port();
-    let absoluteredirect_listener =
-        std::net::TcpListener::bind("127.0.0.1:0").expect("failed to bind to random port");
+    let absoluteredirect_listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("failed to bind to random port");
     let absoluteredirect_port = absoluteredirect_listener.local_addr().unwrap().port();
     tokio::spawn(fwdtoredirect_server(fwdtoredirect_listener));
     tokio::spawn(relativeredirect_server(relativeredirect_listener, app.port));
@@ -336,9 +340,7 @@ pub async fn fwdtoredirect_server(listener: TcpListener) {
             )
         }),
     );
-    axum::Server::from_tcp(listener)
-        .expect("failed to build mock server")
-        .serve(app.into_make_service())
+    axum::serve(listener, app.into_make_service())
         .await
         .unwrap();
 }
@@ -352,9 +354,7 @@ pub async fn relativeredirect_server(listener: TcpListener, app_port: u16) {
             )
         }),
     );
-    axum::Server::from_tcp(listener)
-        .expect("failed to build mock server")
-        .serve(app.into_make_service())
+    axum::serve(listener, app.into_make_service())
         .await
         .unwrap();
 }
@@ -364,9 +364,7 @@ pub async fn absoluteredirect_server(listener: TcpListener) {
         "/",
         get(|| async { Redirect::permanent("http://absolute.redirect") }),
     );
-    axum::Server::from_tcp(listener)
-        .expect("failed to build mock server")
-        .serve(app.into_make_service())
+    axum::serve(listener, app.into_make_service())
         .await
         .unwrap();
 }

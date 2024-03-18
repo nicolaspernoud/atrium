@@ -173,7 +173,7 @@ class _LoginDialogState extends State<LoginDialog> {
     if (widget.formKey.currentState!.validate()) {
       try {
         await ApiProvider().login(login, password);
-        if (!widget.mounted) return;
+        if (!mounted) return;
         Navigator.pop(context, 'OK');
         // If there is an ATRIUM_REDIRECT cookie set, redirect to the target
         if (kIsWeb) {
