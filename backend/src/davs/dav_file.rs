@@ -1,5 +1,5 @@
+use axum::body::Body;
 use headers::{ETag, LastModified};
-use hyper::Body;
 use std::{fs::Metadata, io::Error, path::Path, time::SystemTime};
 use tokio::{
     fs::{self, File},
@@ -90,23 +90,23 @@ impl DavFile {
     pub async fn into_body_sized(mut self, start: u64, max_length: u64) -> Result<Body, Error> {
         if let Some(key) = self.key {
             let encrypted_file = EncryptedStreamer::new(self.file, key);
-            Ok(Body::wrap_stream(
+            Ok(Body::from_stream(
                 encrypted_file.into_stream_sized(start, max_length),
             ))
         } else {
             self.file.seek(std::io::SeekFrom::Start(start)).await?;
             let reader = Streamer::new(self.file, BUF_SIZE);
-            Ok(Body::wrap_stream(reader.into_stream_sized(max_length)))
+            Ok(Body::from_stream(reader.into_stream_sized(max_length)))
         }
     }
 
     pub async fn into_body(self) -> Body {
         if let Some(key) = self.key {
             let encrypted_file = EncryptedStreamer::new(self.file, key);
-            Body::wrap_stream(encrypted_file.into_stream())
+            Body::from_stream(encrypted_file.into_stream())
         } else {
             let reader = Streamer::new(self.file, BUF_SIZE);
-            Body::wrap_stream(reader.into_stream())
+            Body::from_stream(reader.into_stream())
         }
     }
 }

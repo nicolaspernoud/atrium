@@ -96,24 +96,20 @@ Future webDownload(String url, String fileName) async {
   dio.interceptors.add(InterceptorsWrapper());
   try {
     var id = Random().nextInt(9999);
-    Response response = await dio.get(
+    String? dir = await getDownloadPath();
+    dio.download(
       url,
+      '$dir/$fileName',
       onReceiveProgress: (c, t) {
         NotificationsPlugin()
             .showProgressNotification(fileName, "atrium", id, c, t);
       },
       options: Options(
-          responseType: ResponseType.bytes,
           followRedirects: false,
           validateStatus: (status) {
             return status != null && status < 500;
           }),
     );
-    String? dir = await getDownloadPath();
-    File file = File('$dir/$fileName');
-    var raf = file.openSync(mode: FileMode.write);
-    raf.writeFromSync(response.data);
-    await raf.close();
   } catch (e) {
     if (kDebugMode) {
       print(e);

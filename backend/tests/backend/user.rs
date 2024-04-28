@@ -207,6 +207,30 @@ async fn use_share_token_test() {
         .unwrap()
         .xsrf_token;
 
+    let dir = "A' directory with special chars like é or è";
+    let resource = format!("{dir}/A' file with special chars like é or è.txt");
+
+    // Create a dir with special characters
+    let url = format!("http://secured-files.atrium.io:{}/{dir}", app.port);
+    let resp = crate::davs::mkcol(&app, &url)
+        .header("xsrf-token", &xsrf_token)
+        .send()
+        .await
+        .expect("could not create directory");
+    assert_eq!(resp.status(), 201);
+
+    // Create a file with special characters
+    let url = format!("http://secured-files.atrium.io:{}/{resource}", app.port);
+    let resp = app
+        .client
+        .put(&url)
+        .header("xsrf-token", &xsrf_token)
+        .body(b"abc".to_vec())
+        .send()
+        .await
+        .expect("could not create file");
+    assert_eq!(resp.status(), 201);
+
     // Get the a share token for an host which the user has the rights for
     let response = app
         .client
@@ -216,7 +240,9 @@ async fn use_share_token_test() {
         ))
         .header("Content-Type", "application/json")
         .header("xsrf-token", &xsrf_token)
-        .body(r#"{"hostname":"secured-files.atrium.io","path":"/dira/file2"}"#)
+        .body(format!(
+            r#"{{"hostname":"secured-files.atrium.io","path":"/{resource}"}}"#
+        ))
         .send()
         .await
         .expect("failed to execute request");
@@ -244,7 +270,7 @@ async fn use_share_token_test() {
         .unwrap();
 
     // Try to get the file without share token (must fail)
-    let url = format!("http://secured-files.atrium.io:{}/dira/file2", app.port);
+    let url = format!("http://secured-files.atrium.io:{}/{resource}", app.port);
     let resp = client.get(url).send().await.unwrap();
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 
@@ -258,7 +284,7 @@ async fn use_share_token_test() {
 
     // Try to use the share token for the wrong host but the right path (must fail)
     let url = format!(
-        "http://secured-files-2.atrium.io:{}/dira/file2?token={share_token}",
+        "http://secured-files-2.atrium.io:{}/{resource}?token={share_token}",
         app.port
     );
     let resp = client.get(url).send().await.unwrap();
@@ -266,7 +292,7 @@ async fn use_share_token_test() {
 
     // Try to use the share token for the right host and the right path (must pass)
     let url = format!(
-        "http://secured-files.atrium.io:{}/dira/file2?token={share_token}",
+        "http://secured-files.atrium.io:{}/{resource}?token={share_token}",
         app.port
     );
     let resp = client.get(url).send().await.unwrap();
@@ -275,7 +301,7 @@ async fn use_share_token_test() {
     // Wait for 2 seconds and try to reuse the share token which must be expired
     std::thread::sleep(std::time::Duration::from_secs(3));
     let url = format!(
-        "http://secured-files.atrium.io:{}/dira/file2?token={share_token}",
+        "http://secured-files.atrium.io:{}/{resource}?token={share_token}",
         app.port
     );
     let resp = client.get(url).send().await.unwrap();

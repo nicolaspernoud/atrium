@@ -10,11 +10,12 @@ use crate::{
     users::{check_authorization, UserToken},
 };
 use axum::{
+    body::Body,
     extract::{ConnectInfo, Host},
     http::{Request, Response},
 };
 use http::Method;
-use hyper::{Body, StatusCode};
+use hyper::StatusCode;
 
 use std::{net::SocketAddr, sync::OnceLock};
 use tracing::info;

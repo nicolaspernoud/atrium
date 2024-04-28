@@ -10,7 +10,7 @@ use http::{StatusCode, Uri};
 use rustls::ServerConfig;
 use rustls_acme::{caches::DirCache, AcmeConfig};
 use std::{fs::File, net::SocketAddr, sync::Arc, time::Duration};
-use tokio::{signal, sync::broadcast};
+use tokio::{net::TcpListener, signal, sync::broadcast};
 use tokio_stream::StreamExt;
 use tracing::{error, info};
 use tracing_appender::non_blocking::WorkerGuard;
@@ -45,14 +45,17 @@ async fn run() -> Result<()> {
         "[::]" // On linux bind to ipv6 binds to ipv4 as well
     };
     if debug_mode {
-        let mock1_listener =
-            std::net::TcpListener::bind(format!("{ip_bind}:8081")).expect("failed to bind to port");
+        let mock1_listener = TcpListener::bind(format!("{ip_bind}:8081"))
+            .await
+            .expect("failed to bind to port");
         tokio::spawn(mock_proxied_server(mock1_listener));
-        let mock2_listener =
-            std::net::TcpListener::bind(format!("{ip_bind}:8082")).expect("failed to bind to port");
+        let mock2_listener = TcpListener::bind(format!("{ip_bind}:8082"))
+            .await
+            .expect("failed to bind to port");
         tokio::spawn(mock_proxied_server(mock2_listener));
-        let mock_oauth2_listener =
-            std::net::TcpListener::bind(format!("{ip_bind}:8090")).expect("failed to bind to port");
+        let mock_oauth2_listener = TcpListener::bind(format!("{ip_bind}:8090"))
+            .await
+            .expect("failed to bind to port");
         tokio::spawn(mock_oauth2_server(mock_oauth2_listener));
     }
 
@@ -104,8 +107,8 @@ async fn run() -> Result<()> {
                 .directory_lets_encrypt(true)
                 .cache(DirCache::new("./letsencrypt_cache"))
                 .state();
+
             let mut rustls_config = ServerConfig::builder()
-                .with_safe_defaults()
                 .with_no_client_auth()
                 .with_cert_resolver(state.resolver());
             rustls_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
@@ -127,6 +130,7 @@ async fn run() -> Result<()> {
             let addr = format!("[::]:{}", 443)
                 .parse::<std::net::SocketAddr>()
                 .unwrap();
+
             axum_server::bind(addr)
                 .acceptor(acceptor)
                 .handle(handle)

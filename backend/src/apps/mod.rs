@@ -1,16 +1,20 @@
 use axum::{
+    body::Body,
     extract::{ConnectInfo, Host, Path, State},
     http::{
         uri::{Authority, Scheme},
-        Request, Response,
+        Response,
     },
     response::IntoResponse,
     Json,
 };
 use base64ct::Encoding;
 use headers::HeaderValue;
-use http::header::{AUTHORIZATION, COOKIE, HOST};
-use hyper::{header::LOCATION, Body, StatusCode, Uri};
+use http::{
+    header::{AUTHORIZATION, COOKIE, HOST},
+    Request,
+};
+use hyper::{body::Incoming, header::LOCATION, StatusCode, Uri};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tracing::error;
@@ -22,8 +26,6 @@ use crate::{
     users::{authorized_or_redirect_to_login, AdminToken, UserTokenWithoutXSRFCheck, AUTH_COOKIE},
     utils::{is_default, option_vec_trim_remove_empties, string_trim, vec_trim_remove_empties},
 };
-
-use self::proxy::HyperClient;
 
 mod proxy;
 
@@ -121,7 +123,7 @@ impl AppWithUri {
     }
 }
 
-pub async fn proxy_handler<S: HyperClient>(
+pub async fn proxy_handler<S>(
     user: Option<UserTokenWithoutXSRFCheck>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     app: HostType,
@@ -129,9 +131,13 @@ pub async fn proxy_handler<S: HyperClient>(
     State(config): State<ConfigState>,
     State(client): State<S>,
     mut req: Request<Body>,
-) -> Result<Response<Body>, ProxyError> {
+) -> Result<Response<Incoming>, impl IntoResponse>
+where
+    S: tower_service::Service<Request<Body>, Response = http::Response<hyper::body::Incoming>>,
+    <S as tower_service::Service<Request<Body>>>::Error: std::fmt::Debug,
+{
     if let Err(e) = authorized_or_redirect_to_login(&app, &user, &hostname, &req, &config) {
-        return Ok(e);
+        return Err(e);
     }
 
     let app = match app {
@@ -147,18 +153,25 @@ pub async fn proxy_handler<S: HyperClient>(
 
     // If the target service contains a port, it is an internal service, inform the app that we are proxying to it
     if app.forward_authority.port().is_some() {
-        req.headers_mut()
-            .insert("X-Forwarded-Host", HeaderValue::from_str(&hostname)?);
-        req.headers_mut()
-            .insert(HOST, HeaderValue::from_str(&hostname)?);
+        req.headers_mut().insert(
+            "X-Forwarded-Host",
+            HeaderValue::from_str(&hostname).map_err(|e| ProxyError::from(e))?,
+        );
+        req.headers_mut().insert(
+            HOST,
+            HeaderValue::from_str(&hostname).map_err(|e| ProxyError::from(e))?,
+        );
         req.headers_mut().insert(
             "X-Forwarded-Proto",
-            HeaderValue::from_str(app.app_scheme.as_ref())?,
+            HeaderValue::from_str(app.app_scheme.as_ref()).map_err(|e| ProxyError::from(e))?,
         );
     } else {
         // If not rewrite the host header to fool the target service into thinking it is not behind a proxy
-        req.headers_mut()
-            .insert(HOST, HeaderValue::from_str(app.forward_authority.as_str())?);
+        req.headers_mut().insert(
+            HOST,
+            HeaderValue::from_str(app.forward_authority.as_str())
+                .map_err(|e| ProxyError::from(e))?,
+        );
     }
 
     // If the app contains basic auth information, forge a basic auth header
@@ -198,7 +211,7 @@ pub async fn proxy_handler<S: HyperClient>(
                                 "proxy redirect location header parsing for {:?} gave error: {:?}",
                                 location, e
                             );
-                            return Err(ProxyError::BadRedirectResponseError);
+                            return Err(ProxyError::BadRedirectResponseError.into());
                         }
                     }
                 }

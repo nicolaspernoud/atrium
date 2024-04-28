@@ -27,30 +27,41 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-        title: 'atrium',
-        home: const HomePage(),
-        localizationsDelegates: const [
-          MyLocalizationsDelegate(),
-          ...GlobalMaterialLocalizations.delegates,
-          GlobalWidgetsLocalizations.delegate,
-        ],
-        supportedLocales: const [
-          Locale('en', ''),
-          Locale('fr', ''),
-        ],
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-              seedColor: Colors.indigo,
-              background: Colors.grey.shade50,
-              surfaceTint: Colors.white),
-          cardTheme: const CardTheme(elevation: 2),
-          appBarTheme: AppBarTheme(
-            backgroundColor: Colors.indigo,
-            foregroundColor: Colors.grey.shade50,
-            elevation: 4,
-            shadowColor: Theme.of(context).shadowColor,
-          ),
-        ));
+      title: 'atrium',
+      home: const HomePage(),
+      localizationsDelegates: const [
+        MyLocalizationsDelegate(),
+        ...GlobalMaterialLocalizations.delegates,
+        GlobalWidgetsLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('en', ''),
+        Locale('fr', ''),
+      ],
+      themeMode: ThemeMode.system,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+            seedColor: Colors.indigo,
+            background: Colors.grey.shade50,
+            surfaceTint: Colors.white),
+        cardTheme: const CardTheme(elevation: 2),
+        appBarTheme: AppBarTheme(
+          backgroundColor: Colors.indigo,
+          foregroundColor: Colors.grey.shade50,
+          elevation: 4,
+          shadowColor: Theme.of(context).shadowColor,
+        ),
+      ),
+      darkTheme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+            seedColor: Colors.indigo, brightness: Brightness.dark),
+        cardTheme: const CardTheme(elevation: 2),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.indigo,
+          elevation: 4,
+        ),
+      ),
+    );
   }
 }
 
@@ -97,7 +108,7 @@ class _HomePageState extends State<HomePage> {
                   onTap: _onItemTapped,
                   currentIndex: _selectedIndex,
                   selectedItemColor: Colors.amber[900],
-                  unselectedItemColor: Colors.black,
+                  unselectedItemColor: Colors.grey.shade600,
                   items: <BottomNavigationBarItem>[
                     BottomNavigationBarItem(
                       icon: const Icon(Icons.apps),

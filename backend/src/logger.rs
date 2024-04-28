@@ -7,41 +7,56 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use maxminddb::geoip2;
-use std::net::SocketAddr;
-// use tokio::io::AsyncWriteExt;
+use std::net::{
+    IpAddr::{V4, V6},
+    SocketAddr,
+};
+use http_body_util::BodyExt;
 
 const UNKNOWN_CITY: &str = "unknown city";
 const UNKNOWN_COUNTRY: &str = "unknown country";
+const LOCALHOST: &str = "localhost";
+const LOCAL_NETWORK: &str = "local network";
 
 pub fn city_from_ip(addr: SocketAddr, reader: OptionalMaxMindReader) -> String {
-    let location = if addr.ip().is_loopback() {
-        "localhost".to_owned()
-    } else if addr.is_ipv4() && addr.ip().to_string().starts_with("192.168.") {
-        "local network".to_owned()
-    } else if let Some(reader) = reader {
-        match reader.lookup::<geoip2::City>(addr.ip()) {
-            Ok(city) => format!(
-                "{}, {}",
-                city.city.map_or(UNKNOWN_CITY, |c| c
-                    .names
-                    .map_or(UNKNOWN_CITY, |n| n.get("en").unwrap_or(&UNKNOWN_CITY))),
-                city.country.map_or(UNKNOWN_COUNTRY, |c| c
-                    .names
-                    .map_or(UNKNOWN_COUNTRY, |n| n.get("en").unwrap_or(&UNKNOWN_COUNTRY)))
-            ),
-            Err(_) => "unknown location".to_owned(),
+    let ip = addr.ip();
+    let location = match ip {
+        // Replace with https://doc.rust-lang.org/std/net/enum.IpAddr.html#method.is_global when stable
+        V4(ip) if ip.is_private() => LOCAL_NETWORK.to_owned(),
+        V6(ip) if ip.to_ipv4_mapped().is_some() && ip.to_ipv4_mapped().unwrap().is_private() => {
+            LOCAL_NETWORK.to_owned()
         }
-    } else {
-        "unknown location (no geo ip database)".to_owned()
+        _ if ip.is_loopback() => LOCALHOST.to_owned(), // Does not work for ipv4 mapped addresses
+        V6(ip) if ip.to_ipv4_mapped().is_some() && ip.to_ipv4_mapped().unwrap().is_loopback() => {
+            LOCALHOST.to_owned()
+        }
+        _ => {
+            if let Some(reader) = reader {
+                match reader.lookup::<geoip2::City>(ip) {
+                    Ok(city) => format!(
+                        "{}, {}",
+                        city.city.map_or(UNKNOWN_CITY, |c| c
+                            .names
+                            .map_or(UNKNOWN_CITY, |n| n.get("en").unwrap_or(&UNKNOWN_CITY))),
+                        city.country.map_or(UNKNOWN_COUNTRY, |c| c
+                            .names
+                            .map_or(UNKNOWN_COUNTRY, |n| n.get("en").unwrap_or(&UNKNOWN_COUNTRY)))
+                    ),
+                    Err(_) => "unknown location".to_owned(),
+                }
+            } else {
+                "unknown location (no geo ip database)".to_owned()
+            }
+        }
     };
-    format!("{location} ({})", addr.ip())
+    format!("{location} ({})", ip)
 }
 
 #[tracing::instrument(name = "Request", level = "debug", skip_all, fields(ip=%addr, uri = %req.uri(), method = %req.method()))]
 pub async fn print_request_response(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     req: Request<Body>,
-    next: Next<Body>,
+    next: Next,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let (parts, body) = req.into_parts();
 
@@ -148,15 +163,16 @@ where
     B: axum::body::HttpBody<Data = Bytes>,
     B::Error: std::fmt::Display,
 {
-    let bytes = match hyper::body::to_bytes(body).await {
-        Ok(bytes) => bytes,
-        Err(err) => {
-            return Err((
+    let bytes = body
+        .collect()
+        .await
+        .map_err(|e| {
+            (
                 StatusCode::BAD_REQUEST,
-                format!("failed to read body: {}", err),
-            ));
-        }
-    };
+                format!("failed to read body: {}", e),
+            )
+        })?
+        .to_bytes();
 
     let body_str = std::str::from_utf8(&bytes).unwrap_or("NOT UTF-8 (probably binary)");
 

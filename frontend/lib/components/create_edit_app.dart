@@ -44,7 +44,7 @@ class CreateEditAppState extends State<CreateEditApp> {
                       icon: const Icon(Icons.delete_forever),
                       onPressed: () async {
                         await ApiProvider().deleteApp(widget.app.id);
-                        if (!mounted) return;
+                        if (!context.mounted) return;
                         Navigator.pop(context);
                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                             content: Text(MyLocalizations.of(context)!
@@ -274,7 +274,7 @@ class CreateEditAppState extends State<CreateEditApp> {
                                       } catch (e) {
                                         msg = e.toString();
                                       }
-                                      if (!mounted) return;
+                                      if (!context.mounted) return;
                                       ScaffoldMessenger.of(context)
                                           .showSnackBar(
                                         SnackBar(content: Text(msg)),

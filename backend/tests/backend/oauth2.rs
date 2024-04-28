@@ -4,6 +4,7 @@ use atrium::{
     users::User,
 };
 use hyper::StatusCode;
+use tokio::net::TcpListener;
 
 use crate::helpers::TestApp;
 
@@ -50,8 +51,9 @@ async fn log_with_oidc_as_user() {
 #[tokio::test]
 async fn log_with_oidc_wrong_state() {
     // Arrange
-    let mock_oauth2_listener =
-        std::net::TcpListener::bind("127.0.0.1:0").expect("failed to bind to random port");
+    let mock_oauth2_listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("failed to bind to random port");
     let mock_oauth2_port = mock_oauth2_listener.local_addr().unwrap().port();
     tokio::spawn(mock_oauth2_server(mock_oauth2_listener));
     let config = Config {
@@ -85,8 +87,9 @@ async fn log_with_oidc_wrong_state() {
 #[tokio::test]
 async fn log_with_oidc_as_admin() {
     // Arrange
-    let mock_oauth2_listener =
-        std::net::TcpListener::bind("127.0.0.1:0").expect("failed to bind to random port");
+    let mock_oauth2_listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("failed to bind to random port");
     let mock_oauth2_port = mock_oauth2_listener.local_addr().unwrap().port();
     tokio::spawn(mock_oauth2_server(mock_oauth2_listener));
     let config = Config {
@@ -122,8 +125,9 @@ async fn log_with_oidc_as_admin() {
 #[tokio::test]
 async fn configuration_from_well_known_override() {
     // Arrange
-    let mock_oauth2_listener =
-        std::net::TcpListener::bind("127.0.0.1:0").expect("failed to bind to random port");
+    let mock_oauth2_listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("failed to bind to random port");
     let mock_oauth2_port = mock_oauth2_listener.local_addr().unwrap().port();
     tokio::spawn(mock_oauth2_server(mock_oauth2_listener));
     let config = Config {

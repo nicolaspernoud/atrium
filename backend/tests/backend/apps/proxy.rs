@@ -13,7 +13,7 @@ use tungstenite::{client::IntoClientRequest, Message};
 use crate::helpers::TestApp;
 
 #[tokio::test]
-async fn test_get_error_500() {
+async fn test_get_error_502() {
     // Arrange (proxy to unexisting service)
     let config = Config {
         apps: vec![App {
@@ -39,14 +39,14 @@ async fn test_get_error_500() {
     // Act
     let response = app
         .client
-        .get(format!("http://app1.atrium.io:{}/500", app.port))
+        .get(format!("http://app1.atrium.io:{}/502", app.port))
         .header("keep-alive", "treu")
         .send()
         .await
         .expect("failed to execute request");
 
     // Assert
-    assert_eq!(response.status(), 500);
+    assert_eq!(response.status(), 502);
 }
 
 #[tokio::test]

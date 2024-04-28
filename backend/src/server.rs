@@ -1,4 +1,5 @@
 use axum::{
+    body::Body,
     handler::Handler,
     middleware,
     response::{Html, IntoResponse},
@@ -7,7 +8,7 @@ use axum::{
 };
 
 use http::StatusCode;
-use hyper::{Body, Request};
+use hyper::Request;
 use tokio::sync::broadcast::Sender;
 
 use tower::ServiceExt;

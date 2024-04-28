@@ -1,16 +1,16 @@
 use crate::{appstate::ConfigState, configuration::HostType};
 use axum::{
-    extract::State,
-    http::{Request, StatusCode},
+    extract::{Request, State},
+    http::StatusCode,
     middleware::Next,
     response::Response,
 };
 use http::{HeaderValue, Method};
 
-pub async fn cors_middleware<B>(
+pub async fn cors_middleware(
     State(cfg): State<ConfigState>,
-    req: Request<B>,
-    next: Next<B>,
+    req: Request,
+    next: Next,
 ) -> Result<Response, StatusCode> {
     let origin = req.headers().get("origin").map(|o| o.to_owned());
     let hostname = if origin.is_some() && {
@@ -31,10 +31,7 @@ pub async fn cors_middleware<B>(
     Ok(resp)
 }
 
-pub async fn debug_cors_middleware<B>(
-    req: Request<B>,
-    next: Next<B>,
-) -> Result<Response, StatusCode> {
+pub async fn debug_cors_middleware(req: Request, next: Next) -> Result<Response, StatusCode> {
     let method = req.method().clone();
     let origin = req.headers().get("origin").map(|o| o.to_owned());
     let mut resp = next.run(req).await;
@@ -60,15 +57,12 @@ fn allow_methods_headers_credentials(headers: &mut http::HeaderMap) {
     headers.insert("Access-Control-Allow-Credentials", "true".parse().unwrap());
 }
 
-pub async fn inject_security_headers<B>(
+pub async fn inject_security_headers(
     State(cfg): State<ConfigState>,
     host_type: Option<HostType>,
-    req: Request<B>,
-    next: Next<B>,
-) -> Result<Response, StatusCode>
-where
-    B: std::marker::Send,
-{
+    req: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
     let inject = host_type
         .map(|app| app.inject_security_headers())
         .unwrap_or(true);
@@ -118,7 +112,7 @@ fn inject_security_headers_internal(resp: &mut Response, source: &str) -> Result
         // If not, forge a default CSP Header
         None => {
             headers.insert("Content-Security-Policy", 
-            HeaderValue::from_str(&format!("default-src 'self' {source} https://unpkg.com https://fonts.gstatic.com; script-src 'self' {source} 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' {source} 'unsafe-inline'; frame-src {source}; frame-ancestors {source}; img-src 'self' {source} blob:"))
+            HeaderValue::from_str(&format!("default-src 'self' {source} https://unpkg.com https://*.gstatic.com; script-src 'self' {source} 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://*.gstatic.com; style-src 'self' {source} 'unsafe-inline'; frame-src {source}; frame-ancestors {source}; img-src 'self' {source} blob:"))
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,);
         }
     }

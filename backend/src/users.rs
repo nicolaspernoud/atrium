@@ -13,19 +13,23 @@ use crate::{
 use argon2::{password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use axum::{
     async_trait,
-    extract::{ConnectInfo, FromRef, FromRequestParts, Host, Path, RawQuery, State},
+    body::Body,
+    extract::{ConnectInfo, FromRef, FromRequestParts, Host, Path, RawQuery, Request, State},
     middleware::Next,
     response::{IntoResponse, Response},
-    Extension, Json, RequestPartsExt, TypedHeader,
+    Extension, Json, RequestPartsExt,
 };
-use axum_extra::extract::cookie::{Cookie, Key, PrivateCookieJar, SameSite};
+use axum_extra::{
+    extract::cookie::{Cookie, Key, PrivateCookieJar, SameSite},
+    TypedHeader,
+};
 use headers::{authorization::Basic, Authorization, HeaderName};
 use http::{
     header::{CONTENT_LENGTH, LOCATION, SET_COOKIE},
     request::Parts,
-    HeaderValue, Request, StatusCode,
+    HeaderValue, StatusCode,
 };
-use hyper::Body;
+
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
@@ -311,10 +315,7 @@ pub async fn logout(
     Host(hostname): Host,
 ) -> Result<PrivateCookieJar, ErrResponse> {
     let domain = domain_from_hostname(hostname)?;
-    let cookie = Cookie::build(AUTH_COOKIE, "")
-        .path("/")
-        .domain(domain)
-        .finish();
+    let cookie = Cookie::build((AUTH_COOKIE, "")).path("/").domain(domain);
     Ok(jar.remove(cookie))
 }
 
@@ -329,14 +330,14 @@ pub(crate) fn create_user_cookie(
     let encoded = serde_json::to_string(user_token)
         .map_err(|_| ErrResponse::S500("could not encode user"))?;
     let domain = domain_from_hostname(hostname)?;
-    let cookie = Cookie::build(AUTH_COOKIE, encoded)
+    let cookie = Cookie::build((AUTH_COOKIE, encoded))
         .domain(domain)
         .path("/")
         .same_site(axum_extra::extract::cookie::SameSite::Lax)
         .secure(config.tls_mode.is_secure())
         .max_age(Duration::days(config.session_duration_days.unwrap_or(1)))
         .http_only(true)
-        .finish();
+        .build();
     info!(
         "AUTHENTICATION SUCCESS for {} from {}",
         user.login,
@@ -561,10 +562,7 @@ pub async fn get_share_token(
     }
 }
 
-pub async fn cookie_to_body<B>(
-    req: Request<B>,
-    next: Next<B>,
-) -> Result<impl IntoResponse, StatusCode> {
+pub async fn cookie_to_body(req: Request, next: Next) -> Result<impl IntoResponse, StatusCode> {
     let res = next.run(req).await;
     let (mut parts, _) = res.into_parts();
     if parts.status == StatusCode::OK {
@@ -613,13 +611,13 @@ pub fn check_user_has_role_or_forbid(
     if let Some(user) = user {
         if !check_user_has_role(user, target.roles())
             || (user.share.is_some()
-                && (user.share.as_ref().unwrap().path != path
+                && (user.share.as_ref().unwrap().path
+                    != urlencoding::decode(path)
+                        .to_owned()
+                        .map_err(|_| forbidden())?
                     || user.share.as_ref().unwrap().hostname != hostname))
         {
-            return Err(Response::builder()
-                .status(StatusCode::FORBIDDEN)
-                .body(Body::empty())
-                .unwrap());
+            return Err(forbidden());
         }
         return Ok(());
     }
@@ -628,6 +626,13 @@ pub fn check_user_has_role_or_forbid(
         .header(&WWWAUTHENTICATE, r#"Basic realm="server""#)
         .body(Body::empty())
         .unwrap())
+}
+
+fn forbidden() -> http::Response<Body> {
+    Response::builder()
+        .status(StatusCode::FORBIDDEN)
+        .body(Body::empty())
+        .unwrap()
 }
 
 pub fn check_authorization(
@@ -663,17 +668,16 @@ pub fn authorized_or_redirect_to_login(
                         .unwrap();
                 }
                 value.headers_mut().append(LOCATION, hn);
-                let cookie = Cookie::build(
+                let cookie = Cookie::build((
                     "ATRIUM_REDIRECT",
                     format!("{}://{hostname}", config.scheme()),
-                )
+                ))
                 .domain(config.domain.clone())
                 .path("/")
                 .same_site(SameSite::Lax)
                 .secure(false)
                 .max_age(time::Duration::seconds(60))
-                .http_only(false)
-                .finish();
+                .http_only(false);
                 value.headers_mut().append(
                     SET_COOKIE,
                     HeaderValue::from_str(&format!("{cookie}")).unwrap(),

@@ -61,7 +61,7 @@ class CreateEditDavState extends State<CreateEditDav> {
                       icon: const Icon(Icons.delete_forever),
                       onPressed: () async {
                         await ApiProvider().deleteDav(widget.dav.id);
-                        if (!mounted) return;
+                        if (!context.mounted) return;
                         Navigator.pop(context);
                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                             content: Text(MyLocalizations.of(context)!
@@ -220,7 +220,7 @@ class CreateEditDavState extends State<CreateEditDav> {
                                         } catch (e) {
                                           msg = e.toString();
                                         }
-                                        if (!mounted) return;
+                                        if (!context.mounted) return;
                                         ScaffoldMessenger.of(context)
                                             .showSnackBar(
                                           SnackBar(content: Text(msg)),

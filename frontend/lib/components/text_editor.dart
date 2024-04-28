@@ -70,10 +70,9 @@ class _TextEditorState extends State<TextEditor> {
         child: TextFormField(
           decoration: const InputDecoration(
             filled: true,
-            fillColor: Colors.white,
             isDense: true,
             border: InputBorder.none,
-            contentPadding: EdgeInsets.zero,
+            contentPadding: EdgeInsets.symmetric(vertical: 4.0),
           ),
           controller: _editingController,
           cursorColor: Colors.blue,

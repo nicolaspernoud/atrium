@@ -95,7 +95,7 @@ class _ShareDialogState extends State<ShareDialog> {
                       Clipboard.setData(ClipboardData(
                           text: await downloadSingleFile(widget.file.path!)));
                     }
-                    if (!mounted) return;
+                    if (!context.mounted) return; 
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                         content: Text(tr(context, "share_url_copied"))));
                   } on Exception {
@@ -143,7 +143,11 @@ class _ShareDialogState extends State<ShareDialog> {
 
     List<String> htmlFiles = await Future.wait(futures);
 
+    var folderAsHTML = '📁 ${file.name}<ul>${htmlFiles.join("\n")}</ul>';
     // Create an html list with those urls
-    return '<html><body>📁 ${file.name}<ul>${htmlFiles.join("\n")}</ul></body></html>';
+    if (recursionLevel == 0) {
+      folderAsHTML = '<html><body>$folderAsHTML</body></html>';
+    }
+    return folderAsHTML;
   }
 }

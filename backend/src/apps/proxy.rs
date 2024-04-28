@@ -1,18 +1,24 @@
 // inspired by https://github.com/felipenoris/hyper-reverse-proxy
 
-use axum::response::IntoResponse;
-use http::uri::{Authority, Scheme};
-use http::Uri;
-use hyper::header::{HeaderMap, HeaderName, HeaderValue};
-use hyper::http::header::{InvalidHeaderValue, ToStrError};
-use hyper::http::uri::InvalidUri;
-use hyper::upgrade::OnUpgrade;
-use hyper::{Body, Error, Request, Response, StatusCode};
+use axum::{body::Body, response::IntoResponse};
+use http::{
+    uri::{Authority, Scheme},
+    Uri,
+};
+use hyper::{
+    body::Incoming,
+    header::{HeaderMap, HeaderName, HeaderValue},
+    http::{
+        header::{InvalidHeaderValue, ToStrError},
+        uri::InvalidUri,
+    },
+    upgrade::OnUpgrade,
+    Request, Response, StatusCode,
+};
+use hyper_util::client::legacy::Error;
 use std::net::IpAddr;
 use tokio::io::copy_bidirectional;
 use tracing::debug;
-
-use crate::appstate::{Client, InsecureSkipVerifyClient};
 
 static CONNECTION_HEADER: HeaderName = HeaderName::from_static("connection");
 static TE_HEADER: HeaderName = HeaderName::from_static("te");
@@ -35,14 +41,22 @@ static X_FORWARDED_FOR: HeaderName = HeaderName::from_static("x-forwarded-for");
 #[derive(Debug)]
 pub enum ProxyError {
     InvalidUri(InvalidUri),
-    HyperError(Error),
+    HyperError(hyper::Error),
+    HyperClientError(Error),
     ForwardHeaderError,
     UpgradeError(String),
     BadRedirectResponseError,
+    ClientError(&'static str),
 }
 
 impl From<Error> for ProxyError {
     fn from(err: Error) -> ProxyError {
+        ProxyError::HyperClientError(err)
+    }
+}
+
+impl From<hyper::Error> for ProxyError {
+    fn from(err: hyper::Error) -> ProxyError {
         ProxyError::HyperError(err)
     }
 }
@@ -70,8 +84,19 @@ impl IntoResponse for ProxyError {
         match self {
             ProxyError::ForwardHeaderError => StatusCode::BAD_GATEWAY.into_response(),
             ProxyError::UpgradeError(s) => (StatusCode::BAD_GATEWAY, s).into_response(),
+            ProxyError::ClientError(s) => (
+                StatusCode::BAD_GATEWAY,
+                format!("Proxy client error: {}", s),
+            )
+                .into_response(),
             _ => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
         }
+    }
+}
+
+impl From<ProxyError> for Response<Body> {
+    fn from(value: ProxyError) -> Self {
+        value.into_response()
     }
 }
 
@@ -208,10 +233,11 @@ pub async fn call<S>(
     forward_scheme: Scheme,
     forward_authority: &Authority,
     mut request: Request<Body>,
-    client: S,
-) -> Result<Response<Body>, ProxyError>
+    mut client: S,
+) -> Result<Response<Incoming>, ProxyError>
 where
-    S: HyperClient,
+    S: tower_service::Service<Request<Body>, Response = http::Response<Incoming>>,
+    <S as tower_service::Service<Request<Body>>>::Error: std::fmt::Debug,
 {
     debug!(
         "Received proxy call from {} to {}, client: {}",
@@ -249,14 +275,18 @@ where
         }
         let proxied_request = Request::from_parts(parts, Body::from(bytes));
     */
-    let mut response = client.request(proxied_request).await?;
+    let mut response = client.call(proxied_request).await.map_err(|_| {
+        ProxyError::ClientError(
+            "invalid TLS certificate, use option to skip verification if needed",
+        )
+    })?;
 
     if response.status() == StatusCode::SWITCHING_PROTOCOLS {
         let response_upgrade_type = get_upgrade_type(response.headers());
 
         if request_upgrade_type == response_upgrade_type {
             if let Some(request_upgraded) = request_upgraded {
-                let mut response_upgraded = response
+                let response_upgraded = response
                     .extensions_mut()
                     .remove::<OnUpgrade>()
                     .expect("response does not have an upgrade extension")
@@ -265,8 +295,13 @@ where
                 debug!("Responding to a connection upgrade response");
 
                 tokio::spawn(async move {
-                    let mut request_upgraded =
+                    let request_upgraded =
                         request_upgraded.await.expect("failed to upgrade request");
+
+                    let mut request_upgraded =
+                        hyper_util::rt::tokio::TokioIo::new(request_upgraded);
+                    let mut response_upgraded =
+                        hyper_util::rt::tokio::TokioIo::new(response_upgraded);
 
                     match copy_bidirectional(&mut response_upgraded, &mut request_upgraded).await {
                         Ok(_) => debug!("successfull copy between upgraded connections"),
@@ -292,21 +327,5 @@ where
         let proxied_response = create_proxied_response(response);
         debug!("Responding to call with response");
         Ok(proxied_response)
-    }
-}
-
-pub trait HyperClient {
-    fn request(&self, req: Request<Body>) -> hyper::client::ResponseFuture;
-}
-
-impl HyperClient for Client {
-    fn request(&self, req: Request<Body>) -> hyper::client::ResponseFuture {
-        self.request(req)
-    }
-}
-
-impl HyperClient for InsecureSkipVerifyClient {
-    fn request(&self, req: Request<Body>) -> hyper::client::ResponseFuture {
-        self.request(req)
     }
 }

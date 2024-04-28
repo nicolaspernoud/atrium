@@ -253,7 +253,7 @@ class _AppsListState extends State<AppsList> {
                 var maxId =
                     apps.isNotEmpty ? apps.map((e) => e.id).reduce(max) : 0;
                 var app = AppModel(id: maxId + 1);
-                if (!mounted) return;
+                if (!context.mounted) return;
                 await Navigator.push(
                     context,
                     MaterialPageRoute(

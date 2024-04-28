@@ -92,7 +92,7 @@ class ApiProvider {
     _dio.options.baseUrl = App().prefs.hostname;
     final Map<String, dynamic> request = {
       "hostname": hostname,
-      "path": escapePath(path)
+      "path": path
     };
     if (shareForDays != null) {
       request.addAll({"share_with": shareWith, "share_for_days": shareForDays});

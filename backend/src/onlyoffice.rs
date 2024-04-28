@@ -1,13 +1,17 @@
-use crate::appstate::ConfigState;
-use crate::errors::ErrResponse;
-use crate::utils::{is_default, query_pairs_or_error};
-use axum::extract::{RawQuery, State};
-use axum::response::IntoResponse;
-use axum::{response::Html, Json};
-use http::header::CONTENT_TYPE;
-use http::{header, Method, Request, StatusCode};
-use hyper::{Body, Client};
+use crate::{
+    appstate::ConfigState,
+    errors::ErrResponse,
+    utils::{is_default, query_pairs_or_error},
+};
+use axum::{
+    body::Body,
+    extract::{RawQuery, State},
+    response::{Html, IntoResponse},
+    Json,
+};
+use http::{header, header::CONTENT_TYPE, Method, Request, StatusCode};
 use hyper_rustls::HttpsConnectorBuilder;
+use hyper_util::{client::legacy::Client, rt::TokioExecutor};
 use jsonwebtoken::{encode, EncodingKey, Header};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -175,7 +179,7 @@ pub async fn onlyoffice_callback(
             .enable_http1()
             .build();
 
-        let client: Client<_, hyper::Body> = Client::builder().build(https);
+        let client: Client<_, Body> = Client::builder(TokioExecutor::new()).build(https);
 
         // GET the binary content from url
         let request = Request::get(payload.url.unwrap())
@@ -197,7 +201,7 @@ pub async fn onlyoffice_callback(
             .method(Method::PUT)
             .uri(query.unwrap())
             .header(CONTENT_TYPE, "application/octet-stream")
-            .body(Body::wrap_stream(response.into_body()))
+            .body(Body::new(response.into_body()))
             .map_err(|_| ErrResponse::S500("could not create PUT request to atrium file server"))?;
         let response = client
             .request(request)
