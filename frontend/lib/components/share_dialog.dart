@@ -4,7 +4,6 @@ import 'package:atrium/i18n.dart';
 import 'package:atrium/models/api_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:rich_clipboard/rich_clipboard.dart';
 import 'package:webdav_client/webdav_client.dart';
 
 class ShareDialog extends StatefulWidget {
@@ -87,15 +86,12 @@ class _ShareDialogState extends State<ShareDialog> {
                   try {
                     if (_doNotZipFolder) {
                       var html = await downloadFolderAsHTMLList(widget.file);
-                      await RichClipboard.setData(RichClipboardData(
-                        text: html,
-                        html: html,
-                      ));
+                      await Clipboard.setData(ClipboardData(text: html));
                     } else {
-                      Clipboard.setData(ClipboardData(
-                          text: await downloadSingleFile(widget.file.path!)));
+                      var text = await downloadSingleFile(widget.file.path!);
+                      await Clipboard.setData(ClipboardData(text: text));
                     }
-                    if (!context.mounted) return; 
+                    if (!context.mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                         content: Text(tr(context, "share_url_copied"))));
                   } on Exception {

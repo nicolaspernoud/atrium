@@ -42,7 +42,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
             seedColor: Colors.indigo,
-            background: Colors.grey.shade50,
+            surface: Colors.grey.shade50,
             surfaceTint: Colors.white),
         cardTheme: const CardTheme(elevation: 2),
         appBarTheme: AppBarTheme(

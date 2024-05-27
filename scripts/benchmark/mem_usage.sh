@@ -21,22 +21,6 @@ if [ -z "$pid" ]; then
     exit 1
 fi
 
-# Create the gnuplot script
-gnuplot_script=$(
-    cat <<EOL
-set xlabel "Time"
-set ylabel "Memory usage (MB)"
-set title "Memory usage of process $process_name"
-set xdata time
-set timefmt "%s.%N" # Set time format to include nanoseconds
-set format x "%H:%M:%S"
-plot "memory_usage.log" using 1:(\$2/1024) with linespoints title "Memory Usage (MB)"
-EOL
-)
-
-# Save the gnuplot script to a file
-echo "$gnuplot_script" >plot_memory_usage.gp
-
 run_loop() {
     while true; do
         mem=$(ps -p $pid -o rss=)

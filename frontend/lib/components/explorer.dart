@@ -559,6 +559,7 @@ class ExplorerState extends State<Explorer> {
           },
           icon: const Icon(Icons.search)),
       PopupMenuButton<SortBy>(
+          tooltip: tr(context, "sort_by"),
           icon: const Icon(Icons.sort),
           onSelected: (SortBy item) {
             setState(() {

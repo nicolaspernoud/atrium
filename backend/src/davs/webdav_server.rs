@@ -1008,17 +1008,6 @@ impl WebdavServer {
     }
 }
 
-#[derive(Debug, Serialize)]
-struct IndexData {
-    href: String,
-    uri_prefix: String,
-    paths: Vec<PathItem>,
-    allow_upload: bool,
-    allow_delete: bool,
-    allow_search: bool,
-    dir_exists: bool,
-}
-
 #[derive(Debug, Serialize, Eq, PartialEq, Ord, PartialOrd)]
 struct PathItem {
     path_type: PathType,

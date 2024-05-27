@@ -1,15 +1,13 @@
 use crate::helpers::{encode_uri, TestApp};
-use std::io::{self, BufWriter, Write};
-
-use http::StatusCode;
-use hyper::{header::RANGE, Method};
-use tokio::fs::File;
-
 use anyhow::Result;
 use base64ct::{Base64, Encoding};
 use futures::StreamExt;
+use http::StatusCode;
+use hyper::{header::RANGE, Method};
 use quick_xml::escape::escape;
 use sha2::{Digest, Sha512};
+use std::{io::{self, BufWriter, Write}, time::{Duration, Instant}};
+use tokio::fs::File;
 
 #[tokio::test]
 async fn put_and_retrieve_tests() -> Result<()> {
@@ -58,18 +56,18 @@ async fn sized_files_bench() -> Result<()> {
         create_big_binary_file(size * 1_000_000, sized_file_path);
 
         // Reference : file copy
-        let before = time::Instant::now();
+        let before = Instant::now();
         std::fs::copy(sized_file_path, downloaded_file_path)?;
         println!(
             "=== Reference: file copy of size {size} Mb in {:.2?} s → {:.2?} Mb/s",
-            before.elapsed().as_seconds_f32(),
-            *size as f32 / before.elapsed().as_seconds_f32()
+            before.elapsed().as_secs_f32(),
+            *size as f32 / before.elapsed().as_secs_f32()
         );
 
         for dav in ["files1", "files2"] {
             let encrypted = if dav == "files2" { " (encrypted)" } else { "" };
             // Send the file
-            let before = time::Instant::now();
+            let before = Instant::now();
             let file = File::open(sized_file_path).await?;
             let resp = app
                 .client
@@ -83,11 +81,11 @@ async fn sized_files_bench() -> Result<()> {
             assert_eq!(resp.status(), 201);
             println!(
                 "Sent file of size {size} Mb to {dav}{encrypted} in {:.2?} s → {:.2?} Mb/s",
-                before.elapsed().as_seconds_f32(),
-                *size as f32 / before.elapsed().as_seconds_f32()
+                before.elapsed().as_secs_f32(),
+                *size as f32 / before.elapsed().as_secs_f32()
             );
 
-            let before = time::Instant::now();
+            let before = Instant::now();
             let resp = app
                 .client
                 .get(format!(
@@ -102,8 +100,8 @@ async fn sized_files_bench() -> Result<()> {
             std::io::copy(&mut content, &mut file)?;
             println!(
                 "Retrieved file of size {size} Mb from {dav}{encrypted} in {:.2?} s → {:.2?} Mb/s",
-                before.elapsed().as_seconds_f32(),
-                *size as f32 / before.elapsed().as_seconds_f32()
+                before.elapsed().as_secs_f32(),
+                *size as f32 / before.elapsed().as_secs_f32()
             );
         }
         std::fs::remove_file(sized_file_path).ok();
@@ -322,7 +320,7 @@ async fn try_to_use_wrong_key_to_decrypt() -> Result<()> {
 
     app.is_ready().await;
     // That sleep should not be necessary as we await the server to be ready, but somehow it is...
-    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    tokio::time::sleep(Duration::from_millis(250)).await;
 
     // Assert that the file cannot be retrieved
     let resp = app.client.get(&url).send().await?;

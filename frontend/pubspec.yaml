@@ -18,7 +18,7 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 version: 1.5.0
 
 environment:
-  sdk: ">=3.2.0-0 <4.0.0"
+  sdk: '>=3.3.4 <4.0.0'
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -34,10 +34,14 @@ dependencies:
     sdk: flutter
 
   dio: ^5.0.0
-  file_picker: ^6.1.1
+  file_picker: ^8.0.3
   filesize: ^2.0.1
-  flutter_colorpicker: ^1.0.3
-  flutter_local_notifications: ^16.1.0
+  # TEMPORARY
+  flutter_colorpicker:
+    git:
+     url: https://github.com/mchome/flutter_colorpicker
+     ref: master
+  flutter_local_notifications: ^17.1.1
   path_provider: ^2.0.11
   pdfx: ^2.6.0
   provider: ^6.0.4
@@ -49,7 +53,6 @@ dependencies:
   webview_flutter_android: ^3.6.0
   webview_cookie_manager: ^2.0.6
   path: ^1.8.3
-  rich_clipboard: ^1.0.1
   scrollable_positioned_list: ^0.3.5
 
 dev_dependencies:
@@ -62,9 +65,9 @@ dev_dependencies:
   # activated in the `analysis_options.yaml` file located at the root of your
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
-  flutter_lints: ^3.0.1
+  flutter_lints: ^4.0.0
 
-flutter_icons: # generate with `flutter pub run flutter_launcher_icons:main`.
+flutter_launcher_icons: # generate with `flutter pub run flutter_launcher_icons:main`.
   android: "launcher_icon"
   ios: false
   image_path: "assets/icon/icon.png"

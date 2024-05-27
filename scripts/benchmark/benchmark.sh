@@ -24,12 +24,34 @@ docker stop nginx_bench
 docker rm nginx_bench
 
 #####################################################################
-#                            INSTALL RWRK                           #
+#                            INSTALL TOOLS                          #
 #####################################################################
 
 sudo apt install -y libssl-dev
 sudo apt install -y pkg-config
 cargo install rewrk --git https://github.com/ChillFish8/rewrk.git
+# Check if gnuplot is installed
+if ! command -v gnuplot &>/dev/null; then
+  sudo apt-get install -y gnuplot
+fi
+
+monitor_memory_usage() {
+  local pid=$1
+  while true; do
+    mem=$(ps -p $pid -o rss=)
+    if [ -z "$mem" ]; then
+      echo "Process $pid not found. Exiting loop."
+      break
+    fi
+    timestamp=$(date +%s.%N)
+    echo "$timestamp $mem" >>memory_usage.log
+    sleep 0.1
+  done
+  # Launch the gnuplot window to display the graph
+  gnuplot -persist plot_memory_usage.gp
+  # Clean up
+  rm -f memory_usage.log
+}
 
 #####################################################################
 #                              BACKEND                              #
@@ -76,7 +98,9 @@ cp ${WD}/atrium.yaml ${WD}/../../backend/target/release/
 cd ${WD}/../../backend/target/release/
 ./atrium &
 ATRIUM_PROXY_PID=$!
+cd $WD
 sleep 2
+monitor_memory_usage $ATRIUM_PROXY_PID &
 # Test proxy
 echo -e "##############\n### ATRIUM ###\n##############\n" >>$REPORT_FILE
 test_proxy
