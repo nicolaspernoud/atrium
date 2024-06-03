@@ -9,6 +9,7 @@ use tokio_stream::StreamExt;
 
 use tracing::debug;
 use tungstenite::{client::IntoClientRequest, Message};
+use std::str::FromStr;
 
 use crate::helpers::TestApp;
 
@@ -207,7 +208,7 @@ async fn test_websocket() {
     let app = TestApp::spawn(Some(config)).await;
 
     // Act : websocket request
-    let mut request = reqwest::Url::parse(&format!("ws://127.0.0.1:{}", app.port))
+    let mut request = http::Uri::from_str(&format!("ws://127.0.0.1:{}", app.port))
         .unwrap()
         .into_client_request()
         .unwrap();

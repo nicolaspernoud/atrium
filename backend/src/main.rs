@@ -27,6 +27,7 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 pub const CONFIG_FILE: &str = "atrium.yaml";
 
 fn main() -> Result<()> {
+    // println!("MiMalloc version: {}", mimalloc::MiMalloc.version()); // mimalloc = { version = "0.1", features = ["extended"] } in Cargo.toml to use this
     // We need to work out the local time offset before entering multi-threaded context
     let cfg: Config = match File::open(CONFIG_FILE) {
         Ok(file) => serde_yaml::from_reader(file).expect("failed to parse configuration file"),
