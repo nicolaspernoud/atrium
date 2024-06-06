@@ -16,6 +16,7 @@ use tracing::{error, info};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{fmt, fmt::time::OffsetTime, prelude::*};
 
+//CUSTOM_ALLOCATOR
 #[cfg(target_arch = "aarch64")]
 #[global_allocator]
 static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
@@ -23,6 +24,7 @@ static GLOBAL: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 #[cfg(target_arch = "x86_64")]
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+//END_CUSTOM_ALLOCATOR
 
 pub const CONFIG_FILE: &str = "atrium.yaml";
 
