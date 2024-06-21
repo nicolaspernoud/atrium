@@ -16,7 +16,7 @@ anyhow = { default-features = false, version = "1.0" }
 argon2 = { features = ["alloc", "password-hash"], default-features = false, version = "0.5" }
 async_zip = { features = ["deflate", "tokio"], default-features = false, version = "0.0.17" }
 async-stream = "0.3"
-async-walkdir = "1.0"
+async-walkdir = "2.0"
 axum = { version = "0.7", features = ["query", "json", "http2", "tokio"], default-features = false }
 axum-extra = { version = "0.9", features = ["cookie-private", "typed-header"], default-features = false }
 axum-server = "0.6"
@@ -39,7 +39,7 @@ mime_guess = { default-features = false, version = "2.0" }
 # TEMPORARY
 oauth2 = { version="5.0.0-alpha.4", default-features = false}
 percent-encoding = { default-features = false, version = "2.1" }
-quick-xml = "0.31"
+quick-xml = "0.33"
 rand = { default-features = false, version = "0.8" }
 rustls = { default-features = false, version = "0.23", features=["ring"] }
 rustls-pki-types = { version = "1" }
