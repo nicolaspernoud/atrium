@@ -133,31 +133,6 @@ docker stop atrium_bench
 docker rm atrium_bench
 
 #####################################################################
-#                ATRIUM IN DOCKER WITH GLIBC ALLOCATOR              #
-#####################################################################
-
-# Build for production
-cd ${WD}/../..
-docker build --platform linux/amd64 -t atrium_bench_glibc --file Dockerfile.cc .
-
-# Start proxy
-docker run -d --name atrium_bench_glibc \
-  -v ${WD}/atrium.yaml:/app/atrium.yaml \
-  --net=host \
-  atrium_bench_glibc
-sleep 2
-
-# Test proxy
-echo -e "#############################################\n### ATRIUM IN DOCKER WITH GLIBC ALLOCATOR ###\n#############################################\n" >>$REPORT_FILE
-
-test_proxy
-eval ${BENCH_CMD}
-
-# Shutdown
-docker stop atrium_bench_glibc
-docker rm atrium_bench_glibc
-
-#####################################################################
 #                          BACKEND SHUTDOWN                         #
 #####################################################################
 
