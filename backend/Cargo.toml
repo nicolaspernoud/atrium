@@ -39,7 +39,7 @@ mime_guess = { default-features = false, version = "2.0" }
 # TEMPORARY
 oauth2 = { version="5.0.0-alpha.4", default-features = false}
 percent-encoding = { default-features = false, version = "2.1" }
-quick-xml = "0.34"
+quick-xml = "0.35"
 rand = { default-features = false, version = "0.8" }
 rustls = { default-features = false, version = "0.23", features=["ring"] }
 rustls-pki-types = { version = "1" }
