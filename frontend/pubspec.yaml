@@ -36,11 +36,7 @@ dependencies:
   dio: ^5.0.0
   file_picker: ^8.0.3
   filesize: ^2.0.1
-  # TEMPORARY
-  flutter_colorpicker:
-    git:
-     url: https://github.com/mchome/flutter_colorpicker
-     ref: master
+  flutter_colorpicker: ^1.1.0
   flutter_local_notifications: ^17.1.1
   path_provider: ^2.0.11
   pdfx: ^2.6.0

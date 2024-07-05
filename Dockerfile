@@ -3,12 +3,12 @@
 ###########################
 
 # Set up an environnement to cross-compile the app for musl to create a statically-linked binary
-FROM --platform=$BUILDPLATFORM rust:1.78 AS backend-builder
+FROM --platform=$BUILDPLATFORM rust:1.79 AS backend-builder
 ARG TARGETPLATFORM
 RUN case "$TARGETPLATFORM" in \
-      "linux/amd64") echo x86_64-unknown-linux-musl > /rust_target.txt ;; \
-      "linux/arm64") echo aarch64-unknown-linux-musl > /rust_target.txt ;; \
-      "linux/arm/v7") echo armv7-unknown-linux-musleabihf > /rust_target.txt ;; \
+      "linux/amd64") echo x86_64-unknown-linux-gnu > /rust_target.txt ;; \
+      "linux/arm64") echo aarch64-unknown-linux-gnu > /rust_target.txt ;; \
+      "linux/arm/v7") echo armv7-unknown-linux-gnueabihf > /rust_target.txt ;; \
       "linux/arm/v6") echo arm-unknown-linux-musleabihf > /rust_target.txt ;; \
       *) exit 1 ;; \
     esac
@@ -53,7 +53,7 @@ RUN chown -Rf "${UID}":"${UID}" /myapp
 # Stage 2 : Frontend build #
 ############################
 
-FROM --platform=$BUILDPLATFORM ghcr.io/cirruslabs/flutter:3.22.1 AS frontend-builder
+FROM --platform=$BUILDPLATFORM ghcr.io/cirruslabs/flutter:3.22.2 AS frontend-builder
 WORKDIR /build
 COPY ./frontend .
 RUN flutter pub get
@@ -64,7 +64,12 @@ RUN sed -i "s/serviceWorkerVersion = null/serviceWorkerVersion = '$(shuf -i 1000
 # Stage 3 : Final image #
 #########################
 
-FROM scratch
+FROM --platform=linux/amd64 gcr.io/distroless/cc-debian12 AS base-amd64
+FROM --platform=linux/arm64 gcr.io/distroless/cc-debian12 AS base-arm64
+FROM --platform=linux/arm/v7 gcr.io/distroless/cc-debian12 AS base-armv7
+FROM --platform=linux/arm/v6 scratch AS base-armv6
+
+FROM base-${TARGETARCH}${TARGETVARIANT}
 
 COPY --from=backend-builder /etc/passwd /etc/passwd
 COPY --from=backend-builder /etc/group /etc/group
@@ -72,7 +77,7 @@ COPY --from=backend-builder /etc/group /etc/group
 COPY --from=backend-builder /myapp /
 WORKDIR /app
 COPY --from=backend-builder /build/atrium ./
-COPY --from=frontend-builder /build/build/web/ /app/web/
+COPY --chown=appuser:appuser --from=frontend-builder /build/build/web/ /app/web/
 
 USER appuser:appuser
 ENTRYPOINT ["./atrium"]
