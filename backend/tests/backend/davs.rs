@@ -208,7 +208,7 @@ fn create_big_binary_file(size: usize, path: &str) {
 async fn get_correct_range() -> Result<()> {
     let app = TestApp::spawn(None).await;
 
-    let cases = vec!["files1", "files2"];
+    let cases = ["files1", "files2"];
 
     for case in cases.iter() {
         let file = File::open("tests/data/lorem.txt").await?;

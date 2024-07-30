@@ -225,7 +225,7 @@ mod tests {
         // Nominal case
         let values_to_select = vec!["value2", "value4"];
         let mut selected_keys = select_entries_by_value(&hashmap, values_to_select);
-        selected_keys.sort_by(|a, b| a.cmp(b));
+        selected_keys.sort();
         assert_eq!(selected_keys, vec!["key2", "key4"]);
 
         // Test with values unexisting in hashmap

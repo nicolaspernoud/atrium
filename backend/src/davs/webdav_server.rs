@@ -160,13 +160,13 @@ impl WebdavServer {
                             )
                             .await?;
                         }
-                    } else if query.get("diskusage").is_some() {
+                    } else if query.contains_key("diskusage") {
                         self.handle_disk_usage(path, &mut res).await?;
                     } else {
                         self.handle_zip_dir(path, head_only, &mut res, key).await?;
                     }
                 } else if is_file {
-                    let inline = query.get("inline").is_some();
+                    let inline = query.contains_key("inline");
                     self.handle_send_file(path, headers, head_only, &mut res, key, inline)
                         .await?;
                 } else {

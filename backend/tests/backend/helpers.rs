@@ -1,6 +1,6 @@
 use reqwest::Client;
 use std::{fs, net::SocketAddr, sync::Once};
-use tokio::{net::TcpListener, sync::broadcast};
+use tokio::{net::TcpListener, sync::broadcast, task::JoinHandle};
 use tracing::info;
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
@@ -21,6 +21,7 @@ pub struct TestApp {
     pub id: String,
     pub port: u16,
     pub server_started: tokio::sync::broadcast::Receiver<()>,
+    server_handle: JoinHandle<()>,
 }
 
 static TRACING: Once = Once::new();
@@ -88,7 +89,7 @@ impl TestApp {
 
         let (server_status, server_started) = broadcast::channel(16);
 
-        let _ = tokio::spawn(async move {
+        let server_handle = tokio::spawn(async move {
             drop(main_listener);
             loop {
                 info!("Configuration read !");
@@ -138,6 +139,7 @@ impl TestApp {
             id,
             port: main_port,
             server_started,
+            server_handle,
         };
 
         test_app.is_ready().await;
@@ -148,6 +150,7 @@ impl TestApp {
 
 impl Drop for TestApp {
     fn drop(&mut self) {
+        self.server_handle.abort();
         std::fs::remove_file(&format!("{}.yaml", self.id)).ok();
         std::fs::remove_dir_all(&format!("./data/{}", self.id)).ok();
     }
@@ -333,7 +336,6 @@ pub fn create_default_config(
                 email:"admin@atrium.io".to_owned(),
                 ..Default::default()
             }),
-            ..Default::default()
         },
         User {
             login: "user".to_owned(),
