@@ -136,9 +136,7 @@ where
     S: tower_service::Service<Request<Body>, Response = http::Response<hyper::body::Incoming>>,
     <S as tower_service::Service<Request<Body>>>::Error: std::fmt::Debug,
 {
-    if let Err(e) = authorized_or_redirect_to_login(&app, &user, &hostname, &req, &config) {
-        return Err(e);
-    }
+    authorized_or_redirect_to_login(&app, &user, &hostname, &req, &config)?;
 
     let app = match app {
         HostType::ReverseApp(app) => app,
@@ -155,22 +153,21 @@ where
     if app.forward_authority.port().is_some() {
         req.headers_mut().insert(
             "X-Forwarded-Host",
-            HeaderValue::from_str(&hostname).map_err(|e| ProxyError::from(e))?,
+            HeaderValue::from_str(&hostname).map_err(ProxyError::from)?,
         );
         req.headers_mut().insert(
             HOST,
-            HeaderValue::from_str(&hostname).map_err(|e| ProxyError::from(e))?,
+            HeaderValue::from_str(&hostname).map_err(ProxyError::from)?,
         );
         req.headers_mut().insert(
             "X-Forwarded-Proto",
-            HeaderValue::from_str(app.app_scheme.as_ref()).map_err(|e| ProxyError::from(e))?,
+            HeaderValue::from_str(app.app_scheme.as_ref()).map_err(ProxyError::from)?,
         );
     } else {
         // If not rewrite the host header to fool the target service into thinking it is not behind a proxy
         req.headers_mut().insert(
             HOST,
-            HeaderValue::from_str(app.forward_authority.as_str())
-                .map_err(|e| ProxyError::from(e))?,
+            HeaderValue::from_str(app.forward_authority.as_str()).map_err(ProxyError::from)?,
         );
     }
 
@@ -211,7 +208,9 @@ where
                                 "proxy redirect location header parsing for {:?} gave error: {:?}",
                                 location, e
                             );
-                            return Err(ProxyError::BadRedirectResponseError.into());
+                            return Err(<ProxyError as Into<axum::response::Response>>::into(
+                                ProxyError::BadRedirectResponseError,
+                            ));
                         }
                     }
                 }

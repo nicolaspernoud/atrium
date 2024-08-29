@@ -62,7 +62,7 @@ class _SystemInfoState extends State<SystemInfo> {
                       401) {
                 // If error is 401, we log and retry
                 Future.delayed(Duration.zero, () async {
-                  await showLoginDialog(context, mounted);
+                  if (context.mounted) await showLoginDialog(context, mounted);
                   await _getData();
                   setState(() {});
                 });

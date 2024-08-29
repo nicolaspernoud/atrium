@@ -9,7 +9,7 @@ use axum::{
     http::{Request, Response, StatusCode},
     response::IntoResponse,
 };
-use tower::ServiceExt;
+use tower::util::ServiceExt;
 use tower_http::services::ServeDir;
 
 pub async fn dir_handler(

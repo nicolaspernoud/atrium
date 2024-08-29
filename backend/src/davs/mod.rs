@@ -16,14 +16,13 @@ use axum::{
 };
 use http::Method;
 use hyper::StatusCode;
-
-use std::{net::SocketAddr, sync::OnceLock};
+use std::{net::SocketAddr, sync::LazyLock};
 use tracing::info;
 
-static WEBDAV_SERVER: OnceLock<webdav_server::WebdavServer> = OnceLock::new();
+static WEBDAV_SERVER: LazyLock<webdav_server::WebdavServer> =
+    LazyLock::new(webdav_server::WebdavServer::new);
 
-static UNLOGGED_METHODS: OnceLock<[Method; 5]> = OnceLock::new();
-fn unlogged_methods_init() -> [Method; 5] {
+static UNLOGGED_METHODS: LazyLock<[Method; 5]> = LazyLock::new(|| {
     [
         Method::OPTIONS,
         Method::HEAD,
@@ -31,7 +30,7 @@ fn unlogged_methods_init() -> [Method; 5] {
         Method::from_bytes(b"UNLOCK").unwrap(),
         Method::from_bytes(b"PROPFIND").unwrap(),
     ]
-}
+});
 
 pub async fn webdav_handler(
     user: Option<UserToken>,
@@ -75,17 +74,9 @@ pub async fn webdav_handler(
         _ => panic!("Service is not a dav !"),
     };
 
-    match WEBDAV_SERVER
-        .get_or_init(webdav_server::WebdavServer::new)
-        .call(req, addr, &dav)
-        .await
-    {
+    match WEBDAV_SERVER.call(req, addr, &dav).await {
         Ok(response) => {
-            if !UNLOGGED_METHODS
-                .get_or_init(unlogged_methods_init)
-                .contains(&method)
-                && query_str != "diskusage"
-            {
+            if !UNLOGGED_METHODS.contains(&method) && query_str != "diskusage" {
                 tokio::spawn(async move {
                     info!(
                         "FILE ACCESS: {} \"{}{}\" by {} from {}",

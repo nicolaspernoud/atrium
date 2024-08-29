@@ -196,7 +196,7 @@ class _OpenIdWebViewState extends State<OpenIdWebView> {
         var authCookie =
             value.singleWhere((element) => element.name == "ATRIUM_AUTH");
         App().cookie = "ATRIUM_AUTH=${authCookie.value}";
-        Navigator.pop(context, 'OK');
+        if (context.mounted) Navigator.pop(context, 'OK');
       });
       return const SizedBox(
         width: 60,

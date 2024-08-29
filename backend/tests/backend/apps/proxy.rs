@@ -7,9 +7,9 @@ use http::{
 };
 use tokio_stream::StreamExt;
 
+use std::str::FromStr;
 use tracing::debug;
 use tungstenite::{client::IntoClientRequest, Message};
-use std::str::FromStr;
 
 use crate::helpers::TestApp;
 
@@ -24,7 +24,7 @@ async fn test_get_error_502() {
             color: 4292030255,
             is_proxy: true,
             host: "app1".to_owned(),
-            target: format!("localhost:9999"),
+            target: "localhost:9999".to_string(),
             secured: false,
             login: "".to_owned(),
             password: "".to_owned(),
@@ -167,7 +167,7 @@ async fn test_websocket() {
         .expect("failed to bind to random port");
     let mock_ws_listener_port = mock_ws_listener.local_addr().unwrap().port();
 
-    let _ = tokio::spawn(async move {
+    let ws_listener = tokio::spawn(async move {
         if let Ok((stream, _)) = mock_ws_listener.accept().await {
             let mut websocket = accept_async(stream).await.unwrap();
 
@@ -235,4 +235,6 @@ async fn test_websocket() {
         "did not get pong, but {:?}",
         msg
     );
+
+    drop(ws_listener);
 }

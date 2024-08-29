@@ -57,7 +57,7 @@ async fn unsecured_single_proxy_test() {
         .expect("failed to execute request");
     // Assert
     assert!(response.status().is_success());
-    assert!(response.text().await.unwrap().contains(&format!("OK")));
+    assert!(response.text().await.unwrap().contains(&"OK".to_string()));
 }
 
 #[tokio::test]

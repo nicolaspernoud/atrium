@@ -3,13 +3,14 @@ use axum::Json;
 use serde::{Deserialize, Serialize};
 use std::{
     path::PathBuf,
-    sync::{Mutex, OnceLock},
+    sync::{LazyLock, Mutex},
 };
 use sysinfo::{CpuRefreshKind, Disks, MemoryRefreshKind, RefreshKind, System};
 use tokio::task;
 
-static SYSTEM_INFO: OnceLock<Mutex<System>> = OnceLock::new();
-static DISKS_INFO: OnceLock<Mutex<Disks>> = OnceLock::new();
+static SYSTEM_INFO: LazyLock<Mutex<System>> = LazyLock::new(|| Mutex::new(System::new_all()));
+static DISKS_INFO: LazyLock<Mutex<Disks>> =
+    LazyLock::new(|| Mutex::new(Disks::new_with_refreshed_list()));
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SystemInfo {
@@ -29,8 +30,7 @@ pub struct DiskInfo {
 
 pub async fn disk_info(path: PathBuf) -> Result<DiskInfo, &'static str> {
     let disksinfo: Result<Vec<DiskInfo>, &str> = task::spawn_blocking(|| {
-        let disks = DISKS_INFO.get_or_init(|| Mutex::new(Disks::new_with_refreshed_list()));
-        let mut disks = disks.lock().map_err(|_| "could not lock disks info")?;
+        let mut disks = DISKS_INFO.lock().map_err(|_| "could not lock disks info")?;
 
         disks.refresh_list();
         let disksinfo = disks
@@ -74,8 +74,7 @@ fn corresponding_disk_info(
 
 pub async fn system_info(_user: UserToken) -> Result<Json<SystemInfo>, ErrResponse> {
     let sysinfo = task::spawn_blocking(|| {
-        let sys = SYSTEM_INFO.get_or_init(|| Mutex::new(System::new_all()));
-        let mut sys = sys
+        let mut sys = SYSTEM_INFO
             .lock()
             .map_err(|_| ErrResponse::S500("could not lock system info"))?;
         sys.refresh_specifics(
@@ -86,7 +85,7 @@ pub async fn system_info(_user: UserToken) -> Result<Json<SystemInfo>, ErrRespon
         Ok(SystemInfo {
             total_memory: sys.total_memory(),
             used_memory: sys.used_memory(),
-            cpu_usage: sys.global_cpu_info().cpu_usage(),
+            cpu_usage: sys.global_cpu_usage(),
             uptime: System::uptime(),
         })
     })

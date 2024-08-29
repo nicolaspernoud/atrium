@@ -108,7 +108,6 @@ fn remove_hop_headers(headers: &mut HeaderMap) {
 }
 
 fn get_upgrade_type(headers: &HeaderMap) -> Option<String> {
-    #[allow(clippy::blocks_in_if_conditions)]
     if headers
         .get(&CONNECTION_HEADER)
         .map(|value| {

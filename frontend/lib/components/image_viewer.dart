@@ -129,7 +129,7 @@ class _ImageViewerState extends State<ImageViewer> {
         appBar: AppBar(
           title: Text(files[index].name!),
         ),
-        bottomNavigationBar: ButtonBar(
+        bottomNavigationBar: OverflowBar(
           alignment: MainAxisAlignment.center,
           children: [
             IconButton(
