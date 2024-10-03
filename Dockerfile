@@ -3,7 +3,7 @@
 ###########################
 
 # Set up an environnement to cross-compile the app for musl to create a statically-linked binary
-FROM --platform=$BUILDPLATFORM rust:1.80 AS backend-builder
+FROM --platform=$BUILDPLATFORM rust:1.81 AS backend-builder
 ARG TARGETPLATFORM
 RUN case "$TARGETPLATFORM" in \
       "linux/amd64") echo x86_64-unknown-linux-gnu > /rust_target.txt ;; \
@@ -53,12 +53,11 @@ RUN chown -Rf "${UID}":"${UID}" /myapp
 # Stage 2 : Frontend build #
 ############################
 
-FROM --platform=$BUILDPLATFORM ghcr.io/cirruslabs/flutter:3.24.1 AS frontend-builder
+FROM --platform=$BUILDPLATFORM ghcr.io/cirruslabs/flutter:3.24.3 AS frontend-builder
 WORKDIR /build
 COPY ./frontend .
 RUN flutter pub get
 RUN flutter build web --csp --web-renderer html
-RUN sed -i "s/serviceWorkerVersion = null/serviceWorkerVersion = '$(shuf -i 1000000000-9999999999 -n 1)'/g" ./build/web/init.js
 
 #########################
 # Stage 3 : Final image #
