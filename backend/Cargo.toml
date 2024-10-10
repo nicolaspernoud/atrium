@@ -24,8 +24,8 @@ base64ct = { version = "1.6.0", features = ["alloc"] }
 chacha20poly1305 = { version = "0.10.1", features = ["stream"], default-features = false }
 chrono = { default-features = false, version = "0.4.38" }
 filetime = "0.2.25"
-futures = { default-features = false, version = "0.3.30" }
-futures-util = { default-features = false, version = "0.3.30" }
+futures = { default-features = false, version = "0.3.31" }
+futures-util = { default-features = false, version = "0.3.31" }
 headers = "0.4.0"
 http = "1.1.0"
 http-body-util = "0.1.2"
@@ -41,14 +41,14 @@ oauth2 = { version = "5.0.0-rc.1", default-features = false }
 percent-encoding = { default-features = false, version = "2.3.1" }
 quick-xml = "0.36.2"
 rand = { default-features = false, version = "0.8.5" }
-rustls = { default-features = false, version = "0.23.13", features = ["ring"] }
+rustls = { default-features = false, version = "0.23.14", features = ["ring"] }
 rustls-pki-types = { version = "1.9.0" }
 rustls-acme = { version = "0.11.1", features = ["axum", "ring"], default-features = false }
 serde = { version = "1.0.210", default-features = false }
 serde_json = { default-features = false, version = "1.0.128" }
 serde_yml = "0.0.12"
 sha2 = { default-features = false, version = "0.10.8" }
-sysinfo = { default-features = false, version = "0.31.4", features = ["disk", "system"] }
+sysinfo = { default-features = false, version = "0.32.0", features = ["disk", "system"] }
 time = { default-features = false, version = "0.3.36" }
 tokio = { version = "1.40.0", features = ["full"], default-features = false }
 tokio-stream = { version = "0.1.16", default-features = false }
