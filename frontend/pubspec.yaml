@@ -33,37 +33,37 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
-  dio: ^5.0.0
-  file_picker: ^8.0.3
+  dio: ^5.7.0
+  file_picker: ^8.1.2
   filesize: ^2.0.1
   flutter_colorpicker: ^1.1.0
-  flutter_local_notifications: ^17.1.1
-  path_provider: ^2.0.11
-  pdfx: ^2.6.0
-  provider: ^6.0.4
-  shared_preferences: ^2.0.15
-  url_launcher: ^6.1.5
-  video_player: ^2.4.7
-  webdav_client: ^1.2.0
-  webview_flutter: ^4.2.0
-  webview_flutter_android: ^3.6.0
+  flutter_local_notifications: ^17.2.3
+  path_provider: ^2.1.4
+  pdfx: ^2.8.0
+  provider: ^6.1.2
+  shared_preferences: ^2.3.2
+  url_launcher: ^6.3.1
+  video_player: ^2.9.2
+  webdav_client: ^1.2.2
+  webview_flutter: ^4.9.0
+  webview_flutter_android: ^3.16.9
   # TEMPORARY
   webview_cookie_manager:
     git: https://github.com/fryette/webview_cookie_manager.git
-  path: ^1.8.3
-  scrollable_positioned_list: ^0.3.5
+  path: ^1.9.0
+  scrollable_positioned_list: ^0.3.8
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_launcher_icons: ^0.13.1
+  flutter_launcher_icons: ^0.14.1
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
   # activated in the `analysis_options.yaml` file located at the root of your
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
-  flutter_lints: ^4.0.0
+  flutter_lints: ^5.0.0
 
 flutter_launcher_icons: # generate with `flutter pub run flutter_launcher_icons:main`.
   android: "launcher_icon"
