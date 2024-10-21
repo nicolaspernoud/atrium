@@ -7,24 +7,36 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:webdav_client/webdav_client.dart' as webdav;
 import 'package:webview_cookie_manager/webview_cookie_manager.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 class NotificationsPlugin {
-  late FlutterLocalNotificationsPlugin flip;
+  late FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin;
 
   static final NotificationsPlugin _instance = NotificationsPlugin._internal();
 
   factory NotificationsPlugin() => _instance;
 
   NotificationsPlugin._internal() {
-    flip = FlutterLocalNotificationsPlugin();
+    flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+    flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.requestNotificationsPermission();
     var android =
         const AndroidInitializationSettings('@drawable/notification_icon');
     var settings = InitializationSettings(android: android);
-    flip.initialize(settings);
+    flutterLocalNotificationsPlugin.initialize(settings,
+        onDidReceiveNotificationResponse: onReceiveNotificationResponse);
+  }
+
+  void onReceiveNotificationResponse(
+      NotificationResponse notificationResponse) async {
+    var payload = notificationResponse.payload;
+    if (payload != null) OpenFile.open(payload);
   }
 
   Future showSimpleNotification(String title, String message) async {
@@ -37,12 +49,12 @@ class NotificationsPlugin {
         enableVibration: false);
     var platformChannelSpecifics =
         NotificationDetails(android: androidPlatformChannelSpecifics);
-    await flip.show(0, title, message, platformChannelSpecifics,
-        payload: 'Default_Sound');
+    await flutterLocalNotificationsPlugin
+        .show(0, title, message, platformChannelSpecifics, payload: null);
   }
 
   Future showProgressNotification(String title, String body, int progressId,
-      int currentProgress, int maxProgress) async {
+      int currentProgress, int maxProgress, String savePath) async {
     final AndroidNotificationDetails androidNotificationDetails =
         AndroidNotificationDetails('progress channel', 'progress channel',
             channelDescription: 'progress channel description',
@@ -57,8 +69,9 @@ class NotificationsPlugin {
             enableVibration: false);
     final NotificationDetails notificationDetails =
         NotificationDetails(android: androidNotificationDetails);
-    await flip.show(progressId, title, body, notificationDetails,
-        payload: 'item x');
+    await flutterLocalNotificationsPlugin.show(
+        progressId, title, body, notificationDetails,
+        payload: currentProgress == maxProgress ? savePath : null);
   }
 }
 
@@ -81,14 +94,13 @@ download(String url, webdav.Client client, webdav.File file,
   var successTitle = tr(context, "download_success");
   var id = Random().nextInt(9999);
   String? dir = await getDownloadPath();
-  await client
-      .read2File(file.path!, '$dir/${file.name!}${file.isDir! ? ".zip" : ""}',
-          onProgress: (c, t) {
-    NotificationsPlugin()
-        .showProgressNotification(downloadingTitle, file.name!, id, c, t);
+  var savePath = '$dir/${file.name!}${file.isDir! ? ".zip" : ""}';
+  await client.read2File(file.path!, savePath, onProgress: (c, t) {
+    NotificationsPlugin().showProgressNotification(
+        downloadingTitle, file.name!, id, c, t, savePath);
   });
-  NotificationsPlugin()
-      .showProgressNotification(successTitle, file.name!, id, 100, 100);
+  NotificationsPlugin().showProgressNotification(
+      successTitle, file.name!, id, 100, 100, savePath);
 }
 
 Future webDownload(String url, String fileName) async {
@@ -97,12 +109,13 @@ Future webDownload(String url, String fileName) async {
   try {
     var id = Random().nextInt(9999);
     String? dir = await getDownloadPath();
+    var savePath = '$dir/$fileName';
     dio.download(
       url,
-      '$dir/$fileName',
+      savePath,
       onReceiveProgress: (c, t) {
         NotificationsPlugin()
-            .showProgressNotification(fileName, "atrium", id, c, t);
+            .showProgressNotification(fileName, "atrium", id, c, t, savePath);
       },
       options: Options(
           followRedirects: false,

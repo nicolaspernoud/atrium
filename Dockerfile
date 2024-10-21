@@ -13,7 +13,7 @@ RUN case "$TARGETPLATFORM" in \
       *) exit 1 ;; \
     esac
 RUN rustup target add $(cat /rust_target.txt)
-RUN apt update && apt install -y musl-tools musl-dev binutils-arm-linux-gnueabihf gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu libcap2-bin
+RUN apt update && apt install -y binutils-arm-linux-gnueabihf gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf libcap2-bin musl-dev musl-tools
 RUN ln -s /usr/bin/arm-linux-gnueabihf-gcc /usr/bin/arm-linux-musleabihf-gcc
 RUN ln -s /usr/bin/aarch64-linux-gnu-gcc /usr/bin/aarch64-linux-musl-gcc
 
