@@ -64,8 +64,7 @@ pub async fn inject_security_headers(
     next: Next,
 ) -> Result<Response, StatusCode> {
     let inject = host_type
-        .map(|app| app.inject_security_headers())
-        .unwrap_or(true);
+        .map_or(true, |app| app.inject_security_headers());
     if inject {
         let source = {
             format!(

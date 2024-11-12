@@ -110,14 +110,13 @@ fn remove_hop_headers(headers: &mut HeaderMap) {
 fn get_upgrade_type(headers: &HeaderMap) -> Option<String> {
     if headers
         .get(&CONNECTION_HEADER)
-        .map(|value| {
+        .is_some_and(|value| {
             value
                 .to_str()
                 .unwrap()
                 .split(',')
                 .any(|e| e.trim() == UPGRADE_HEADER)
         })
-        .unwrap_or(false)
     {
         if let Some(upgrade_value) = headers.get(&UPGRADE_HEADER) {
             debug!(
@@ -164,14 +163,13 @@ fn create_proxied_request<B>(
     let contains_te_trailers_value = request
         .headers()
         .get(&TE_HEADER)
-        .map(|value| {
+        .is_some_and(|value| {
             value
                 .to_str()
                 .unwrap()
                 .split(',')
                 .any(|e| e.trim() == TRAILERS_HEADER)
-        })
-        .unwrap_or(false);
+        });
 
     debug!("Setting headers of proxied request");
 
@@ -302,13 +300,10 @@ where
                     let mut response_upgraded =
                         hyper_util::rt::tokio::TokioIo::new(response_upgraded);
 
-                    match copy_bidirectional(&mut response_upgraded, &mut request_upgraded).await {
-                        Ok(_) => debug!("successfull copy between upgraded connections"),
-                        Err(_) => debug!(
-                            "failed copy between upgraded connections (EOF), for client IP: {}",
-                            client_ip
-                        ),
-                    }
+                    if copy_bidirectional(&mut response_upgraded, &mut request_upgraded).await.is_ok() { debug!("successfull copy between upgraded connections") } else { debug!(
+                        "failed copy between upgraded connections (EOF), for client IP: {}",
+                        client_ip
+                    ); }
                 });
                 Ok(response)
             } else {

@@ -1233,7 +1233,7 @@ async fn secured_dav_basic_auth_and_token_test() {
             "Authorization",
             format!(
                 "Basic {}",
-                base64ct::Base64::encode_string("admin:password".as_bytes())
+                base64ct::Base64::encode_string(b"admin:password")
             ),
         )
         .send()
@@ -1247,7 +1247,7 @@ async fn secured_dav_basic_auth_and_token_test() {
             "Authorization",
             format!(
                 "Basic {}",
-                base64ct::Base64::encode_string("admin:badpassword".as_bytes())
+                base64ct::Base64::encode_string(b"admin:badpassword")
             ),
         )
         .send()

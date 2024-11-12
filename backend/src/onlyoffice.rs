@@ -74,7 +74,7 @@ pub async fn onlyoffice_page(
     if let Some(server) = &config
         .onlyoffice_config
         .as_ref()
-        .map(|c| c.server.to_owned())
+        .map(|c| c.server.clone())
     {
         let template = fs::read_to_string("./web/onlyoffice/index.tmpl")
             .await

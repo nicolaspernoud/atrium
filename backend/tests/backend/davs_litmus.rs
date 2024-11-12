@@ -8,7 +8,7 @@ use crate::{
 use anyhow::Result;
 
 fn has_header(r: &Response, header_name: &str) {
-    assert!(r.headers().get(header_name).is_some())
+    assert!(r.headers().get(header_name).is_some());
 }
 
 fn is_header(r: &Response, header_name: &str, header_value: &str) {
@@ -19,7 +19,7 @@ fn is_header(r: &Response, header_name: &str, header_value: &str) {
             .to_str()
             .expect("header could not be converted to str"),
         header_value
-    )
+    );
 }
 
 async fn body_contains(r: Response, content: &str) {

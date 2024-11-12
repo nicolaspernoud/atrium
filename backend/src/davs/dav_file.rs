@@ -100,7 +100,7 @@ impl DavFile {
         }
     }
 
-    pub async fn into_body(self) -> Body {
+    pub fn into_body(self) -> Body {
         if let Some(key) = self.key {
             let encrypted_file = EncryptedStreamer::new(self.file, key);
             Body::from_stream(encrypted_file.into_stream())

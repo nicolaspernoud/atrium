@@ -6,12 +6,12 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
+use http_body_util::BodyExt;
 use maxminddb::geoip2;
 use std::net::{
     IpAddr::{V4, V6},
     SocketAddr,
 };
-use http_body_util::BodyExt;
 
 const UNKNOWN_CITY: &str = "unknown city";
 const UNKNOWN_COUNTRY: &str = "unknown country";
@@ -62,7 +62,8 @@ pub async fn print_request_response(
 
     let body = buffer_body(body).await?;
     tracing::debug!(
-        "\nREQUEST\n⇨ headers: {:?}\n⇨ body: {}",
+        "\nREQUEST\n⇨ uri: {}\n⇨ headers: {:?}\n⇨ body: {}",
+        parts.uri,
         parts.headers,
         body.0
     );

@@ -153,17 +153,16 @@ where
         }
 
         // OR Try to get user_token from the query
-        if let Ok(query) = RawQuery::from_request_parts(parts, state).await {
-            if let Some(Some(password)) = query_pairs_or_error(query.0.as_deref())
-                .ok()
-                .map(|hm| hm.get("token").map(|v| v.to_owned()))
-            {
-                let res = cookie_from_password(AUTH_COOKIE, &jar, password);
-                if res.is_ok() {
-                    return res;
-                } else {
-                    return cookie_from_password(SHARE_TOKEN, &jar, password);
-                }
+        let Ok(query) = RawQuery::from_request_parts(parts, state).await;
+        if let Some(Some(password)) = query_pairs_or_error(query.0.as_deref())
+            .ok()
+            .map(|hm| hm.get("token").map(|v| v.to_owned()))
+        {
+            let res = cookie_from_password(AUTH_COOKIE, &jar, password);
+            if res.is_ok() {
+                return res;
+            } else {
+                return cookie_from_password(SHARE_TOKEN, &jar, password);
             }
         }
 
@@ -172,28 +171,27 @@ where
         if let Ok(TypedHeader(Authorization(basic))) =
             TypedHeader::<Authorization<Basic>>::from_request_parts(parts, state).await
         {
-            match cookie_from_password(AUTH_COOKIE, &jar, basic.password()) {
-                Ok(token) => return Ok(token),
-                Err(_) => {
-                    let config = ConfigState::from_ref(state);
+            if let Ok(token) = cookie_from_password(AUTH_COOKIE, &jar, basic.password()) {
+                return Ok(token);
+            } else {
+                let config = ConfigState::from_ref(state);
 
-                    let Extension(addr) = parts
-                        .extract::<Extension<ConnectInfo<SocketAddr>>>()
-                        .await
-                        .expect("Could not find socket address");
-                    return match authenticate_local_user(
-                        &config,
-                        LocalAuth {
-                            login: basic.username().to_string(),
-                            password: basic.password().to_string(),
-                        },
-                        MAXMIND_READER.get(),
-                        addr.0,
-                    ) {
-                        Ok(user) => Ok(user.1),
-                        Err(e) => Err((e.0, "no user found in basic auth")),
-                    };
-                }
+                let Extension(addr) = parts
+                    .extract::<Extension<ConnectInfo<SocketAddr>>>()
+                    .await
+                    .expect("Could not find socket address");
+                return match authenticate_local_user(
+                    &config,
+                    LocalAuth {
+                        login: basic.username().to_string(),
+                        password: basic.password().to_string(),
+                    },
+                    MAXMIND_READER.get(),
+                    addr.0,
+                ) {
+                    Ok(user) => Ok(user.1),
+                    Err(e) => Err((e.0, "no user found in basic auth")),
+                };
             }
         }
 
@@ -400,8 +398,8 @@ pub fn authenticate_local_user(
 
 pub(crate) fn user_to_token(user: &User, config: &Config) -> UserToken {
     UserToken {
-        login: user.login.to_owned(),
-        roles: user.roles.to_owned(),
+        login: user.login.clone(),
+        roles: user.roles.clone(),
         xsrf_token: random_string(16),
         share: None,
         expires: (OffsetDateTime::now_utc()
@@ -542,8 +540,7 @@ pub async fn get_share_token(
         let expires = share
             .share_for_days
             .as_ref()
-            .map(|d| Duration::days(*d))
-            .unwrap_or(Duration::seconds(2));
+            .map_or(Duration::seconds(2), |d| Duration::days(*d));
         let user_token = UserToken {
             login: share_login,
             roles: user.roles,
@@ -603,7 +600,7 @@ pub fn check_user_has_role(user: &UserToken, roles: &[String]) -> bool {
 }
 
 pub fn check_user_has_role_or_forbid(
-    user: &Option<&UserToken>,
+    user: Option<&UserToken>,
     target: &HostType,
     hostname: &str,
     path: &str,
@@ -612,9 +609,7 @@ pub fn check_user_has_role_or_forbid(
         if !check_user_has_role(user, target.roles())
             || (user.share.is_some()
                 && (user.share.as_ref().unwrap().path
-                    != urlencoding::decode(path)
-                        .to_owned()
-                        .map_err(|_| forbidden())?
+                    != urlencoding::decode(path).clone().map_err(|_| forbidden())?
                     || user.share.as_ref().unwrap().hostname != hostname))
         {
             return Err(forbidden());
@@ -637,12 +632,12 @@ fn forbidden() -> http::Response<Body> {
 
 pub fn check_authorization(
     app: &HostType,
-    user: &Option<&UserToken>,
+    user: Option<&UserToken>,
     hostname: &str,
     path: &str,
 ) -> Result<(), Response<Body>> {
     if app.secured() {
-        check_user_has_role_or_forbid(user, app, hostname, path)?
+        check_user_has_role_or_forbid(user, app, hostname, path)?;
     }
     Ok(())
 }
@@ -656,7 +651,7 @@ pub fn authorized_or_redirect_to_login(
 ) -> Result<(), Response<Body>> {
     let domain = hostname.split(':').next().unwrap_or_default();
     if let Err(mut value) =
-        check_authorization(app, &user.as_ref().map(|u| &u.0), domain, req.uri().path())
+        check_authorization(app, user.as_ref().map(|u| &u.0), domain, req.uri().path())
     {
         // Redirect to login page if user is not logged, write where to get back after login in a cookie
         if value.status() == StatusCode::UNAUTHORIZED {
@@ -664,8 +659,11 @@ pub fn authorized_or_redirect_to_login(
                 *value.status_mut() = StatusCode::FOUND;
                 // If single proxy mode, redirect directly to IdP without passing through atrium main app
                 if config.single_proxy {
-                    hn = HeaderValue::from_str(&(config.full_domain() + "/auth/oauth2login"))
-                        .unwrap();
+                    hn = HeaderValue::from_str(&format!(
+                        "{}/auth/oauth2login",
+                        config.full_domain()
+                    ))
+                    .unwrap();
                 }
                 value.headers_mut().append(LOCATION, hn);
                 let cookie = Cookie::build((
@@ -723,7 +721,7 @@ mod check_user_has_role_or_forbid_tests {
 
     #[test]
     fn test_no_user() {
-        let user = &None;
+        let user = None;
         let app: App = App {
             target: "www.example.com".to_string(), // to prevent failing when parsing url
             roles: vec!["role1".to_string(), "role2".to_string()],
@@ -747,7 +745,7 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(&Some(&user), &target, "", "").is_ok());
+        assert!(check_user_has_role_or_forbid(Some(&user), &target, "", "").is_ok());
     }
 
     #[test]
@@ -763,7 +761,7 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(&Some(&user), &target, "", "").is_ok());
+        assert!(check_user_has_role_or_forbid(Some(&user), &target, "", "").is_ok());
     }
 
     #[test]
@@ -779,7 +777,7 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(&Some(&user), &target, "", "").is_err());
+        assert!(check_user_has_role_or_forbid(Some(&user), &target, "", "").is_err());
     }
 
     #[test]
@@ -792,7 +790,7 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(&Some(&user), &target, "", "").is_err());
+        assert!(check_user_has_role_or_forbid(Some(&user), &target, "", "").is_err());
     }
 
     #[test]
@@ -807,7 +805,7 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(&Some(&user), &target, "", "").is_err());
+        assert!(check_user_has_role_or_forbid(Some(&user), &target, "", "").is_err());
     }
 
     #[test]
@@ -819,6 +817,6 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(&Some(&user), &target, "", "").is_err());
+        assert!(check_user_has_role_or_forbid(Some(&user), &target, "", "").is_err());
     }
 }

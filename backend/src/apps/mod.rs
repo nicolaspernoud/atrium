@@ -139,8 +139,7 @@ where
     authorized_or_redirect_to_login(&app, &user, &hostname, &req, &config)?;
 
     let app = match app {
-        HostType::ReverseApp(app) => app,
-        HostType::SkipVerifyReverseApp(app) => app,
+        HostType::SkipVerifyReverseApp(app) | HostType::ReverseApp(app) => app,
         _ => panic!("Service is not an app !"),
     };
 

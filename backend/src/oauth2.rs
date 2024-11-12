@@ -65,7 +65,7 @@ pub async fn openid_configuration(cfg: &mut Option<OpenIdConfig>) {
                 tracing::info!(
                     "Could not set up Open ID Connect configuration from well-known url: {}",
                     error
-                )
+                );
             });
     }
 }
@@ -312,7 +312,7 @@ impl<'c> AsyncHttpClient<'c> for HyperOAuth2Client {
     fn call(&'c self, request: HttpRequest) -> Self::Future {
         Box::pin(async move {
             let (parts, body) = request.into_parts();
-            let req = Request::from_parts(parts, Body::from(body.to_vec()));
+            let req = Request::from_parts(parts, Body::from(body.clone()));
             let res = self
                 .request(req)
                 .await

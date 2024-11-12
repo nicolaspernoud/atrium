@@ -9,7 +9,15 @@ use axum_server::Handle;
 use http::{StatusCode, Uri};
 use rustls::ServerConfig;
 use rustls_acme::{caches::DirCache, AcmeConfig};
-use std::{fs::File, net::SocketAddr, sync::Arc, time::Duration};
+use std::{
+    fs::File,
+    net::SocketAddr,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 use tokio::{net::TcpListener, signal, sync::broadcast};
 use tokio_stream::StreamExt;
 use tracing::{error, info};
@@ -21,13 +29,10 @@ pub const CONFIG_FILE: &str = "atrium.yaml";
 fn main() -> Result<()> {
     // println!("MiMalloc version: {}", mimalloc::MiMalloc.version()); // mimalloc = { version = "0.1", features = ["extended"] } in Cargo.toml to use this
     // We need to work out the local time offset before entering multi-threaded context
-    let cfg: Config = match File::open(CONFIG_FILE) {
-        Ok(file) => serde_yml::from_reader(file).expect("failed to parse configuration file"),
-        Err(_) => {
-            println!("Configuration file not found, trying to create default configuration file.");
-            File::create(CONFIG_FILE).expect("could not create default configuration file");
-            Config::default()
-        }
+    let cfg: Config = if let Ok(file) = File::open(CONFIG_FILE) { serde_yml::from_reader(file).expect("failed to parse configuration file") } else {
+        println!("Configuration file not found, trying to create default configuration file.");
+        File::create(CONFIG_FILE).expect("could not create default configuration file");
+        Config::default()
     };
     let _log_guards = setup_logger(cfg.debug_mode, cfg.log_to_file);
     run()
@@ -58,13 +63,13 @@ async fn run() -> Result<()> {
 
     let config = atrium::configuration::load_config(CONFIG_FILE).await?;
 
-    let reload_loop = std::sync::Arc::new(std::sync::Mutex::new(true));
+    let reload_loop = Arc::new(AtomicBool::new(true));
     let (tx, _) = broadcast::channel(16);
 
     info!("Starting server...");
     loop {
         let reload_loop = reload_loop.clone();
-        if !(*reload_loop.lock().unwrap()) {
+        if !(reload_loop.load(Ordering::Relaxed)) {
             break;
         };
 
@@ -86,7 +91,7 @@ async fn run() -> Result<()> {
                 },
                 _ = shutdown_signal() => {
                         info!("Shutting down...");
-                        *reload_loop.lock().unwrap() = false;
+                        reload_loop.store(false, Ordering::Relaxed);
                         shutdown_handle.graceful_shutdown(Some(Duration::from_secs(10)));
                 },
             }

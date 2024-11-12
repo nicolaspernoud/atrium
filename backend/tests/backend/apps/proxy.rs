@@ -173,7 +173,7 @@ async fn test_websocket() {
 
             let msg = websocket.next().await.unwrap().unwrap();
             assert!(
-                matches!(&msg, Message::Ping(inner) if inner == "hello".as_bytes()),
+                matches!(&msg, Message::Ping(inner) if inner == b"hello"),
                 "did not get ping, but: {:?}",
                 msg
             );
@@ -231,7 +231,7 @@ async fn test_websocket() {
     let msg = client.next().await.unwrap().unwrap();
 
     assert!(
-        matches!(&msg, Message::Pong(inner) if inner == "hello".as_bytes()),
+        matches!(&msg, Message::Pong(inner) if inner == b"hello"),
         "did not get pong, but {:?}",
         msg
     );

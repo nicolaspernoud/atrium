@@ -10,6 +10,10 @@ import 'package:flutter/material.dart';
 import 'package:webdav_client/webdav_client.dart' as webdav;
 import 'package:atrium/models/api_provider.dart';
 
+class NotificationsPlugin {
+  
+}
+
 // Create new client configured for web
 webdav.Client newExplorerClient(String uri,
     {String user = '', String password = '', bool debug = false}) {

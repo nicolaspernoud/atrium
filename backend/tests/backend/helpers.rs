@@ -151,8 +151,8 @@ impl TestApp {
 impl Drop for TestApp {
     fn drop(&mut self) {
         self.server_handle.abort();
-        std::fs::remove_file(&format!("{}.yaml", self.id)).ok();
-        std::fs::remove_dir_all(&format!("./data/{}", self.id)).ok();
+        std::fs::remove_file(format!("{}.yaml", self.id)).ok();
+        std::fs::remove_dir_all(format!("./data/{}", self.id)).ok();
     }
 }
 

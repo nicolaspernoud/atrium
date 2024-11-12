@@ -3,7 +3,7 @@
 ###########################
 
 # Set up an environnement to cross-compile the app for musl to create a statically-linked binary
-FROM --platform=$BUILDPLATFORM rust:1.81 AS backend-builder
+FROM --platform=$BUILDPLATFORM rust:1.82 AS backend-builder
 ARG TARGETPLATFORM
 RUN case "$TARGETPLATFORM" in \
       "linux/amd64") echo x86_64-unknown-linux-gnu > /rust_target.txt ;; \
@@ -13,7 +13,7 @@ RUN case "$TARGETPLATFORM" in \
       *) exit 1 ;; \
     esac
 RUN rustup target add $(cat /rust_target.txt)
-RUN apt update && apt install -y musl-tools musl-dev binutils-arm-linux-gnueabihf gcc-arm-linux-gnueabihf gcc-aarch64-linux-gnu libcap2-bin
+RUN apt update && apt install -y binutils-arm-linux-gnueabihf gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf libcap2-bin musl-dev musl-tools
 RUN ln -s /usr/bin/arm-linux-gnueabihf-gcc /usr/bin/arm-linux-musleabihf-gcc
 RUN ln -s /usr/bin/aarch64-linux-gnu-gcc /usr/bin/aarch64-linux-musl-gcc
 

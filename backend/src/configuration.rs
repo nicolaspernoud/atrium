@@ -65,8 +65,7 @@ impl TlsMode {
     pub fn is_secure(&self) -> bool {
         match self {
             TlsMode::No => false,
-            TlsMode::BehindProxy => true,
-            TlsMode::Auto => true,
+            TlsMode::BehindProxy | TlsMode::Auto => true,
         }
     }
 }
@@ -170,7 +169,7 @@ impl Config {
                     .map(|dav| format!("{}.{}", trim_host(&dav.host), self.hostname)),
             )
             .collect::<Vec<String>>();
-        domains.insert(0, self.hostname.to_owned());
+        domains.insert(0, self.hostname.clone());
         // Insert apps subdomains
         for app in filter_services(&self.apps, &self.hostname, &self.domain) {
             for domain in app.subdomains.as_ref().unwrap_or(&Vec::new()) {
@@ -195,10 +194,10 @@ pub async fn load_config(config_file: &str) -> Result<(ConfigState, ConfigMap), 
     }
     // Allow overriding the hostname with env variable
     if let Ok(h) = std::env::var("MAIN_HOSTNAME") {
-        config.hostname = h
+        config.hostname = h;
     }
     if is_default(&config.domain) {
-        config.domain = config.hostname.clone()
+        config.domain = config.hostname.clone();
     };
     let port = if config.tls_mode.is_secure() {
         None
@@ -316,8 +315,7 @@ pub enum HostType {
 impl HostType {
     pub fn host(&self) -> &str {
         match self {
-            HostType::ReverseApp(app) => &app.inner.host,
-            HostType::SkipVerifyReverseApp(app) => &app.inner.host,
+            HostType::SkipVerifyReverseApp(app) | HostType::ReverseApp(app) => &app.inner.host,
             HostType::Dav(dav) => &dav.host,
             HostType::StaticApp(app) => &app.host,
         }
@@ -325,8 +323,7 @@ impl HostType {
 
     pub fn roles(&self) -> &Vec<String> {
         match self {
-            HostType::ReverseApp(app) => &app.inner.roles,
-            HostType::SkipVerifyReverseApp(app) => &app.inner.roles,
+            HostType::ReverseApp(app) | HostType::SkipVerifyReverseApp(app) => &app.inner.roles,
             HostType::Dav(dav) => &dav.roles,
             HostType::StaticApp(app) => &app.roles,
         }
@@ -334,8 +331,7 @@ impl HostType {
 
     pub fn secured(&self) -> bool {
         match self {
-            HostType::ReverseApp(app) => app.inner.secured,
-            HostType::SkipVerifyReverseApp(app) => app.inner.secured,
+            HostType::ReverseApp(app)| HostType::SkipVerifyReverseApp(app)=> app.inner.secured,
             HostType::Dav(dav) => dav.secured,
             HostType::StaticApp(app) => app.secured,
         }

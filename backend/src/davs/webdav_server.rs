@@ -112,12 +112,11 @@ impl WebdavServer {
 
         let head_only = method == Method::HEAD;
 
-        let path = match self.extract_path(req_path, &dav.directory) {
-            Some(v) => v,
-            None => {
-                status_forbid(&mut res);
-                return Ok(res);
-            }
+        let path = if let Some(v) = Self::extract_path(req_path, &dav.directory) {
+            v
+        } else {
+            status_forbid(&mut res);
+            return Ok(res);
         };
 
         let path = path.as_path();
@@ -163,7 +162,7 @@ impl WebdavServer {
                     } else if query.contains_key("diskusage") {
                         self.handle_disk_usage(path, &mut res).await?;
                     } else {
-                        self.handle_zip_dir(path, head_only, &mut res, key).await?;
+                        Self::handle_zip_dir(path, head_only, &mut res, key)?;
                     }
                 } else if is_file {
                     let inline = query.contains_key("inline");
@@ -187,7 +186,7 @@ impl WebdavServer {
                 if !allow_delete {
                     status_forbid(&mut res);
                 } else if !is_miss {
-                    self.handle_delete(path, is_dir, &mut res).await?
+                    self.handle_delete(path, is_dir, &mut res).await?;
                 } else {
                     status_not_found(&mut res);
                 }
@@ -244,7 +243,7 @@ impl WebdavServer {
                         status_not_found(&mut res);
                     } else {
                         self.handle_copymove(path, req, method, &mut res, &dav.directory)
-                            .await?
+                            .await?;
                     }
                 }
                 "MOVE" => {
@@ -254,7 +253,7 @@ impl WebdavServer {
                         status_not_found(&mut res);
                     } else {
                         self.handle_copymove(path, req, method, &mut res, &dav.directory)
-                            .await?
+                            .await?;
                     }
                 }
                 "LOCK" => {
@@ -262,7 +261,7 @@ impl WebdavServer {
                     if is_dir {
                         status_not_found(&mut res);
                     } else {
-                        self.handle_lock(req_path, is_miss, &mut res).await?;
+                        Self::handle_lock(req_path, is_miss, &mut res)?;
                     }
                 }
                 "UNLOCK" => {
@@ -288,12 +287,11 @@ impl WebdavServer {
     ) -> BoxResult<()> {
         ensure_path_parent(path).await?;
 
-        let file = match DavFile::create(path, key).await {
-            Ok(v) => v,
-            Err(_) => {
-                status_forbid(res);
-                return Ok(());
-            }
+        let file = if let Ok(v) = DavFile::create(path, key).await {
+            v
+        } else {
+            status_forbid(res);
+            return Ok(());
         };
 
         let (parts, body) = req.into_parts();
@@ -306,16 +304,14 @@ impl WebdavServer {
 
         let mut body_reader = StreamReader::new(body_with_io_error);
 
-        match file.copy_from(&mut body_reader).await {
-            Ok(()) => (),
-            Err(_) => {
-                *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-                *res.body_mut() = Body::from("error writing file");
-                error!("WARNING: The file creation on {}{} encountered an error. The file was not created or was deleted !",
-                parts.headers.get(http::header::HOST).unwrap_or(&HeaderValue::from_static("<no host>")).to_str().unwrap_or_default(), parts.uri);
-                let _ = fs::remove_file(path).await;
-                return Ok(());
-            }
+        if let Ok(()) = file.copy_from(&mut body_reader).await {
+        } else {
+            *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+            *res.body_mut() = Body::from("error writing file");
+            error!("WARNING: The file creation on {}{} encountered an error. The file was not created or was deleted !",
+            parts.headers.get(http::header::HOST).unwrap_or(&HeaderValue::from_static("<no host>")).to_str().unwrap_or_default(), parts.uri);
+            let _ = fs::remove_file(path).await;
+            return Ok(());
         };
 
         // If the X-OC-Mtime header is present, alter the file modified time according to that header's value.
@@ -326,7 +322,7 @@ impl WebdavServer {
                         .is_ok()
                     {
                         // Respond with the appropriate header on success
-                        res.headers_mut().insert("X-OC-Mtime", ACCEPTED.to_owned());
+                        res.headers_mut().insert("X-OC-Mtime", ACCEPTED.clone());
                     }
                 }
             }
@@ -386,7 +382,7 @@ impl WebdavServer {
         }
         let j = serde_json::to_string(&paths)?;
         res.headers_mut()
-            .insert(CONTENT_TYPE, APPLICATION_JSON.to_owned());
+            .insert(CONTENT_TYPE, APPLICATION_JSON.clone());
         *res.body_mut() = Body::from(j);
         Ok(())
     }
@@ -400,13 +396,12 @@ impl WebdavServer {
         let du = crate::sysinfo::disk_info(full_path).await?;
         let j = serde_json::to_string(&du)?;
         res.headers_mut()
-            .insert(CONTENT_TYPE, APPLICATION_JSON.to_owned());
+            .insert(CONTENT_TYPE, APPLICATION_JSON.clone());
         *res.body_mut() = Body::from(j);
         Ok(())
     }
 
-    async fn handle_zip_dir(
-        &self,
+    fn handle_zip_dir(
         path: &Path,
         head_only: bool,
         res: &mut Response,
@@ -469,11 +464,9 @@ impl WebdavServer {
             res.headers_mut().typed_insert(etag.clone());
 
             if headers.typed_get::<Range>().is_some() {
-                use_range = headers
-                    .typed_get::<IfRange>()
-                    .map(|if_range| !if_range.is_modified(Some(&etag), Some(&last_modified)))
-                    // Always be fresh if there is no validators
-                    .unwrap_or(true);
+                use_range = headers.typed_get::<IfRange>().map_or(true, |if_range| {
+                    !if_range.is_modified(Some(&etag), Some(&last_modified))
+                });
             } else {
                 use_range = false;
             }
@@ -545,7 +538,7 @@ impl WebdavServer {
             if head_only {
                 return Ok(());
             }
-            *res.body_mut() = file.into_body().await;
+            *res.body_mut() = file.into_body();
         }
         Ok(())
     }
@@ -561,13 +554,14 @@ impl WebdavServer {
     ) -> BoxResult<()> {
         let base_path = Path::new(directory);
         let depth: u32 = match headers.get("depth") {
-            Some(v) => match v.to_str().ok().and_then(|v| v.parse().ok()) {
-                Some(v) => v,
-                None => {
+            Some(v) => {
+                if let Some(v) = v.to_str().ok().and_then(|v| v.parse().ok()) {
+                    v
+                } else {
                     *res.status_mut() = StatusCode::BAD_REQUEST;
                     return Ok(());
                 }
-            },
+            }
             None => 1,
         };
         let mut paths = vec![self
@@ -575,15 +569,14 @@ impl WebdavServer {
             .await?
             .unwrap()];
         if depth != 0 {
-            match self
+            if let Ok(child) = self
                 .list_dir(path, base_path, directory, allow_symlinks, &key)
                 .await
             {
-                Ok(child) => paths.extend(child),
-                Err(_) => {
-                    status_forbid(res);
-                    return Ok(());
-                }
+                paths.extend(child);
+            } else {
+                status_forbid(res);
+                return Ok(());
             }
         }
         let output = paths
@@ -619,24 +612,16 @@ impl WebdavServer {
     }
 
     async fn handle_mkcol(&self, path: &Path, res: &mut Response) -> BoxResult<()> {
-        match fs::create_dir(path).await {
-            Ok(_) => {
-                *res.status_mut() = StatusCode::CREATED;
-                Ok(())
-            }
-            Err(_) => {
-                *res.status_mut() = StatusCode::CONFLICT;
-                Ok(())
-            }
+        if fs::create_dir(path).await.is_ok() {
+            *res.status_mut() = StatusCode::CREATED;
+            Ok(())
+        } else {
+            *res.status_mut() = StatusCode::CONFLICT;
+            Ok(())
         }
     }
 
-    async fn handle_lock(
-        &self,
-        req_path: &str,
-        is_miss: bool,
-        res: &mut Response,
-    ) -> BoxResult<()> {
+    fn handle_lock(req_path: &str, is_miss: bool, res: &mut Response) -> BoxResult<()> {
         let token = format!("opaquelocktoken:{}", Uuid::new_v4());
 
         res.headers_mut().insert(
@@ -682,7 +667,7 @@ impl WebdavServer {
                       </D:propstat>
                     </D:response>
                 "#
-            )
+            );
         } else {
             output = format!(
                 r#"
@@ -747,13 +732,13 @@ impl WebdavServer {
     ) -> Option<Destination> {
         let dest = headers.get("Destination")?.to_str().ok()?;
         let uri: Uri = dest.parse().ok()?;
-        match self.extract_path(uri.path(), dav_path) {
+        match Self::extract_path(uri.path(), dav_path) {
             Some(dest) => Some(Destination::new(dest, uri.to_string().ends_with('/')).await),
             None => None,
         }
     }
 
-    fn extract_path(&self, wanted_path: &str, dav_path: &str) -> Option<PathBuf> {
+    fn extract_path(wanted_path: &str, dav_path: &str) -> Option<PathBuf> {
         let decoded_path = decode_uri(&wanted_path[1..])?.into_owned();
         let stripped_path = Path::new(&decoded_path).components().collect::<PathBuf>();
         let self_path = Path::new(dav_path);
@@ -852,12 +837,11 @@ impl WebdavServer {
         };
 
         // decode and validate destination.
-        let mut dest = match self.extract_dest(req.headers(), dav_path).await {
-            Some(dest) => dest,
-            None => {
-                *res.status_mut() = StatusCode::FORBIDDEN;
-                return Ok(());
-            }
+        let mut dest = if let Some(dest) = self.extract_dest(req.headers(), dav_path).await {
+            dest
+        } else {
+            *res.status_mut() = StatusCode::FORBIDDEN;
+            return Ok(());
         };
 
         // Fails if we try to move a folder in place of the root directory itself
@@ -1245,48 +1229,41 @@ enum Destination {
 
 impl Destination {
     async fn new(dest: PathBuf, is_new_dir: bool) -> Destination {
-        match fs::symlink_metadata(&dest).await {
-            Ok(meta) => {
-                if meta.is_symlink() {
-                    if let Ok(m) = fs::metadata(&dest).await {
-                        if m.is_file() {
-                            return Destination::ExistingFile(dest);
-                        }
-                        if m.is_dir() {
-                            return Destination::ExistingDir(dest);
-                        }
+        if let Ok(meta) = fs::symlink_metadata(&dest).await {
+            if meta.is_symlink() {
+                if let Ok(m) = fs::metadata(&dest).await {
+                    if m.is_file() {
+                        return Destination::ExistingFile(dest);
+                    }
+                    if m.is_dir() {
+                        return Destination::ExistingDir(dest);
                     }
                 }
-                if meta.is_file() {
-                    Destination::ExistingFile(dest)
-                } else {
-                    Destination::ExistingDir(dest)
-                }
             }
-            Err(_) => {
-                if is_new_dir {
-                    return Destination::DirToBe(dest);
-                }
-                Destination::FileToBe(dest)
+            if meta.is_file() {
+                Destination::ExistingFile(dest)
+            } else {
+                Destination::ExistingDir(dest)
             }
+        } else {
+            if is_new_dir {
+                return Destination::DirToBe(dest);
+            }
+            Destination::FileToBe(dest)
         }
     }
 
     fn exists(&self) -> bool {
         match self {
-            Destination::ExistingDir(_) => true,
-            Destination::DirToBe(_) => false,
-            Destination::ExistingFile(_) => true,
-            Destination::FileToBe(_) => false,
+            Destination::ExistingDir(_) | Destination::ExistingFile(_) => true,
+            Destination::DirToBe(_) | Destination::FileToBe(_) => false,
         }
     }
 
     fn is_dir(&self) -> bool {
         match self {
-            Destination::ExistingDir(_) => true,
-            Destination::DirToBe(_) => true,
-            Destination::ExistingFile(_) => false,
-            Destination::FileToBe(_) => false,
+            Destination::ExistingDir(_) | Destination::DirToBe(_) => true,
+            Destination::ExistingFile(_) | Destination::FileToBe(_) => false,
         }
     }
 
@@ -1296,19 +1273,19 @@ impl Destination {
 
     fn path(&self) -> &PathBuf {
         match self {
-            Destination::ExistingDir(p) => p,
-            Destination::DirToBe(p) => p,
-            Destination::ExistingFile(p) => p,
-            Destination::FileToBe(p) => p,
+            Destination::ExistingDir(p)
+            | Destination::DirToBe(p)
+            | Destination::ExistingFile(p)
+            | Destination::FileToBe(p) => p,
         }
     }
 
     fn push(&mut self, path: PathBuf) {
         match self {
-            Destination::ExistingDir(p) => p.push(path),
-            Destination::DirToBe(p) => p.push(path),
-            Destination::ExistingFile(p) => p.push(path),
-            Destination::FileToBe(p) => p.push(path),
+            Destination::ExistingDir(p)
+            | Destination::DirToBe(p)
+            | Destination::ExistingFile(p)
+            | Destination::FileToBe(p) => p.push(path),
         }
     }
 }

@@ -45,15 +45,13 @@ pub async fn webdav_handler(
     let query_str = req.uri().query().unwrap_or_default().to_owned();
     let dav_host_str = dav.host().to_owned();
     let user_str = user
-        .as_ref()
-        .map(|u| u.login.to_owned())
-        .unwrap_or_else(|| "unknown user".to_owned());
+        .as_ref().map_or_else(|| "unknown user".to_owned(), |u| u.login.clone());
 
     let domain = hostname.split(':').next().unwrap_or_default();
 
     if method != Method::OPTIONS {
         if let Err(access_denied_resp) =
-            check_authorization(&dav, &user.as_ref(), domain, req.uri().path())
+            check_authorization(&dav, user.as_ref(), domain, req.uri().path())
         {
             tokio::spawn(async move {
                 info!(

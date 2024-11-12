@@ -64,6 +64,7 @@ class ExplorerState extends State<Explorer> {
 
   @override
   void initState() {
+    NotificationsPlugin(); // To ensure singleton is initialised
     super.initState();
     readWrite = widget.readWrite;
     // init client
