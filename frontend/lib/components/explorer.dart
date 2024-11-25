@@ -223,19 +223,13 @@ class ExplorerState extends State<Explorer> {
   }
 
   Widget _buildListView(BuildContext context, List<webdav.File> list) {
-    if (list.isNotEmpty && list[0].path == null) {
-      list.removeAt(0);
-    } // Remove the ".." placeholder it it has been inserted before rebuild
-
     if (sortBy == SortBy.names) {
       list.sort(foldersFirstThenAlphabetically);
     } else {
       list.sort((a, b) => b.mTime!.compareTo(a.mTime!));
     }
 
-    if (dirPath != "/") list.insert(0, File());
-
-    for (var i = 1; i < list.length; i++) {
+    for (var i = 0; i < list.length; i++) {
       // If we found a file before building this view, we scroll to that file
       if (list[i].path! == foundFile) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -243,16 +237,16 @@ class ExplorerState extends State<Explorer> {
             index: i,
           );
         });
+        break;
       }
     }
 
     CancelToken cancelToken = CancelToken();
 
-    return ScrollablePositionedList.builder(
-      itemCount: list.length,
-      itemBuilder: (context, index) {
-        if (dirPath != "/" && index == 0) {
-          return ListTile(
+    return Column(
+      children: [
+        if (dirPath != "/")
+          ListTile(
             leading: const Icon(Icons.reply),
             title: const Text(".."),
             onTap: () {
@@ -262,249 +256,261 @@ class ExplorerState extends State<Explorer> {
                 _getData();
               });
             },
-          );
-        } else {
-          var file = list[index];
-          var type = fileType(file);
+          ),
+        Expanded(
+          child: ScrollablePositionedList.builder(
+            itemCount: list.length,
+            itemBuilder: (context, index) {
+              var file = list[index];
+              var type = fileType(file);
 
-          return ListTile(
-            leading: widgetFromFileType(file, type, cancelToken),
-            tileColor: file.path! == foundFile ? Colors.grey[400] : null,
-            title: Text(file.name ?? ''),
-            subtitle: Text(formatTime(file.mTime) +
-                ((file.size != null && file.size! > 0)
-                    ? " - ${filesize(file.size, 0)}"
-                    : "")),
-            trailing: PopupMenuButton(
-                itemBuilder: (BuildContext context) => <PopupMenuEntry>[
-                      PopupMenuItem(
-                          onTap: () =>
-                              download(widget.url, client, file, context),
-                          child: Row(
-                            children: [
-                              const Padding(
-                                padding: EdgeInsets.all(8.0),
-                                child: Icon(Icons.download),
-                              ),
-                              Text(tr(context, "download"))
-                            ],
-                          )),
-                      PopupMenuItem(
-                          onTap: () {
-                            WidgetsBinding.instance
-                                .addPostFrameCallback((_) async {
-                              if (!widget.dav.secured) {
-                                Clipboard.setData(ClipboardData(
-                                    text:
-                                        '${widget.url}${escapePath(file.path!)}'));
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                        content: Text(
-                                            tr(context, "share_url_copied"))));
-                              } else {
-                                await showDialog(
-                                    context: context,
-                                    builder: (context) =>
-                                        ShareDialog(widget.url, file, client));
-                              }
-                            });
-                          },
-                          child: Row(
-                            children: [
-                              const Padding(
-                                padding: EdgeInsets.all(8.0),
-                                child: Icon(Icons.share),
-                              ),
-                              Text(tr(context, "share"))
-                            ],
-                          )),
-                      if (readWrite) ...[
-                        PopupMenuItem(
-                            onTap: () {
-                              WidgetsBinding.instance
-                                  .addPostFrameCallback((_) async {
-                                String? val = await showDialog<String>(
-                                  context: context,
-                                  builder: (context) =>
-                                      RenameDialog(file.name!),
-                                );
-                                if (val != null && file.path != null) {
-                                  var newPath = file.path!;
-                                  newPath = newPath.endsWith("/")
-                                      ? newPath.substring(0, newPath.length - 1)
-                                      : newPath;
-                                  newPath =
-                                      "${newPath.substring(0, newPath.lastIndexOf('/'))}/$val";
-                                  newPath = file.isDir! ? "$newPath/" : newPath;
-                                  await client.rename(
-                                      file.path!, newPath, true);
-                                  setState(() {
-                                    _getData();
+              return ListTile(
+                leading: widgetFromFileType(file, type, cancelToken),
+                tileColor: file.path! == foundFile ? Colors.grey[400] : null,
+                title: Text(file.name ?? ''),
+                subtitle: Text(formatTime(file.mTime) +
+                    ((file.size != null && file.size! > 0)
+                        ? " - ${filesize(file.size, 0)}"
+                        : "")),
+                trailing: PopupMenuButton(
+                    itemBuilder: (BuildContext context) => <PopupMenuEntry>[
+                          PopupMenuItem(
+                              onTap: () =>
+                                  download(widget.url, client, file, context),
+                              child: Row(
+                                children: [
+                                  const Padding(
+                                    padding: EdgeInsets.all(8.0),
+                                    child: Icon(Icons.download),
+                                  ),
+                                  Text(tr(context, "download"))
+                                ],
+                              )),
+                          PopupMenuItem(
+                              onTap: () {
+                                WidgetsBinding.instance
+                                    .addPostFrameCallback((_) async {
+                                  if (!widget.dav.secured) {
+                                    Clipboard.setData(ClipboardData(
+                                        text:
+                                            '${widget.url}${escapePath(file.path!)}'));
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                            content: Text(tr(
+                                                context, "share_url_copied"))));
+                                  } else {
+                                    await showDialog(
+                                        context: context,
+                                        builder: (context) => ShareDialog(
+                                            widget.url, file, client));
+                                  }
+                                });
+                              },
+                              child: Row(
+                                children: [
+                                  const Padding(
+                                    padding: EdgeInsets.all(8.0),
+                                    child: Icon(Icons.share),
+                                  ),
+                                  Text(tr(context, "share"))
+                                ],
+                              )),
+                          if (readWrite) ...[
+                            PopupMenuItem(
+                                onTap: () {
+                                  WidgetsBinding.instance
+                                      .addPostFrameCallback((_) async {
+                                    String? val = await showDialog<String>(
+                                      context: context,
+                                      builder: (context) =>
+                                          RenameDialog(file.name!),
+                                    );
+                                    if (val != null && file.path != null) {
+                                      var newPath = file.path!;
+                                      newPath = newPath.endsWith("/")
+                                          ? newPath.substring(
+                                              0, newPath.length - 1)
+                                          : newPath;
+                                      newPath =
+                                          "${newPath.substring(0, newPath.lastIndexOf('/'))}/$val";
+                                      newPath =
+                                          file.isDir! ? "$newPath/" : newPath;
+                                      await client.rename(
+                                          file.path!, newPath, true);
+                                      setState(() {
+                                        _getData();
+                                      });
+                                    }
                                   });
-                                }
-                              });
-                            },
-                            child: Row(
-                              children: [
-                                const Padding(
-                                  padding: EdgeInsets.all(8.0),
-                                  child: Icon(Icons.drive_file_rename_outline),
-                                ),
-                                Text(tr(context, "rename"))
-                              ],
-                            )),
-                        PopupMenuItem(
-                            onTap: (() {
-                              setState(() {
-                                _copyMoveStatus = CopyMoveStatus.copy;
-                                _copyMovePath = file.path!;
-                              });
-                            }),
-                            child: Row(
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.all(8.0),
-                                  child: Icon(Icons.copy,
-                                      color: _copyMovePath == file.path! &&
-                                              _copyMoveStatus ==
-                                                  CopyMoveStatus.copy
-                                          ? Colors.blueAccent
-                                          : null),
-                                ),
-                                Text(tr(context, "copy"))
-                              ],
-                            )),
-                        PopupMenuItem(
-                            onTap: (() {
-                              setState(() {
-                                _copyMoveStatus = CopyMoveStatus.move;
-                                _copyMovePath = file.path!;
-                              });
-                            }),
-                            child: Row(
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.all(8.0),
-                                  child: Icon(Icons.cut,
-                                      color: _copyMovePath == file.path! &&
-                                              _copyMoveStatus ==
-                                                  CopyMoveStatus.move
-                                          ? Colors.blueAccent
-                                          : null),
-                                ),
-                                Text(tr(context, "cut"))
-                              ],
-                            )),
-                        PopupMenuItem(
-                            onTap: () async {
-                              WidgetsBinding.instance
-                                  .addPostFrameCallback((_) async {
-                                var confirmed = await showDialog<bool>(
-                                  context: context,
-                                  builder: (context) =>
-                                      DeleteDialog(file.name!),
-                                );
-                                if (confirmed!) {
-                                  await client.removeAll(file.path!);
+                                },
+                                child: Row(
+                                  children: [
+                                    const Padding(
+                                      padding: EdgeInsets.all(8.0),
+                                      child:
+                                          Icon(Icons.drive_file_rename_outline),
+                                    ),
+                                    Text(tr(context, "rename"))
+                                  ],
+                                )),
+                            PopupMenuItem(
+                                onTap: (() {
                                   setState(() {
-                                    list.removeAt(index);
+                                    _copyMoveStatus = CopyMoveStatus.copy;
+                                    _copyMovePath = file.path!;
                                   });
-                                }
-                              });
-                            },
-                            child: Row(
-                              children: [
-                                const Padding(
-                                  padding: EdgeInsets.all(8.0),
-                                  child: Icon(Icons.delete),
-                                ),
-                                Text(tr(context, "delete"))
-                              ],
-                            ))
-                      ]
-                    ]),
-            onTap: () async {
-              if (file.isDir!) {
-                dirPath = file.path!;
-                setState(() {
-                  _getData();
-                });
-              } else {
-                if (type == FileType.text) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => TextEditor(
-                            client: client, file: file, readWrite: readWrite)),
-                  );
-                } else if (type == FileType.image) {
-                  cancelToken.cancel();
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => ImageViewer(
-                              client: client,
-                              url: widget.url,
-                              files: list,
-                              index: index,
-                            )),
-                  );
-                } else if (type == FileType.pdf) {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => PdfViewer(
-                            client: client,
-                            url: widget.url,
-                            file: file,
-                            color: widget.dav.color)),
-                  );
-                } else if (type == FileType.document) {
-                  // Get a share token for this document
-                  var shareToken = await ApiProvider().getShareToken(
-                      widget.url.split("://")[1].split(":")[0], file.path!,
-                      shareWith: "external_editor", shareForDays: 1);
-                  final Uri launchUri = Uri(
-                    scheme: App().prefs.hostnameScheme,
-                    host: App().prefs.hostnameHost,
-                    port: App().prefs.hostnamePort,
-                    path: 'onlyoffice',
-                    query: joinQueryParameters(<String, String>{
-                      'file': '${widget.url}${file.path}',
-                      'mtime': file.mTime!.toIso8601String(),
-                      'user': App().prefs.username,
-                      'share_token': shareToken!
-                    }),
-                  );
-                  if (!context.mounted) return;
-                  Navigator.of(context)
-                      .push(MaterialPageRoute<void>(builder: (context) {
-                    return Scaffold(
-                        appBar: AppBar(toolbarHeight: 0.0),
-                        body: AppWebView(initialUrl: launchUri.toString()));
-                  }));
-                } else if (type == FileType.media) {
-                  String uri = '${widget.url}${escapePath(file.path!)}';
-                  if (kIsWeb) {
-                    var shareToken = await ApiProvider().getShareToken(
-                        widget.url.split("://")[1].split(":")[0], file.path!,
-                        shareWith: "media_player", shareForDays: 1);
-                    uri = '$uri?token=$shareToken';
+                                }),
+                                child: Row(
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.all(8.0),
+                                      child: Icon(Icons.copy,
+                                          color: _copyMovePath == file.path! &&
+                                                  _copyMoveStatus ==
+                                                      CopyMoveStatus.copy
+                                              ? Colors.blueAccent
+                                              : null),
+                                    ),
+                                    Text(tr(context, "copy"))
+                                  ],
+                                )),
+                            PopupMenuItem(
+                                onTap: (() {
+                                  setState(() {
+                                    _copyMoveStatus = CopyMoveStatus.move;
+                                    _copyMovePath = file.path!;
+                                  });
+                                }),
+                                child: Row(
+                                  children: [
+                                    Padding(
+                                      padding: const EdgeInsets.all(8.0),
+                                      child: Icon(Icons.cut,
+                                          color: _copyMovePath == file.path! &&
+                                                  _copyMoveStatus ==
+                                                      CopyMoveStatus.move
+                                              ? Colors.blueAccent
+                                              : null),
+                                    ),
+                                    Text(tr(context, "cut"))
+                                  ],
+                                )),
+                            PopupMenuItem(
+                                onTap: () async {
+                                  WidgetsBinding.instance
+                                      .addPostFrameCallback((_) async {
+                                    var confirmed = await showDialog<bool>(
+                                      context: context,
+                                      builder: (context) =>
+                                          DeleteDialog(file.name!),
+                                    );
+                                    if (confirmed!) {
+                                      await client.removeAll(file.path!);
+                                      setState(() {
+                                        list.removeAt(index);
+                                      });
+                                    }
+                                  });
+                                },
+                                child: Row(
+                                  children: [
+                                    const Padding(
+                                      padding: EdgeInsets.all(8.0),
+                                      child: Icon(Icons.delete),
+                                    ),
+                                    Text(tr(context, "delete"))
+                                  ],
+                                ))
+                          ]
+                        ]),
+                onTap: () async {
+                  if (file.isDir!) {
+                    dirPath = file.path!;
+                    setState(() {
+                      _getData();
+                    });
+                  } else {
+                    if (type == FileType.text) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => TextEditor(
+                                client: client,
+                                file: file,
+                                readWrite: readWrite)),
+                      );
+                    } else if (type == FileType.image) {
+                      cancelToken.cancel();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => ImageViewer(
+                                  client: client,
+                                  url: widget.url,
+                                  files: list,
+                                  index: index,
+                                )),
+                      );
+                    } else if (type == FileType.pdf) {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => PdfViewer(
+                                client: client,
+                                url: widget.url,
+                                file: file,
+                                color: widget.dav.color)),
+                      );
+                    } else if (type == FileType.document) {
+                      // Get a share token for this document
+                      var shareToken = await ApiProvider().getShareToken(
+                          widget.url.split("://")[1].split(":")[0], file.path!,
+                          shareWith: "external_editor", shareForDays: 1);
+                      final Uri launchUri = Uri(
+                        scheme: App().prefs.hostnameScheme,
+                        host: App().prefs.hostnameHost,
+                        port: App().prefs.hostnamePort,
+                        path: 'onlyoffice',
+                        query: joinQueryParameters(<String, String>{
+                          'file': '${widget.url}${file.path}',
+                          'mtime': file.mTime!.toIso8601String(),
+                          'user': App().prefs.username,
+                          'share_token': shareToken!
+                        }),
+                      );
+                      if (!context.mounted) return;
+                      Navigator.of(context)
+                          .push(MaterialPageRoute<void>(builder: (context) {
+                        return Scaffold(
+                            appBar: AppBar(toolbarHeight: 0.0),
+                            body: AppWebView(initialUrl: launchUri.toString()));
+                      }));
+                    } else if (type == FileType.media) {
+                      String uri = '${widget.url}${escapePath(file.path!)}';
+                      if (kIsWeb) {
+                        var shareToken = await ApiProvider().getShareToken(
+                            widget.url.split("://")[1].split(":")[0],
+                            file.path!,
+                            shareWith: "media_player",
+                            shareForDays: 1);
+                        uri = '$uri?token=$shareToken';
+                      }
+                      if (!context.mounted) return;
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) =>
+                                  MediaPlayer(uri: uri, file: file)));
+                    }
                   }
-                  if (!context.mounted) return;
-                  Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (context) =>
-                              MediaPlayer(uri: uri, file: file)));
-                }
-              }
+                },
+              );
             },
-          );
-        }
-      },
-      itemScrollController: itemScrollController,
-      itemPositionsListener: itemPositionsListener,
+            itemScrollController: itemScrollController,
+            itemPositionsListener: itemPositionsListener,
+          ),
+        ),
+      ],
     );
   }
 

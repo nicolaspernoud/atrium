@@ -3,7 +3,7 @@ hostname: atrium.127.0.0.1.nip.io # required : fully qualified domain name of th
 debug_mode: true # optional, defaults to false : prints a lot of debug logs ; disable in production as it has a big performance impact
 single_proxy: false # optional, default to false : in single proxy mode, atrium will route only to the first app available, it is meant to secure a single proxied application with Open ID Connect
 http_port: 8080 # required, defaults to 8080 : http port to listen to if tls mode is not Auto
-tls_mode: No # required, defaults to No : use No for development/test http mode, Auto to generate Let's Encrypt certificates automatically (most common production usage) or ̀BehindProxy to use atrium behind a TLS offloading proxy
+tls_mode: No # required, defaults to No : use No for development/test http mode, Auto to generate Let's Encrypt certificates automatically (most common production usage) or ̀BehindProxy to use atrium behind a TLS offloading proxy or SelfSigned to generate self signed certificates (using http_port for https)
 letsencrypt_email: foo@bar.com # required if `tls_mode: Auto` is used : email for receiving Let's Encrypt information
 #cookie_key : # required, will be generated on first start : cookies and token signing key !!! SENSITIVE INFORMATION : TO BE KEPT HIDDEN !!!
 log_to_file: false # optional, defaults to false : log to a file in addition to std out

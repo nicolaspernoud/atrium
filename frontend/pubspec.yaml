@@ -46,13 +46,13 @@ dependencies:
   video_player: ^2.9.2
   webdav_client: ^1.2.2
   webview_flutter: ^4.10.0
-  webview_flutter_android: ^4.0.0
+  webview_flutter_android: ^4.1.0
   # TEMPORARY
   webview_cookie_manager:
     git: https://github.com/fryette/webview_cookie_manager.git
   path: ^1.9.0
   scrollable_positioned_list: ^0.3.8
-  open_file: ^3.5.9
+  open_file: ^3.5.10
 
 dev_dependencies:
   flutter_test:

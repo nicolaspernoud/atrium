@@ -59,6 +59,8 @@ pub enum TlsMode {
     No,
     BehindProxy,
     Auto,
+    #[cfg(feature = "self_signed")]
+    SelfSigned,
 }
 
 impl TlsMode {
@@ -66,6 +68,8 @@ impl TlsMode {
         match self {
             TlsMode::No => false,
             TlsMode::BehindProxy | TlsMode::Auto => true,
+            #[cfg(feature = "self_signed")]
+            TlsMode::SelfSigned => true,
         }
     }
 }
@@ -331,7 +335,7 @@ impl HostType {
 
     pub fn secured(&self) -> bool {
         match self {
-            HostType::ReverseApp(app)| HostType::SkipVerifyReverseApp(app)=> app.inner.secured,
+            HostType::ReverseApp(app) | HostType::SkipVerifyReverseApp(app) => app.inner.secured,
             HostType::Dav(dav) => dav.secured,
             HostType::StaticApp(app) => app.secured,
         }

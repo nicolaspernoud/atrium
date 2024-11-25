@@ -24,12 +24,17 @@ use tracing::{error, info};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{fmt, fmt::time::OffsetTime, prelude::*};
 
+#[cfg(feature = "self_signed")]
+pub mod self_signed;
+
 pub const CONFIG_FILE: &str = "atrium.yaml";
 
 fn main() -> Result<()> {
     // println!("MiMalloc version: {}", mimalloc::MiMalloc.version()); // mimalloc = { version = "0.1", features = ["extended"] } in Cargo.toml to use this
     // We need to work out the local time offset before entering multi-threaded context
-    let cfg: Config = if let Ok(file) = File::open(CONFIG_FILE) { serde_yml::from_reader(file).expect("failed to parse configuration file") } else {
+    let cfg: Config = if let Ok(file) = File::open(CONFIG_FILE) {
+        serde_yml::from_reader(file).expect("failed to parse configuration file")
+    } else {
         println!("Configuration file not found, trying to create default configuration file.");
         File::create(CONFIG_FILE).expect("could not create default configuration file");
         Config::default()
@@ -97,52 +102,61 @@ async fn run() -> Result<()> {
             }
         });
 
-        if config.0.tls_mode == TlsMode::Auto {
-            let config = atrium::configuration::load_config(CONFIG_FILE).await?;
-            let domains: Vec<String> = config.0.domains();
-            info!(
-                "Getting let's encrypt certificates for FQDNs : {:?}",
-                domains
-            );
-            let mut state = AcmeConfig::new(domains)
-                .contact_push(format!("mailto:{}", config.0.letsencrypt_email))
-                .directory_lets_encrypt(true)
-                .cache(DirCache::new("./letsencrypt_cache"))
-                .state();
+        match config.0.tls_mode {
+            TlsMode::Auto => {
+                let config = atrium::configuration::load_config(CONFIG_FILE).await?;
+                let domains: Vec<String> = config.0.domains();
+                info!(
+                    "Getting let's encrypt certificates for FQDNs : {:?}",
+                    domains
+                );
+                let mut state = AcmeConfig::new(domains)
+                    .contact_push(format!("mailto:{}", config.0.letsencrypt_email))
+                    .directory_lets_encrypt(true)
+                    .cache(DirCache::new("./letsencrypt_cache"))
+                    .state();
 
-            let mut rustls_config = ServerConfig::builder()
-                .with_no_client_auth()
-                .with_cert_resolver(state.resolver());
-            rustls_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
-            let acceptor = state.axum_acceptor(Arc::new(rustls_config));
+                let mut rustls_config = ServerConfig::builder()
+                    .with_no_client_auth()
+                    .with_cert_resolver(state.resolver());
+                rustls_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+                let acceptor = state.axum_acceptor(Arc::new(rustls_config));
 
-            tokio::spawn(async move {
-                loop {
-                    match state.next().await.unwrap() {
-                        Ok(ok) => info!("ACME (let's encrypt) event: {:?}", ok),
-                        Err(err) => error!("ACME (let's encrypt) error: {:?}", err),
+                tokio::spawn(async move {
+                    loop {
+                        match state.next().await.expect("could not start ACME loop") {
+                            Ok(ok) => info!("ACME (let's encrypt) event: {:?}", ok),
+                            Err(err) => error!("ACME (let's encrypt) error: {:?}", err),
+                        }
                     }
-                }
-            });
+                });
 
-            // Spawn a server to redirect HTTP to HTTPS
-            tokio::spawn(redirect_http_to_https(handle.clone()));
+                // Spawn a server to redirect HTTP to HTTPS
+                tokio::spawn(redirect_http_to_https(handle.clone()));
 
-            // Main server
-            let addr = format!("[::]:{}", 443)
-                .parse::<std::net::SocketAddr>()
-                .unwrap();
+                // Main server
+                let addr = format!("[::]:{}", 443).parse::<std::net::SocketAddr>()?;
 
-            axum_server::bind(addr)
-                .acceptor(acceptor)
-                .handle(handle)
-                .serve(app)
+                axum_server::bind(addr)
+                    .acceptor(acceptor)
+                    .handle(handle)
+                    .serve(app)
+                    .await?;
+            }
+            #[cfg(feature = "self_signed")]
+            TlsMode::SelfSigned => {
+                self_signed::serve_with_self_signed_cert(
+                    ip_bind,
+                    &server.port,
+                    handle,
+                    app,
+                )
                 .await?;
-        } else {
-            let addr = format!("{ip_bind}:{}", server.port)
-                .parse::<std::net::SocketAddr>()
-                .unwrap();
-            axum_server::bind(addr).handle(handle).serve(app).await?;
+            }
+            _ => {
+                let addr = format!("{ip_bind}:{}", server.port).parse::<std::net::SocketAddr>()?;
+                axum_server::bind(addr).handle(handle).serve(app).await?;
+            }
         }
     }
 
@@ -229,7 +243,7 @@ async fn redirect_http_to_https(handle: Handle) -> tokio::io::Result<()> {
         let mut parts = uri.into_parts();
         parts.scheme = Some(axum::http::uri::Scheme::HTTPS);
         if parts.path_and_query.is_none() {
-            parts.path_and_query = Some("/".parse().unwrap());
+            parts.path_and_query = Some("/".parse()?);
         }
         parts.authority = Some(host.parse()?);
         Ok(Uri::from_parts(parts)?)
