@@ -1,6 +1,5 @@
 use async_tungstenite::tokio::{accept_async, connect_async};
 use atrium::{apps::App, configuration::Config};
-use futures::SinkExt;
 use http::{
     header::{CONNECTION, HOST, UPGRADE},
     HeaderValue,

@@ -5,12 +5,15 @@ use std::{
     path::PathBuf,
     sync::{LazyLock, Mutex},
 };
-use sysinfo::{CpuRefreshKind, Disks, MemoryRefreshKind, RefreshKind, System};
+use sysinfo::{CpuRefreshKind, DiskRefreshKind, Disks, MemoryRefreshKind, RefreshKind, System};
 use tokio::task;
 
 static SYSTEM_INFO: LazyLock<Mutex<System>> = LazyLock::new(|| Mutex::new(System::new_all()));
-static DISKS_INFO: LazyLock<Mutex<Disks>> =
-    LazyLock::new(|| Mutex::new(Disks::new_with_refreshed_list()));
+static DISKS_INFO: LazyLock<Mutex<Disks>> = LazyLock::new(|| {
+    Mutex::new(Disks::new_with_refreshed_list_specifics(
+        DiskRefreshKind::nothing().with_storage(),
+    ))
+});
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SystemInfo {
@@ -32,7 +35,7 @@ pub async fn disk_info(path: PathBuf) -> Result<DiskInfo, &'static str> {
     let disksinfo: Result<Vec<DiskInfo>, &str> = task::spawn_blocking(|| {
         let mut disks = DISKS_INFO.lock().map_err(|_| "could not lock disks info")?;
 
-        disks.refresh_list();
+        disks.refresh_specifics(true, DiskRefreshKind::nothing().with_storage());
         let disksinfo = disks
             .iter()
             .map(|disk| DiskInfo {
@@ -78,9 +81,9 @@ pub async fn system_info(_user: UserToken) -> Result<Json<SystemInfo>, ErrRespon
             .lock()
             .map_err(|_| ErrResponse::S500("could not lock system info"))?;
         sys.refresh_specifics(
-            RefreshKind::new()
-                .with_memory(MemoryRefreshKind::new().with_ram())
-                .with_cpu(CpuRefreshKind::new().with_cpu_usage()),
+            RefreshKind::nothing()
+                .with_memory(MemoryRefreshKind::nothing().with_ram())
+                .with_cpu(CpuRefreshKind::nothing().with_cpu_usage()),
         );
         Ok(SystemInfo {
             total_memory: sys.total_memory(),
