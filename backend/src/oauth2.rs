@@ -8,10 +8,13 @@ use crate::{
 use anyhow::Result;
 use axum::{
     body::Body,
-    extract::{ConnectInfo, Host, Query, State},
+    extract::{ConnectInfo, Query, State},
     response::{IntoResponse, Redirect},
 };
-use axum_extra::extract::cookie::{Cookie, CookieJar, PrivateCookieJar};
+use axum_extra::extract::{
+    cookie::{Cookie, CookieJar, PrivateCookieJar},
+    Host,
+};
 use http::{header::AUTHORIZATION, HeaderValue, Request, StatusCode, Uri};
 use http_body_util::BodyExt;
 use hyper::body::Buf;

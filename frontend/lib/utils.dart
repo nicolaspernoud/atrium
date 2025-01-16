@@ -33,9 +33,13 @@ FileType fileTypeFromExt(String ext) {
     "txt",
     "yaml",
     "yml",
-  ].contains(ext)) return FileType.text;
+  ].contains(ext)) {
+    return FileType.text;
+  }
   if (["docx", "doc", "odt", "xlsx", "xls", "ods", "pptx", "ppt", "opd"]
-      .contains(ext)) return FileType.document;
+      .contains(ext)) {
+    return FileType.document;
+  }
   if ([
     "apng",
     "avif",
@@ -53,7 +57,9 @@ FileType fileTypeFromExt(String ext) {
     "tif",
     "tiff",
     "webp"
-  ].contains(ext)) return FileType.image;
+  ].contains(ext)) {
+    return FileType.image;
+  }
   if (["mp3", "wav", "ogg", "mp4", "avi", "mkv", "m4v", "webm"].contains(ext)) {
     return FileType.media;
   }

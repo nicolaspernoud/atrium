@@ -7,14 +7,11 @@ use crate::{
     utils::{is_default, option_string_trim, string_trim},
 };
 use anyhow::Result;
-use axum::{
-    async_trait,
-    extract::{FromRef, FromRequestParts},
-};
+use axum::extract::{FromRef, FromRequestParts, OptionalFromRequestParts};
 use http::request::Parts;
 use hyper::StatusCode;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, convert::Infallible, sync::Arc};
 
 fn http_port() -> u16 {
     8080
@@ -351,7 +348,6 @@ impl HostType {
     }
 }
 
-#[async_trait]
 impl<S> FromRequestParts<S> for HostType
 where
     S: Send + Sync,
@@ -362,7 +358,7 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let configmap = ConfigMap::from_ref(state);
 
-        let host = axum::extract::Host::from_request_parts(parts, state)
+        let host = axum_extra::extract::Host::from_request_parts(parts, state)
             .await
             .map_err(|_| StatusCode::NOT_FOUND)?;
 
@@ -376,6 +372,25 @@ where
         let target = (*target).clone();
 
         Ok(target)
+    }
+}
+
+impl<S> OptionalFromRequestParts<S> for HostType
+where
+    S: Send + Sync,
+    ConfigMap: FromRef<S>,
+{
+    type Rejection = Infallible;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &S,
+    ) -> Result<Option<Self>, Self::Rejection> {
+        Ok(
+            <HostType as FromRequestParts<S>>::from_request_parts(parts, state)
+                .await
+                .ok(),
+        )
     }
 }
 

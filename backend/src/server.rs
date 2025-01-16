@@ -68,11 +68,11 @@ impl Server {
 
         let admin_router = Router::new()
             .route("/api/admin/users", get(get_users).post(add_user))
-            .route("/api/admin/users/:user_login", delete(delete_user))
+            .route("/api/admin/users/{user_login}", delete(delete_user))
             .route("/api/admin/apps", get(get_apps).post(add_app))
-            .route("/api/admin/apps/:app_id", delete(delete_app))
+            .route("/api/admin/apps/{app_id}", delete(delete_app))
             .route("/api/admin/davs", get(get_davs).post(add_dav))
-            .route("/api/admin/davs/:dav_id", delete(delete_dav));
+            .route("/api/admin/davs/{dav_id}", delete(delete_dav));
 
         let main_router = Router::new()
             .route(

@@ -5,7 +5,7 @@ import 'dart:html';
 
 import 'package:flutter/widgets.dart';
 
-import 'dart:ui' as ui;
+import 'dart:ui_web' as ui;
 
 class AppWebView extends StatefulWidget {
   final String initialUrl;
@@ -36,8 +36,8 @@ class _AppWebViewState extends State<AppWebView> {
     ui.platformViewRegistry.registerViewFactory(
         viewId.toString(),
         (int id) => IFrameElement()
-          ..width = MediaQuery.of(context).size.width.toString()
-          ..height = MediaQuery.of(context).size.height.toString()
+          ..style.width = '100%'
+          ..style.height = '100%'
           ..src = widget.initialUrl
           ..id = viewId
           ..style.border = 'none');

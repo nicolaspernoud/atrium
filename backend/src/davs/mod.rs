@@ -11,9 +11,10 @@ use crate::{
 };
 use axum::{
     body::Body,
-    extract::{ConnectInfo, Host},
+    extract::ConnectInfo,
     http::{Request, Response},
 };
+use axum_extra::extract::Host;
 use http::Method;
 use hyper::StatusCode;
 use std::{net::SocketAddr, sync::LazyLock};
@@ -45,7 +46,8 @@ pub async fn webdav_handler(
     let query_str = req.uri().query().unwrap_or_default().to_owned();
     let dav_host_str = dav.host().to_owned();
     let user_str = user
-        .as_ref().map_or_else(|| "unknown user".to_owned(), |u| u.login.clone());
+        .as_ref()
+        .map_or_else(|| "unknown user".to_owned(), |u| u.login.clone());
 
     let domain = hostname.split(':').next().unwrap_or_default();
 

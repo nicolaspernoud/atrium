@@ -12,8 +12,6 @@
       "args": [
         "--web-hostname",
         "atrium.127.0.0.1.nip.io",
-        "--web-renderer",
-        "html",
         "--web-port",
         "3000"
       ]
@@ -23,7 +21,11 @@
       "request": "launch",
       "name": "Debug atrium backend (axum)",
       "cargo": {
-        "args": ["build", "--manifest-path", "backend/Cargo.toml"]
+        "args": [
+          "build",
+          "--manifest-path",
+          "backend/Cargo.toml"
+        ]
       },
       "args": [],
       "cwd": "${workspaceRoot}/backend"

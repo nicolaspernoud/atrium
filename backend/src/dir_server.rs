@@ -5,10 +5,11 @@ use crate::{
 };
 use axum::{
     body::Body,
-    extract::{Host, State},
+    extract::State,
     http::{Request, Response, StatusCode},
     response::IntoResponse,
 };
+use axum_extra::extract::Host;
 use tower::util::ServiceExt;
 use tower_http::services::ServeDir;
 

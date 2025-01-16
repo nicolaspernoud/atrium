@@ -12,15 +12,20 @@ use crate::{
 };
 use argon2::{password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use axum::{
-    async_trait,
     body::Body,
-    extract::{ConnectInfo, FromRef, FromRequestParts, Host, Path, RawQuery, Request, State},
+    extract::{
+        ConnectInfo, FromRef, FromRequestParts, OptionalFromRequestParts, Path, RawQuery, Request,
+        State,
+    },
     middleware::Next,
     response::{IntoResponse, Response},
     Extension, Json, RequestPartsExt,
 };
 use axum_extra::{
-    extract::cookie::{Cookie, Key, PrivateCookieJar, SameSite},
+    extract::{
+        cookie::{Cookie, Key, PrivateCookieJar, SameSite},
+        Host,
+    },
     TypedHeader,
 };
 use headers::{authorization::Basic, Authorization, HeaderName};
@@ -32,7 +37,7 @@ use http::{
 
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
-use std::net::SocketAddr;
+use std::{convert::Infallible, net::SocketAddr};
 use time::{Duration, OffsetDateTime};
 use tracing::info;
 
@@ -123,7 +128,6 @@ impl UserToken {
     }
 }
 
-#[async_trait]
 impl<S> FromRequestParts<S> for UserToken
 where
     S: Send + Sync,
@@ -134,12 +138,13 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let jar = PrivateCookieJar::from_request_parts(parts, state)
             .await
-            .expect("Could not find cookie jar");
+            .expect("Cookie jar retrieval is Infallible");
 
         // Get the serialized user_token from the cookie jar, and check the xsrf token
         if let Some(cookie) = jar.get(AUTH_COOKIE) {
             if let Ok(TypedHeader(XSRFToken(xsrf_token))) =
-                TypedHeader::<XSRFToken>::from_request_parts(parts, state).await
+                <TypedHeader<XSRFToken> as FromRequestParts<S>>::from_request_parts(parts, state)
+                    .await
             {
                 // Deserialize the user_token and return him/her
                 let serialized_user_token = cookie.value();
@@ -169,7 +174,10 @@ where
         // OR Try to get user_token from basic auth headers
 
         if let Ok(TypedHeader(Authorization(basic))) =
-            TypedHeader::<Authorization<Basic>>::from_request_parts(parts, state).await
+            <TypedHeader<Authorization<Basic>> as FromRequestParts<S>>::from_request_parts(
+                parts, state,
+            )
+            .await
         {
             if let Ok(token) = cookie_from_password(AUTH_COOKIE, &jar, basic.password()) {
                 return Ok(token);
@@ -202,6 +210,26 @@ where
     }
 }
 
+impl<S> OptionalFromRequestParts<S> for UserToken
+where
+    S: Send + Sync,
+    Key: FromRef<S>,
+    ConfigState: FromRef<S>,
+{
+    type Rejection = Infallible;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &S,
+    ) -> Result<Option<Self>, Self::Rejection> {
+        Ok(
+            <UserToken as FromRequestParts<S>>::from_request_parts(parts, state)
+                .await
+                .ok(),
+        )
+    }
+}
+
 fn cookie_from_password(
     cookie_name: &str,
     jar: &PrivateCookieJar,
@@ -226,7 +254,6 @@ fn cookie_from_password(
 #[derive(Serialize, Deserialize)]
 pub struct AdminToken(UserToken);
 
-#[async_trait]
 impl<S> FromRequestParts<S> for AdminToken
 where
     S: Send + Sync,
@@ -235,7 +262,7 @@ where
 {
     type Rejection = (StatusCode, &'static str);
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let user = UserToken::from_request_parts(parts, state).await?;
+        let user = <UserToken as FromRequestParts<S>>::from_request_parts(parts, state).await?;
         if !user.roles.contains(&ADMINS_ROLE.to_owned()) {
             return Err((StatusCode::UNAUTHORIZED, "user is not in admin group"));
         }
@@ -246,7 +273,6 @@ where
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UserTokenWithoutXSRFCheck(pub UserToken);
 
-#[async_trait]
 impl<S> FromRequestParts<S> for UserTokenWithoutXSRFCheck
 where
     S: Send + Sync,
@@ -256,7 +282,7 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let jar: PrivateCookieJar = PrivateCookieJar::from_request_parts(parts, state)
             .await
-            .expect("Could not find cookie jar");
+            .expect("Cookie jar retrieval is Infallible");
 
         // Get the serialized user_token from the cookie jar, and check the xsrf token
         if let Some(cookie) = jar.get(AUTH_COOKIE) {
@@ -266,6 +292,25 @@ where
             return Ok(UserTokenWithoutXSRFCheck(user_token));
         }
         Err((StatusCode::UNAUTHORIZED, "no user found"))
+    }
+}
+
+impl<S> OptionalFromRequestParts<S> for UserTokenWithoutXSRFCheck
+where
+    S: Send + Sync,
+    Key: FromRef<S>,
+{
+    type Rejection = Infallible;
+
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &S,
+    ) -> Result<Option<Self>, Self::Rejection> {
+        Ok(
+            <UserTokenWithoutXSRFCheck as FromRequestParts<S>>::from_request_parts(parts, state)
+                .await
+                .ok(),
+        )
     }
 }
 

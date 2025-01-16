@@ -1,6 +1,6 @@
 use axum::{
     body::Body,
-    extract::{ConnectInfo, Host, Path, State},
+    extract::{ConnectInfo, Path, State},
     http::{
         uri::{Authority, Scheme},
         Response,
@@ -8,6 +8,7 @@ use axum::{
     response::IntoResponse,
     Json,
 };
+use axum_extra::extract::Host;
 use base64ct::Encoding;
 use headers::HeaderValue;
 use http::{

@@ -525,17 +525,17 @@ class ExplorerState extends State<Explorer> {
         return SizedBox(
           width: 30,
           height: 30,
-          child: FutureBuilder<Uint8List>(
+          child: FutureBuilder<ImageProvider>(
               future: client
                   .read(file.path!, cancelToken: cancelToken)
-                  .then((value) => Uint8List.fromList(value)),
-              builder:
-                  (BuildContext context, AsyncSnapshot<Uint8List> snapshot) {
+                  .then((value) => MemoryImage(Uint8List.fromList(value))),
+              builder: (BuildContext context,
+                  AsyncSnapshot<ImageProvider> snapshot) {
                 if (snapshot.hasData) {
                   return Center(
                       child: Image(
-                          image: ResizeImage(MemoryImage(snapshot.data!),
-                              width: 30)));
+                    image: snapshot.data!,
+                  ));
                 } else {
                   return const Icon(Icons.image, size: 30);
                 }
@@ -676,7 +676,7 @@ class ExplorerSearchDelegate extends SearchDelegate {
 
   @override
   Widget buildResults(BuildContext context) {
-    throw UnimplementedError();
+    return buildSuggestions(context);
   }
 }
 

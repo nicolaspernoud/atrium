@@ -4,7 +4,8 @@ use atrium::{
     mocks::{mock_oauth2_server, mock_proxied_server},
     server::Server,
 };
-use axum::{extract::Host, handler::HandlerWithoutStateExt, response::Redirect, BoxError};
+use axum::{handler::HandlerWithoutStateExt, response::Redirect, BoxError};
+use axum_extra::extract::Host;
 use axum_server::Handle;
 use http::{StatusCode, Uri};
 use rustls::ServerConfig;
@@ -145,13 +146,8 @@ async fn run() -> Result<()> {
             }
             #[cfg(feature = "self_signed")]
             TlsMode::SelfSigned => {
-                self_signed::serve_with_self_signed_cert(
-                    ip_bind,
-                    &server.port,
-                    handle,
-                    app,
-                )
-                .await?;
+                self_signed::serve_with_self_signed_cert(ip_bind, &server.port, handle, app)
+                    .await?;
             }
             _ => {
                 let addr = format!("{ip_bind}:{}", server.port).parse::<std::net::SocketAddr>()?;
