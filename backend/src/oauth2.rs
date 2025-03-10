@@ -2,7 +2,7 @@ use crate::{
     appstate::{ConfigState, MAXMIND_READER},
     configuration::OpenIdConfig,
     errors::ErrResponse,
-    users::{create_user_cookie, user_to_token, User, UserInfo, ADMINS_ROLE},
+    users::{ADMINS_ROLE, User, UserInfo, create_user_cookie, user_to_token},
     utils::select_entries_by_value,
 };
 use anyhow::Result;
@@ -12,15 +12,15 @@ use axum::{
     response::{IntoResponse, Redirect},
 };
 use axum_extra::extract::{
-    cookie::{Cookie, CookieJar, PrivateCookieJar},
     Host,
+    cookie::{Cookie, CookieJar, PrivateCookieJar},
 };
-use http::{header::AUTHORIZATION, HeaderValue, Request, StatusCode, Uri};
+use http::{HeaderValue, Request, StatusCode, Uri, header::AUTHORIZATION};
 use http_body_util::BodyExt;
 use hyper::body::Buf;
 use hyper_rustls::HttpsConnectorBuilder;
 use hyper_util::{
-    client::legacy::{connect::HttpConnector, Client},
+    client::legacy::{Client, connect::HttpConnector},
     rt::TokioExecutor,
 };
 use oauth2::{

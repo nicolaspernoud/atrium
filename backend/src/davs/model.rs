@@ -5,9 +5,9 @@ use crate::{
     utils::{is_default, option_string_trim, string_trim, vec_trim_remove_empties},
 };
 use axum::{
+    Json,
     extract::{Path, State},
     response::IntoResponse,
-    Json,
 };
 use hyper::StatusCode;
 use serde::{Deserialize, Serialize};

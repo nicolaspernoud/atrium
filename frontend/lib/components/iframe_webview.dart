@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html';
+import 'package:web/web.dart';
 
 import 'package:flutter/widgets.dart';
 
@@ -35,7 +34,7 @@ class _AppWebViewState extends State<AppWebView> {
     // ignore: undefined_prefixed_name
     ui.platformViewRegistry.registerViewFactory(
         viewId.toString(),
-        (int id) => IFrameElement()
+        (int id) => HTMLIFrameElement()
           ..style.width = '100%'
           ..style.height = '100%'
           ..src = widget.initialUrl

@@ -99,7 +99,7 @@ pub async fn system_info(_user: UserToken) -> Result<Json<SystemInfo>, ErrRespon
 
 #[cfg(test)]
 mod tests {
-    use crate::sysinfo::{corresponding_disk_info, DiskInfo};
+    use crate::sysinfo::{DiskInfo, corresponding_disk_info};
     use std::path::PathBuf;
 
     #[test]

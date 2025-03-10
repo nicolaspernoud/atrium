@@ -1,7 +1,7 @@
 use crate::CONFIG_FILE;
 use anyhow::Result;
 use axum::{extract::connect_info::IntoMakeServiceWithConnectInfo, routing::MethodRouter};
-use axum_server::{tls_rustls::RustlsConfig, Handle};
+use axum_server::{Handle, tls_rustls::RustlsConfig};
 use std::{net::SocketAddr, path::Path};
 use tokio::fs;
 use tracing::info;

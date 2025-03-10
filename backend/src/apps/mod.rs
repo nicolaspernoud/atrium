@@ -1,21 +1,21 @@
 use axum::{
+    Json,
     body::Body,
     extract::{ConnectInfo, Path, State},
     http::{
-        uri::{Authority, Scheme},
         Response,
+        uri::{Authority, Scheme},
     },
     response::IntoResponse,
-    Json,
 };
 use axum_extra::extract::Host;
 use base64ct::Encoding;
 use headers::HeaderValue;
 use http::{
-    header::{AUTHORIZATION, COOKIE, HOST},
     Request,
+    header::{AUTHORIZATION, COOKIE, HOST},
 };
-use hyper::{body::Incoming, header::LOCATION, StatusCode, Uri};
+use hyper::{StatusCode, Uri, body::Incoming, header::LOCATION};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use tracing::error;
@@ -23,8 +23,8 @@ use tracing::error;
 use crate::{
     apps::proxy::ProxyError,
     appstate::{ConfigFile, ConfigState},
-    configuration::{config_or_error, HostType},
-    users::{authorized_or_redirect_to_login, AdminToken, UserTokenWithoutXSRFCheck, AUTH_COOKIE},
+    configuration::{HostType, config_or_error},
+    users::{AUTH_COOKIE, AdminToken, UserTokenWithoutXSRFCheck, authorized_or_redirect_to_login},
     utils::{is_default, option_vec_trim_remove_empties, string_trim, vec_trim_remove_empties},
 };
 

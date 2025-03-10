@@ -23,7 +23,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 use super::{
-    dav_file::{decrypted_size, Streamer, BUF_SIZE},
+    dav_file::{BUF_SIZE, Streamer, decrypted_size},
     headers::Depth,
     model::Dav,
 };
@@ -32,22 +32,22 @@ use crate::{
     utils::extract_query_pairs,
 };
 use async_walkdir::WalkDir;
-use async_zip::{tokio::write::ZipFileWriter, Compression, ZipEntryBuilder};
+use async_zip::{Compression, ZipEntryBuilder, tokio::write::ZipFileWriter};
 use axum::body::Body;
 use chrono::{TimeZone, Utc};
-use futures_util::{future::BoxFuture, FutureExt, StreamExt};
+use futures_util::{FutureExt, StreamExt, future::BoxFuture};
 use headers::{
     AcceptRanges, ContentType, HeaderMap, HeaderMapExt, IfModifiedSince, IfNoneMatch, IfRange,
     Range,
 };
 use http_body_util::BodyExt;
 use hyper::{
-    header::{
-        HeaderValue, CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, RANGE,
-    },
     Method, StatusCode, Uri,
+    header::{
+        CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, HeaderValue, RANGE,
+    },
 };
-use quick_xml::{escape::escape, events::Event, Reader};
+use quick_xml::{Reader, escape::escape, events::Event};
 use serde::Serialize;
 use std::{
     borrow::Cow,
@@ -308,8 +308,16 @@ impl WebdavServer {
         } else {
             *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
             *res.body_mut() = Body::from("error writing file");
-            error!("WARNING: The file creation on {}{} encountered an error. The file was not created or was deleted !",
-            parts.headers.get(http::header::HOST).unwrap_or(&HeaderValue::from_static("<no host>")).to_str().unwrap_or_default(), parts.uri);
+            error!(
+                "WARNING: The file creation on {}{} encountered an error. The file was not created or was deleted !",
+                parts
+                    .headers
+                    .get(http::header::HOST)
+                    .unwrap_or(&HeaderValue::from_static("<no host>"))
+                    .to_str()
+                    .unwrap_or_default(),
+                parts.uri
+            );
             let _ = fs::remove_file(path).await;
             return Ok(());
         };
@@ -464,7 +472,7 @@ impl WebdavServer {
             res.headers_mut().typed_insert(etag.clone());
 
             if headers.typed_get::<Range>().is_some() {
-                use_range = headers.typed_get::<IfRange>().map_or(true, |if_range| {
+                use_range = headers.typed_get::<IfRange>().is_none_or(|if_range| {
                     !if_range.is_modified(Some(&etag), Some(&last_modified))
                 });
             } else {
@@ -564,10 +572,11 @@ impl WebdavServer {
             }
             None => 1,
         };
-        let mut paths = vec![self
-            .to_pathitem(path, base_path, directory, allow_symlinks, &key)
-            .await?
-            .unwrap()];
+        let mut paths = vec![
+            self.to_pathitem(path, base_path, directory, allow_symlinks, &key)
+                .await?
+                .unwrap(),
+        ];
         if depth != 0 {
             if let Ok(child) = self
                 .list_dir(path, base_path, directory, allow_symlinks, &key)
@@ -826,7 +835,7 @@ impl WebdavServer {
         dav_path: &str,
     ) -> BoxResult<()> {
         // get and check headers.
-        let overwrite = req.headers().typed_get::<Overwrite>().map_or(true, |o| o.0);
+        let overwrite = req.headers().typed_get::<Overwrite>().is_none_or(|o| o.0);
         let depth = match req.headers().typed_get::<Depth>() {
             Some(Depth::Infinity) | None => Depth::Infinity,
             Some(Depth::Zero) if method.as_str() == "COPY" => Depth::Zero,

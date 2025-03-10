@@ -20,11 +20,13 @@ async fn static_app_test() {
 
     // Assert
     assert!(response.status().is_success());
-    assert!(response
-        .text()
-        .await
-        .unwrap()
-        .contains("This is statically served !"));
+    assert!(
+        response
+            .text()
+            .await
+            .unwrap()
+            .contains("This is statically served !")
+    );
 
     // Act
     let response = app
@@ -40,11 +42,13 @@ async fn static_app_test() {
     // Assert
     assert!(response.status().is_success());
     assert!(response.headers().contains_key("Content-Security-Policy"));
-    assert!(response
-        .text()
-        .await
-        .unwrap()
-        .contains("Lorem ipsum dolor sit amet"));
+    assert!(
+        response
+            .text()
+            .await
+            .unwrap()
+            .contains("Lorem ipsum dolor sit amet")
+    );
 }
 
 #[tokio::test]
@@ -104,9 +108,11 @@ async fn secured_static_app_test() {
         .expect("failed to execute request");
     // Assert that is possible
     assert!(response.status().is_success());
-    assert!(response
-        .text()
-        .await
-        .unwrap()
-        .contains("This is statically served !"));
+    assert!(
+        response
+            .text()
+            .await
+            .unwrap()
+            .contains("This is statically served !")
+    );
 }

@@ -136,9 +136,9 @@ pub fn get_rustls_config_dangerous() -> ClientConfig {
 mod insecure_certificate_verifier {
 
     use rustls::{
+        DigitallySignedStruct,
         client::danger::HandshakeSignatureValid,
         crypto::{verify_tls12_signature, verify_tls13_signature},
-        DigitallySignedStruct,
     };
     use rustls_pki_types::{CertificateDer, ServerName, UnixTime};
 

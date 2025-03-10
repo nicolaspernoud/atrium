@@ -1,5 +1,5 @@
 use atrium::{apps::App, configuration::TlsMode};
-use axum::{response::Redirect, routing::get, Router};
+use axum::{Router, response::Redirect, routing::get};
 use http::StatusCode;
 use hyper::header::LOCATION;
 use tokio::net::TcpListener;
@@ -70,11 +70,13 @@ async fn secured_proxy_test() {
         .expect("failed to execute request");
     // Assert that is possible
     assert!(response.status().is_success());
-    assert!(response
-        .text()
-        .await
-        .unwrap()
-        .contains("Hello world from mock server"));
+    assert!(
+        response
+            .text()
+            .await
+            .unwrap()
+            .contains("Hello world from mock server")
+    );
 }
 
 #[tokio::test]
@@ -165,11 +167,13 @@ async fn reload_test() {
 
     // Assert
     assert!(response.status().is_success());
-    assert!(response
-        .text()
-        .await
-        .unwrap()
-        .contains("Hello world from main server !"));
+    assert!(
+        response
+            .text()
+            .await
+            .unwrap()
+            .contains("Hello world from main server !")
+    );
 
     // Act
     let response = app
@@ -181,11 +185,13 @@ async fn reload_test() {
 
     // Assert
     assert!(response.status().is_success());
-    assert!(response
-        .text()
-        .await
-        .unwrap()
-        .contains("Hello world from mock server"));
+    assert!(
+        response
+            .text()
+            .await
+            .unwrap()
+            .contains("Hello world from mock server")
+    );
 }
 
 #[tokio::test]

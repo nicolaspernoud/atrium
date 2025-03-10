@@ -180,14 +180,13 @@ where
 }
 
 use chacha20poly1305::{
-    aead::{
-        stream,
-        stream::{NewStream, StreamPrimitive},
-        KeyInit,
-    },
     XChaCha20Poly1305,
+    aead::{
+        KeyInit, stream,
+        stream::{NewStream, StreamPrimitive},
+    },
 };
-use rand::{rngs::OsRng, RngCore};
+use rand::{RngCore, rngs::OsRng};
 use std::io::ErrorKind;
 use tokio::io::AsyncWriteExt;
 
@@ -444,11 +443,7 @@ pub fn decrypted_size(enc_size: u64) -> u64 {
         let enc_size_without_nonce = enc_size - NONCE_SIZE as u64;
         let d = enc_size_without_nonce / ENCRYPTED_CHUNK_SIZE as u64;
         let r = enc_size_without_nonce % ENCRYPTED_CHUNK_SIZE as u64;
-        if r > 0 {
-            d + 1
-        } else {
-            d
-        }
+        if r > 0 { d + 1 } else { d }
     };
     enc_size - ENCRYPTION_OVERHEAD as u64 * number_of_chunks - NONCE_SIZE as u64
 }
@@ -483,8 +478,8 @@ impl ChunkedPosition {
 #[cfg(test)]
 mod tests {
     use crate::davs::dav_file::{
-        decrypted_size, ChunkedPosition, ENCRYPTED_CHUNK_SIZE, ENCRYPTION_OVERHEAD, NONCE_SIZE,
-        PLAIN_CHUNK_SIZE,
+        ChunkedPosition, ENCRYPTED_CHUNK_SIZE, ENCRYPTION_OVERHEAD, NONCE_SIZE, PLAIN_CHUNK_SIZE,
+        decrypted_size,
     };
 
     #[test]

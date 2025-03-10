@@ -56,7 +56,7 @@ class DavModel implements Model {
     data['writable'] = writable;
     data['name'] = name;
     data['icon'] = icon;
-    data['color'] = color.value;
+    data['color'] = color.toARGB32();
     data['secured'] = secured;
     data['allow_symlinks'] = allowSymlinks;
     data['roles'] = roles;

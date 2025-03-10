@@ -1,5 +1,4 @@
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html';
+import 'package:web/web.dart' as web;
 
 import 'package:atrium/globals.dart';
 import 'package:dio/browser.dart';
@@ -44,7 +43,7 @@ download(String url, webdav.Client client, webdav.File file,
     BuildContext context) async {
   var shareToken = await ApiProvider()
       .getShareToken(url.split("://")[1].split(":")[0], file.path!);
-  AnchorElement()
+  web.HTMLAnchorElement()
     ..href = '$url${escapePath(file.path!)}?token=$shareToken'
     ..click();
 }
@@ -64,13 +63,13 @@ upload(String destPath, PlatformFile file, webdav.Client client,
 }
 
 void openIdConnectLogin(BuildContext context) {
-  window.open(
+  web.window.open(
     '${App().prefs.hostname}/auth/oauth2login',
     "Auth",
     "width=400, height=500, scrollbars=yes",
   );
 
-  window.onMessage.listen((event) {
+  web.window.onMessage.listen((event) {
     String xsrfToken =
         event.data.toString().split('xsrf_token=')[1].split('&')[0];
     bool isAdmin =
@@ -88,7 +87,7 @@ void openIdConnectLogin(BuildContext context) {
 }
 
 void redirectToAppAfterAuth() {
-  final cookie = document.cookie!;
+  final cookie = web.document.cookie;
   if (cookie.isNotEmpty) {
     final entity = cookie.split("; ").map((item) {
       final split = item.split("=");
@@ -97,13 +96,13 @@ void redirectToAppAfterAuth() {
     final cookieMap = Map.fromEntries(entity);
     if (cookieMap.containsKey("ATRIUM_REDIRECT")) {
       var redirectTo = cookieMap["ATRIUM_REDIRECT"]!;
-      window.location.href = redirectTo;
+      web.window.location.href = redirectTo;
     }
   }
 }
 
 bool isWebDesktop() {
   return kIsWeb &&
-      !window.navigator.userAgent.contains("Safari/6") &&
+      !web.window.navigator.userAgent.contains("Safari/6") &&
       defaultTargetPlatform != TargetPlatform.android;
 }

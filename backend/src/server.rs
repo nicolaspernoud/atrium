@@ -1,10 +1,10 @@
 use axum::{
+    Router,
     body::Body,
     handler::Handler,
     middleware,
     response::{Html, IntoResponse},
-    routing::{any, delete, get, get_service, post, MethodRouter},
-    Router,
+    routing::{MethodRouter, any, delete, get, get_service, post},
 };
 
 use http::StatusCode;
@@ -18,7 +18,7 @@ use tower_http::services::ServeDir;
 use crate::{
     apps::{add_app, delete_app, get_apps, proxy_handler},
     appstate::{AppState, Client, InsecureSkipVerifyClient},
-    configuration::{load_config, HostType},
+    configuration::{HostType, load_config},
     davs::{
         model::{add_dav, delete_dav, get_davs},
         webdav_handler,

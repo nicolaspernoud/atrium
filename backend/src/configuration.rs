@@ -2,7 +2,7 @@ use crate::{
     apps::{App, AppWithUri},
     appstate::{ConfigMap, ConfigState},
     davs::model::Dav,
-    oauth2::{openid_configuration, RolesMap},
+    oauth2::{RolesMap, openid_configuration},
     users::User,
     utils::{is_default, option_string_trim, string_trim},
 };
@@ -116,12 +116,12 @@ pub struct Config {
 impl Config {
     pub async fn from_file(filepath: &str) -> Result<Self> {
         let data = tokio::fs::read_to_string(filepath).await?;
-        let config = serde_yml::from_str::<Config>(&data)?;
+        let config = serde_yaml_ng::from_str::<Config>(&data)?;
         Ok(config)
     }
 
     pub async fn to_file(&self, filepath: &str) -> Result<()> {
-        let contents = serde_yml::to_string::<Config>(self)?;
+        let contents = serde_yaml_ng::to_string::<Config>(self)?;
         tokio::fs::write(filepath, contents).await?;
         Ok(())
     }

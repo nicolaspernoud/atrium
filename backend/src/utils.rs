@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use http::StatusCode;
-use rand::{distributions::Alphanumeric, thread_rng, Rng};
+use rand::{Rng, distributions::Alphanumeric, thread_rng};
 
 pub fn random_string(size: usize) -> std::string::String {
     thread_rng()
@@ -11,7 +11,7 @@ pub fn random_string(size: usize) -> std::string::String {
         .collect()
 }
 
-use serde::{de, Deserialize};
+use serde::{Deserialize, de};
 pub use trim_in_place::*;
 
 pub fn string_trim<'de, D>(d: D) -> Result<String, D::Error>

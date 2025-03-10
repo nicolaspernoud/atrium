@@ -1,12 +1,15 @@
-use crate::helpers::{encode_uri, TestApp};
+use crate::helpers::{TestApp, encode_uri};
 use anyhow::Result;
 use base64ct::{Base64, Encoding};
 use futures::StreamExt;
 use http::StatusCode;
-use hyper::{header::RANGE, Method};
+use hyper::{Method, header::RANGE};
 use quick_xml::escape::escape;
 use sha2::{Digest, Sha512};
-use std::{io::{self, BufWriter, Write}, time::{Duration, Instant}};
+use std::{
+    io::{self, BufWriter, Write},
+    time::{Duration, Instant},
+};
 use tokio::fs::File;
 
 #[tokio::test]

@@ -11,8 +11,9 @@ use crate::helpers::TestApp;
 #[tokio::test]
 async fn unsecured_single_proxy_test() {
     // Arrange
-    let mock_listener =
-        TcpListener::bind("127.0.0.1:0").await.expect("failed to bind to random port");
+    let mock_listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("failed to bind to random port");
     let mock_port = mock_listener.local_addr().unwrap().port();
     tokio::spawn(mock_proxied_server(mock_listener));
     let config = Config {
@@ -63,12 +64,14 @@ async fn unsecured_single_proxy_test() {
 #[tokio::test]
 async fn secured_single_proxy_test() {
     // Arrange
-    let mock_oauth2_listener =
-        TcpListener::bind("127.0.0.1:0").await.expect("failed to bind to random port");
+    let mock_oauth2_listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("failed to bind to random port");
     let mock_oauth2_port = mock_oauth2_listener.local_addr().unwrap().port();
     tokio::spawn(mock_oauth2_server(mock_oauth2_listener));
-    let mock_listener =
-        TcpListener::bind("127.0.0.1:0").await.expect("failed to bind to random port");
+    let mock_listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("failed to bind to random port");
     let mock_port = mock_listener.local_addr().unwrap().port();
     tokio::spawn(mock_proxied_server(mock_listener));
     let config = Config {

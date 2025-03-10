@@ -75,7 +75,7 @@ class AppModel implements Model {
     data['id'] = id;
     data['name'] = name;
     data['icon'] = icon;
-    data['color'] = color.value; // TODO : replace with toARGB32 method when available
+    data['color'] = color.toARGB32();
     data['is_proxy'] = isProxy;
     data['insecure_skip_verify'] = insecureSkipVerify;
     data['host'] = host;

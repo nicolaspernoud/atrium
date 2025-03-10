@@ -1,7 +1,7 @@
 use crate::{
     apps::App,
-    appstate::{ConfigFile, ConfigState, OptionalMaxMindReader, MAXMIND_READER},
-    configuration::{config_or_error, trim_host, Config, HostType},
+    appstate::{ConfigFile, ConfigState, MAXMIND_READER, OptionalMaxMindReader},
+    configuration::{Config, HostType, config_or_error, trim_host},
     davs::model::Dav,
     errors::ErrResponse,
     headers::XSRFToken,
@@ -10,8 +10,9 @@ use crate::{
         is_default, query_pairs_or_error, random_string, string_trim, vec_trim_remove_empties,
     },
 };
-use argon2::{password_hash::SaltString, Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
+use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier, password_hash::SaltString};
 use axum::{
+    Extension, Json, RequestPartsExt,
     body::Body,
     extract::{
         ConnectInfo, FromRef, FromRequestParts, OptionalFromRequestParts, Path, RawQuery, Request,
@@ -19,20 +20,19 @@ use axum::{
     },
     middleware::Next,
     response::{IntoResponse, Response},
-    Extension, Json, RequestPartsExt,
 };
 use axum_extra::{
-    extract::{
-        cookie::{Cookie, Key, PrivateCookieJar, SameSite},
-        Host,
-    },
     TypedHeader,
+    extract::{
+        Host,
+        cookie::{Cookie, Key, PrivateCookieJar, SameSite},
+    },
 };
-use headers::{authorization::Basic, Authorization, HeaderName};
+use headers::{Authorization, HeaderName, authorization::Basic};
 use http::{
+    HeaderValue, StatusCode,
     header::{CONTENT_LENGTH, LOCATION, SET_COOKIE},
     request::Parts,
-    HeaderValue, StatusCode,
 };
 
 use rand::rngs::OsRng;
@@ -761,7 +761,7 @@ mod check_user_has_role_or_forbid_tests {
     use crate::{
         apps::{App, AppWithUri},
         configuration::HostType,
-        users::{check_user_has_role_or_forbid, UserToken},
+        users::{UserToken, check_user_has_role_or_forbid},
     };
 
     #[test]

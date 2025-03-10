@@ -1,14 +1,14 @@
 use async_tungstenite::tokio::{accept_async, connect_async};
 use atrium::{apps::App, configuration::Config};
 use http::{
-    header::{CONNECTION, HOST, UPGRADE},
     HeaderValue,
+    header::{CONNECTION, HOST, UPGRADE},
 };
 use tokio_stream::StreamExt;
 
 use std::str::FromStr;
 use tracing::debug;
-use tungstenite::{client::IntoClientRequest, Message};
+use tungstenite::{Message, client::IntoClientRequest};
 
 use crate::helpers::TestApp;
 
@@ -101,11 +101,13 @@ async fn proxy_test() {
     // Assert
     assert_eq!(response.status(), 200);
     assert!(response.headers().contains_key("Content-Security-Policy"));
-    assert!(response
-        .text()
-        .await
-        .unwrap()
-        .contains("Hello world from main server !"));
+    assert!(
+        response
+            .text()
+            .await
+            .unwrap()
+            .contains("Hello world from main server !")
+    );
 
     // Act
     let response = app
@@ -118,11 +120,13 @@ async fn proxy_test() {
     // Assert
     assert_eq!(response.status(), 200);
     assert!(!response.headers().contains_key("Content-Security-Policy"));
-    assert!(response
-        .text()
-        .await
-        .unwrap()
-        .contains("Hello world from mock server"));
+    assert!(
+        response
+            .text()
+            .await
+            .unwrap()
+            .contains("Hello world from mock server")
+    );
 
     // Act
     let response = app
@@ -150,11 +154,13 @@ async fn proxy_test() {
     // Assert
     assert!(response.status().is_success());
     assert!(response.headers().contains_key("Content-Security-Policy"));
-    assert!(response
-        .text()
-        .await
-        .unwrap()
-        .contains("Hello world from mock server"));
+    assert!(
+        response
+            .text()
+            .await
+            .unwrap()
+            .contains("Hello world from mock server")
+    );
 }
 
 #[tokio::test]
@@ -172,13 +178,13 @@ async fn test_websocket() {
 
             let msg = websocket.next().await.unwrap().unwrap();
             assert!(
-                matches!(&msg, Message::Ping(inner) if inner == b"hello"),
+                matches!(&msg, Message::Ping(inner) if **inner == *b"hello"),
                 "did not get ping, but: {:?}",
                 msg
             );
             // Tungstenite will auto send a Pong as a response to a Ping
             websocket
-                .send(Message::Text("Handshake OK".to_string()))
+                .send(Message::Text("Handshake OK".into()))
                 .await
                 .unwrap();
         }
@@ -222,7 +228,7 @@ async fn test_websocket() {
 
     // Assert
     assert!(
-        matches!(&msg, Message::Text(inner) if inner == "Handshake OK"),
+        matches!(&msg, Message::Text(inner) if **inner == *"Handshake OK"),
         "did not get text, but {:?}",
         msg
     );
@@ -230,7 +236,7 @@ async fn test_websocket() {
     let msg = client.next().await.unwrap().unwrap();
 
     assert!(
-        matches!(&msg, Message::Pong(inner) if inner == b"hello"),
+        matches!(&msg, Message::Pong(inner) if **inner == *b"hello"),
         "did not get pong, but {:?}",
         msg
     );

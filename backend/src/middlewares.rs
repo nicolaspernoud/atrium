@@ -63,8 +63,7 @@ pub async fn inject_security_headers(
     req: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    let inject = host_type
-        .map_or(true, |app| app.inject_security_headers());
+    let inject = host_type.is_none_or(|app| app.inject_security_headers());
     if inject {
         let source = {
             format!(

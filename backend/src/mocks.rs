@@ -1,13 +1,13 @@
 use crate::middlewares::debug_cors_middleware;
 use axum::{
+    Extension, Router,
     extract::Query,
     middleware,
     response::{Html, IntoResponse, Redirect},
     routing::{get, post},
-    Extension, Router,
 };
 use axum_extra::extract::Host;
-use http::{header, HeaderMap, HeaderValue, StatusCode};
+use http::{HeaderMap, HeaderValue, StatusCode, header};
 use serde::Deserialize;
 use tokio::net::TcpListener;
 

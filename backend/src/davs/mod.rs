@@ -7,7 +7,7 @@ use crate::{
     appstate::MAXMIND_READER,
     configuration::HostType,
     logger::city_from_ip,
-    users::{check_authorization, UserToken},
+    users::{UserToken, check_authorization},
 };
 use axum::{
     body::Body,

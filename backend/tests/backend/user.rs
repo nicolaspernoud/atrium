@@ -398,11 +398,13 @@ async fn logout_test() {
         .await
         .expect("failed to execute request");
     assert_eq!(response.status(), StatusCode::OK);
-    assert!(response
-        .headers()
-        .get("set-cookie")
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .contains("ATRIUM_AUTH=; Path=/; Domain=atrium.io; Max-Age=0;"));
+    assert!(
+        response
+            .headers()
+            .get("set-cookie")
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .contains("ATRIUM_AUTH=; Path=/; Domain=atrium.io; Max-Age=0;")
+    );
 }

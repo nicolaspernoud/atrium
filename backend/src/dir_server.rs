@@ -1,7 +1,7 @@
 use crate::{
     appstate::ConfigState,
     configuration::HostType,
-    users::{authorized_or_redirect_to_login, UserTokenWithoutXSRFCheck},
+    users::{UserTokenWithoutXSRFCheck, authorized_or_redirect_to_login},
 };
 use axum::{
     body::Body,

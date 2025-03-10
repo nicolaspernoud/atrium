@@ -10,7 +10,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:webdav_client/webdav_client.dart' as webdav;
-import 'package:webview_cookie_manager/webview_cookie_manager.dart';
+import 'package:webview_cookie_manager_plus/webview_cookie_manager_plus.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 class NotificationsPlugin {

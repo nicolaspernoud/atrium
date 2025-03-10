@@ -4,18 +4,18 @@ use atrium::{
     mocks::{mock_oauth2_server, mock_proxied_server},
     server::Server,
 };
-use axum::{handler::HandlerWithoutStateExt, response::Redirect, BoxError};
+use axum::{BoxError, handler::HandlerWithoutStateExt, response::Redirect};
 use axum_extra::extract::Host;
 use axum_server::Handle;
 use http::{StatusCode, Uri};
 use rustls::ServerConfig;
-use rustls_acme::{caches::DirCache, AcmeConfig};
+use rustls_acme::{AcmeConfig, caches::DirCache};
 use std::{
     fs::File,
     net::SocketAddr,
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
     time::Duration,
 };
@@ -34,7 +34,7 @@ fn main() -> Result<()> {
     // println!("MiMalloc version: {}", mimalloc::MiMalloc.version()); // mimalloc = { version = "0.1", features = ["extended"] } in Cargo.toml to use this
     // We need to work out the local time offset before entering multi-threaded context
     let cfg: Config = if let Ok(file) = File::open(CONFIG_FILE) {
-        serde_yml::from_reader(file).expect("failed to parse configuration file")
+        serde_yaml_ng::from_reader(file).expect("failed to parse configuration file")
     } else {
         println!("Configuration file not found, trying to create default configuration file.");
         File::create(CONFIG_FILE).expect("could not create default configuration file");
@@ -235,7 +235,7 @@ fn setup_logger(debug_mode: bool, log_to_file: bool) -> Vec<WorkerGuard> {
 }
 
 async fn redirect_http_to_https(handle: Handle) -> tokio::io::Result<()> {
-    fn make_https(host: String, uri: Uri) -> Result<Uri, BoxError> {
+    fn make_https(host: &str, uri: Uri) -> Result<Uri, BoxError> {
         let mut parts = uri.into_parts();
         parts.scheme = Some(axum::http::uri::Scheme::HTTPS);
         if parts.path_and_query.is_none() {
@@ -245,15 +245,12 @@ async fn redirect_http_to_https(handle: Handle) -> tokio::io::Result<()> {
         Ok(Uri::from_parts(parts)?)
     }
 
-    let redirect = move |Host(host): Host, uri: Uri| async move {
-        match make_https(host, uri) {
+    async fn redirect(Host(host): Host, uri: Uri) -> Result<Redirect, (StatusCode, &'static str)> {
+        match make_https(&host, uri) {
             Ok(uri) => Ok(Redirect::permanent(&uri.to_string())),
-            Err(error) => {
-                tracing::warn!(%error, "failed to convert URI to HTTPS");
-                Err(StatusCode::BAD_REQUEST)
-            }
+            Err(_) => Err((StatusCode::BAD_REQUEST, "redirect to HTTPS failed")),
         }
-    };
+    }
 
     let addr = format!("[::]:{}", 80)
         .parse::<std::net::SocketAddr>()

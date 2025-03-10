@@ -2,10 +2,11 @@
 
 use axum::{body::Body, response::IntoResponse};
 use http::{
-    uri::{Authority, Scheme},
     Uri,
+    uri::{Authority, Scheme},
 };
 use hyper::{
+    Request, Response, StatusCode,
     body::Incoming,
     header::{HeaderMap, HeaderName, HeaderValue},
     http::{
@@ -13,7 +14,6 @@ use hyper::{
         uri::InvalidUri,
     },
     upgrade::OnUpgrade,
-    Request, Response, StatusCode,
 };
 use hyper_util::client::legacy::Error;
 use std::net::IpAddr;
@@ -108,16 +108,13 @@ fn remove_hop_headers(headers: &mut HeaderMap) {
 }
 
 fn get_upgrade_type(headers: &HeaderMap) -> Option<String> {
-    if headers
-        .get(&CONNECTION_HEADER)
-        .is_some_and(|value| {
-            value
-                .to_str()
-                .unwrap()
-                .split(',')
-                .any(|e| e.trim() == UPGRADE_HEADER)
-        })
-    {
+    if headers.get(&CONNECTION_HEADER).is_some_and(|value| {
+        value
+            .to_str()
+            .unwrap()
+            .split(',')
+            .any(|e| e.trim() == UPGRADE_HEADER)
+    }) {
         if let Some(upgrade_value) = headers.get(&UPGRADE_HEADER) {
             debug!(
                 "Found upgrade header with value: {}",
@@ -160,16 +157,13 @@ fn create_proxied_request<B>(
 ) -> Result<Request<B>, ProxyError> {
     debug!("Creating proxied request");
 
-    let contains_te_trailers_value = request
-        .headers()
-        .get(&TE_HEADER)
-        .is_some_and(|value| {
-            value
-                .to_str()
-                .unwrap()
-                .split(',')
-                .any(|e| e.trim() == TRAILERS_HEADER)
-        });
+    let contains_te_trailers_value = request.headers().get(&TE_HEADER).is_some_and(|value| {
+        value
+            .to_str()
+            .unwrap()
+            .split(',')
+            .any(|e| e.trim() == TRAILERS_HEADER)
+    });
 
     debug!("Setting headers of proxied request");
 
@@ -297,14 +291,23 @@ where
 
                     let mut request_upgraded =
                         hyper_util::rt::tokio::TokioIo::new(request_upgraded);
+
                     let mut response_upgraded =
                         hyper_util::rt::tokio::TokioIo::new(response_upgraded);
 
-                    if copy_bidirectional(&mut response_upgraded, &mut request_upgraded).await.is_ok() { debug!("successfull copy between upgraded connections") } else { debug!(
-                        "failed copy between upgraded connections (EOF), for client IP: {}",
-                        client_ip
-                    ); }
+                    if copy_bidirectional(&mut response_upgraded, &mut request_upgraded)
+                        .await
+                        .is_ok()
+                    {
+                        debug!("successfull copy between upgraded connections");
+                    } else {
+                        debug!(
+                            "failed copy between upgraded connections (EOF), for client IP: {}",
+                            client_ip
+                        );
+                    }
                 });
+
                 Ok(response)
             } else {
                 Err(ProxyError::UpgradeError(

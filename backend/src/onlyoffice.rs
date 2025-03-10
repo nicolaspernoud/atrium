@@ -4,15 +4,15 @@ use crate::{
     utils::{is_default, query_pairs_or_error},
 };
 use axum::{
+    Json,
     body::Body,
     extract::{RawQuery, State},
     response::{Html, IntoResponse},
-    Json,
 };
-use http::{header, header::CONTENT_TYPE, Method, Request, StatusCode};
+use http::{Method, Request, StatusCode, header, header::CONTENT_TYPE};
 use hyper_rustls::HttpsConnectorBuilder;
 use hyper_util::{client::legacy::Client, rt::TokioExecutor};
-use jsonwebtoken::{encode, EncodingKey, Header};
+use jsonwebtoken::{EncodingKey, Header, encode};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tokio::fs::{self};
@@ -71,11 +71,7 @@ pub async fn onlyoffice_page(
     let mtime = ooq.get("mtime").ok_or(QUERY_ERROR)?;
     let oo_user = ooq.get("user").ok_or(QUERY_ERROR)?;
 
-    if let Some(server) = &config
-        .onlyoffice_config
-        .as_ref()
-        .map(|c| c.server.clone())
-    {
+    if let Some(server) = &config.onlyoffice_config.as_ref().map(|c| c.server.clone()) {
         let template = fs::read_to_string("./web/onlyoffice/index.tmpl")
             .await
             .map_err(|_| ErrResponse::S500("couldn't read onlyoffice template file"))?;
