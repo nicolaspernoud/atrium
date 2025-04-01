@@ -12,7 +12,7 @@ use axum::{
 use http::{Method, Request, StatusCode, header, header::CONTENT_TYPE};
 use hyper_rustls::HttpsConnectorBuilder;
 use hyper_util::{client::legacy::Client, rt::TokioExecutor};
-use jsonwebtoken::{EncodingKey, Header, encode};
+use jsonwebtoken_aws_lc::{EncodingKey, Header, encode};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tokio::fs::{self};

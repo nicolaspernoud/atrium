@@ -194,7 +194,7 @@ fn create_big_binary_file(size: usize, path: &str) {
     let f = std::fs::File::create(path).unwrap();
     let mut writer = BufWriter::new(f);
 
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let mut buffer = [0; 1024];
     let mut remaining_size = size;
 

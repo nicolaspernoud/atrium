@@ -186,7 +186,7 @@ use chacha20poly1305::{
         stream::{NewStream, StreamPrimitive},
     },
 };
-use rand::{RngCore, rngs::OsRng};
+use rand::{TryRngCore, rngs::OsRng};
 use std::io::ErrorKind;
 use tokio::io::AsyncWriteExt;
 
@@ -217,7 +217,9 @@ where
         R: AsyncRead + Unpin + ?Sized,
     {
         let mut nonce = [0; NONCE_SIZE];
-        OsRng.fill_bytes(&mut nonce);
+        OsRng
+            .try_fill_bytes(&mut nonce)
+            .map_err(|e| Error::new(ErrorKind::Other, format!("error generating nonce: {}", e)))?;
         let aead = XChaCha20Poly1305::new(self.key.as_ref().into());
         let mut stream_encryptor = stream::EncryptorBE32::from_aead(aead, nonce.as_ref().into());
 

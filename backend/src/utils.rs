@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use http::StatusCode;
-use rand::{Rng, distributions::Alphanumeric, thread_rng};
+use rand::{Rng, distr::Alphanumeric, rng};
 
 pub fn random_string(size: usize) -> std::string::String {
-    thread_rng()
+    rng()
         .sample_iter(&Alphanumeric)
         .take(size)
         .map(char::from)

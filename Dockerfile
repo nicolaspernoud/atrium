@@ -6,16 +6,17 @@
 FROM --platform=$BUILDPLATFORM rust:1.85 AS backend-builder
 ARG TARGETPLATFORM
 RUN case "$TARGETPLATFORM" in \
-      "linux/amd64") echo x86_64-unknown-linux-gnu > /rust_target.txt ;; \
-      "linux/arm64") echo aarch64-unknown-linux-gnu > /rust_target.txt ;; \
-      "linux/arm/v7") echo armv7-unknown-linux-gnueabihf > /rust_target.txt ;; \
-      "linux/arm/v6") echo arm-unknown-linux-musleabihf > /rust_target.txt ;; \
-      *) exit 1 ;; \
+    "linux/amd64") echo x86_64-unknown-linux-gnu > /rust_target.txt ;; \
+    "linux/arm64") echo aarch64-unknown-linux-gnu > /rust_target.txt ;; \
+    "linux/arm/v7") echo armv7-unknown-linux-gnueabihf > /rust_target.txt ;; \
+    "linux/arm/v6") echo arm-unknown-linux-musleabihf > /rust_target.txt ;; \
+    *) exit 1 ;; \
     esac
 RUN rustup target add $(cat /rust_target.txt)
-RUN apt update && apt install -y binutils-arm-linux-gnueabihf gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf libcap2-bin musl-dev musl-tools
+RUN apt update && apt install -y binutils-arm-linux-gnueabihf clang cmake gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf libc6-dev-i386 libcap2-bin libclang-dev musl-dev musl-tools
 RUN ln -s /usr/bin/arm-linux-gnueabihf-gcc /usr/bin/arm-linux-musleabihf-gcc
 RUN ln -s /usr/bin/aarch64-linux-gnu-gcc /usr/bin/aarch64-linux-musl-gcc
+RUN ln -s /usr/include/asm-generic /usr/include/asm
 
 # Create appuser
 ENV USER=appuser

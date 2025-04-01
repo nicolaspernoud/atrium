@@ -28,6 +28,7 @@ use axum_extra::{
         cookie::{Cookie, Key, PrivateCookieJar, SameSite},
     },
 };
+use chacha20poly1305::aead::OsRng;
 use headers::{Authorization, HeaderName, authorization::Basic};
 use http::{
     HeaderValue, StatusCode,
@@ -35,7 +36,6 @@ use http::{
     request::Parts,
 };
 
-use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use std::{convert::Infallible, net::SocketAddr};
 use time::{Duration, OffsetDateTime};
