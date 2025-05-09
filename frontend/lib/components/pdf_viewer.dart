@@ -67,34 +67,39 @@ class _PdfViewerState extends State<PdfViewer> {
         actions: isWebDesktop()
             ? null
             : <Widget>[
-                IconButton(
-                  icon: const Icon(Icons.navigate_before),
-                  onPressed: () {
-                    _pdfController.previousPage(
-                      curve: Curves.ease,
-                      duration: const Duration(milliseconds: 100),
-                    );
-                  },
-                ),
                 PdfPageNumber(
-                  controller: _pdfController,
-                  builder: (_, loadingState, page, pagesCount) => Container(
-                    alignment: Alignment.center,
-                    child: Text(
-                      '$page/${pagesCount ?? 0}',
-                      style: const TextStyle(fontSize: 22),
-                    ),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.navigate_next),
-                  onPressed: () {
-                    _pdfController.nextPage(
-                      curve: Curves.ease,
-                      duration: const Duration(milliseconds: 100),
-                    );
-                  },
-                ),
+                    controller: _pdfController,
+                    builder: (_, loadingState, page, pagesCount) =>
+                        (pagesCount != null && pagesCount > 0)
+                            ? Row(
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.navigate_before),
+                                    onPressed: () {
+                                      _pdfController.previousPage(
+                                        curve: Curves.ease,
+                                        duration:
+                                            const Duration(milliseconds: 100),
+                                      );
+                                    },
+                                  ),
+                                  Text(
+                                    '$page/$pagesCount',
+                                    style: const TextStyle(fontSize: 22),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.navigate_next),
+                                    onPressed: () {
+                                      _pdfController.nextPage(
+                                        curve: Curves.ease,
+                                        duration:
+                                            const Duration(milliseconds: 100),
+                                      );
+                                    },
+                                  ),
+                                ],
+                              )
+                            : Container()),
               ],
       ),
       body: isWebDesktop()

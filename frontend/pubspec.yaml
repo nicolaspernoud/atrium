@@ -39,7 +39,7 @@ dependencies:
   flutter_colorpicker: ^1.1.0
   flutter_local_notifications: ^19.0.0
   path_provider: ^2.1.5
-  pdfx: 2.8.0
+  pdfx: ^2.9.1
   provider: ^6.1.4
   shared_preferences: ^2.5.3
   url_launcher: ^6.3.1
