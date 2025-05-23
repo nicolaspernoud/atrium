@@ -22,4 +22,4 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
       - uses: EmbarkStudios/cargo-deny-action@v1
         with:
-          rust-version: "1.85.0"
+          rust-version: "1.86.0"

@@ -1,0 +1,20 @@
+{
+  "name": "Atrium Dev Container",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dart-code.flutter",
+        "rust-lang.rust-analyzer"
+      ]
+    }
+  },
+  "remoteEnv": {
+    "ANDROID_EMULATOR_USE_SYSTEM_LIBS": "1"
+  },
+  "runArgs": [
+    "--network=host"
+  ]
+}

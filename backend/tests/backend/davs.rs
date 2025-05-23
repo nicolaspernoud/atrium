@@ -8,7 +8,7 @@ use quick_xml::escape::escape;
 use sha2::{Digest, Sha512};
 use std::{
     io::{self, BufWriter, Write},
-    time::{Duration, Instant},
+    time::Instant,
 };
 use tokio::fs::File;
 
@@ -322,12 +322,11 @@ async fn try_to_use_wrong_key_to_decrypt() -> Result<()> {
         .expect("failed to execute request");
 
     app.is_ready().await;
-    // That sleep should not be necessary as we await the server to be ready, but somehow it is...
-    tokio::time::sleep(Duration::from_millis(250)).await;
 
-    // Assert that the file cannot be retrieved
-    let resp = app.client.get(&url).send().await?;
-    assert!(resp.bytes().await.is_err());
+    // Assert that the file cannot be retrieved or that the server closes the connection
+    if let Ok(response) = app.client.get(&url).send().await {
+        assert!(response.bytes().await.is_err());
+    }
 
     Ok(())
 }
