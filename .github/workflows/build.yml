@@ -36,6 +36,7 @@ jobs:
           docker buildx build --push \
             --tag nicolaspernoud/atrium:"$([[ ${GITHUB_REF##*/} = main ]] && echo "latest" || echo "${GITHUB_REF##*/}")" \
             --platform linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64 \
+            $(cat versions.env | grep -v '^#' | xargs -I {} echo --build-arg {}) \
             .
 
   app-build:
@@ -47,6 +48,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+      - name: Dotenv Action
+        id: dotenv
+        uses: falti/dotenv-action@v1.1.4
+        with:
+          path: versions.env
       - name: Export Release Timestamp
         run: echo "APP_VERSION=$(date +'%Y-%m-%d_%H-%m-%S')" >> $GITHUB_ENV
       - name: Set up Java
@@ -58,7 +64,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: "stable"
-          flutter-version: "3.29.3"
+          flutter-version: ${{ steps.dotenv.outputs.flutter_version }}
       - name: Decode android/key.jks
         run: echo "${{ secrets.KEY_JKS }}" | base64 --decode > android/key.jks
       - name: Decode android/key.properties

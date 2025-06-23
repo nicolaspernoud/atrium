@@ -260,19 +260,16 @@ fn insert_authenticated_user_mail_header(
 fn remove_auth_cookie(req: &mut Request<Body>) -> Result<(), ProxyError> {
     let mut new_cookie = String::new();
     for c in req.headers_mut().get_all(COOKIE) {
-        match c.to_str() {
-            Ok(s) => {
-                new_cookie.push_str(
-                    &s.split(';')
-                        .skip_while(|&c| c.contains(AUTH_COOKIE))
-                        .collect::<Vec<&str>>()
-                        .join(";"),
-                );
-                if !new_cookie.is_empty() {
-                    new_cookie.push(';');
-                }
+        if let Ok(s) = c.to_str() {
+            new_cookie.push_str(
+                &s.split(';')
+                    .skip_while(|&c| c.contains(AUTH_COOKIE))
+                    .collect::<Vec<&str>>()
+                    .join(";"),
+            );
+            if !new_cookie.is_empty() {
+                new_cookie.push(';');
             }
-            Err(_) => continue,
         }
     }
     req.headers_mut().insert(COOKIE, new_cookie.parse()?);

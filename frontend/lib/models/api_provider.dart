@@ -90,10 +90,7 @@ class ApiProvider {
   Future<String?> getShareToken(String hostname, String path,
       {String shareWith = "", int? shareForDays}) async {
     _dio.options.baseUrl = App().prefs.hostname;
-    final Map<String, dynamic> request = {
-      "hostname": hostname,
-      "path": path
-    };
+    final Map<String, dynamic> request = {"hostname": hostname, "path": path};
     if (shareForDays != null) {
       request.addAll({"share_with": shareWith, "share_for_days": shareForDays});
     }
@@ -192,8 +189,9 @@ class ApiProvider {
     return DiskInfo.fromJson(response.data);
   }
 
-  Future<List<PathItem>> searchDav(DavModel dav, String query) async {
-    final response = await _dio.get('${modelUrl(dav)}?q=$query');
+  Future<List<PathItem>> searchDav(
+      DavModel dav, String dirPath, String query) async {
+    final response = await _dio.get('${modelUrl(dav)}$dirPath?q=$query');
     var pathItemArray = response.data;
     var pathItems = <PathItem>[];
     for (var user in pathItemArray) {

@@ -88,7 +88,7 @@ Dio newDio(BaseOptions options) {
   return Dio(options);
 }
 
-download(String url, webdav.Client client, webdav.File file,
+Future<void> download(String url, webdav.Client client, webdav.File file,
     BuildContext context) async {
   var downloadingTitle = tr(context, "downloading");
   var successTitle = tr(context, "download_success");
@@ -148,13 +148,13 @@ Future<String?> getDownloadPath() async {
   return directory?.path;
 }
 
-upload(String destPath, PlatformFile file, webdav.Client client,
+Future<void> upload(String destPath, PlatformFile file, webdav.Client client,
     Function(int, int)? onProgress, CancelToken cancelToken) async {
   await client.writeFromFile(file.path!, "$destPath/${file.name}",
       onProgress: onProgress, cancelToken: cancelToken);
 }
 
-openIdConnectLogin(BuildContext context) async {
+Future<void> openIdConnectLogin(BuildContext context) async {
   await Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (context) {

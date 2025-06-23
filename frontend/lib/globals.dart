@@ -70,23 +70,23 @@ class App extends ChangeNotifier {
     _uploads.uploads.removeWhere((element) => element == upload);
   }
 
-  Future<Upload?> uploadOne() async {
-    return await _uploads.uploadOne();
+  Stream<Upload?> uploadAll()  {
+    return  _uploads.uploadAll();
   }
 
   void reportProgress() {
     notifyListeners();
   }
 
-  log(String v) async {
+  Future<void> log(String v) async {
     await prefs.addToLog(v);
   }
 
-  getLog() {
+  List<String> getLog() {
     return prefs.log;
   }
 
-  clearLog() {
+  void clearLog() {
     prefs.clearLog();
   }
 

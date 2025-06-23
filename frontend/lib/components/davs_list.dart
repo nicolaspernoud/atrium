@@ -33,7 +33,7 @@ class _DavsListState extends State<DavsList> {
     _getData();
   }
 
-  Future<void> openLoginDialog(_) async {
+  Future<void> openLoginDialog(dynamic _) async {
     await showLoginDialog(context, mounted);
   }
 
@@ -72,7 +72,7 @@ class _DavsListState extends State<DavsList> {
                     if (context.mounted) {
                       await showLoginDialog(context, mounted);
                     }
-                    await _getData();
+                    _getData();
                     setState(() {});
                   });
                   return const Center(child: CircularProgressIndicator());
@@ -196,7 +196,7 @@ class _DavsListState extends State<DavsList> {
                                                                             builder: (context) =>
                                                                                 CreateEditDav(dav: dav, isNew: false),
                                                                           ));
-                                                                      await _getData();
+                                                                      _getData();
                                                                       setState(
                                                                           () {});
                                                                     });
@@ -237,7 +237,7 @@ class _DavsListState extends State<DavsList> {
                                                                         });
                                                                         await ApiProvider()
                                                                             .deleteDav(dav.id);
-                                                                        await _getData();
+                                                                        _getData();
                                                                         setState(
                                                                             () {});
                                                                       }
@@ -285,14 +285,14 @@ class _DavsListState extends State<DavsList> {
                       builder: (context) =>
                           CreateEditDav(dav: dav, isNew: true),
                     ));
-                await _getData();
+                _getData();
                 setState(() {});
               })
           : null,
     );
   }
 
-  _getData() {
+  Null _getData() {
     davs = App().isAdmin ? ApiProvider().getDavs() : ApiProvider().listDavs();
   }
 }

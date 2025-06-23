@@ -1,10 +1,29 @@
+use async_stream::stream;
 use axum::body::Body;
+use chacha20poly1305::{
+    XChaCha20Poly1305,
+    aead::{
+        KeyInit, stream,
+        stream::{NewStream, StreamPrimitive},
+    },
+};
+use futures::{Stream, StreamExt};
 use headers::{ETag, LastModified};
+use rand::{TryRngCore, rngs::OsRng};
+use std::io::ErrorKind;
+use std::pin::Pin;
 use std::{fs::Metadata, io::Error, path::Path, time::SystemTime};
+use tokio::io::AsyncReadExt;
+use tokio::io::AsyncWriteExt;
 use tokio::{
     fs::{self, File},
     io::{self, AsyncRead, AsyncSeekExt, AsyncWrite},
 };
+
+const PLAIN_CHUNK_SIZE: usize = 1_000_000; // 1 MByte
+const ENCRYPTION_OVERHEAD: usize = 16;
+const ENCRYPTED_CHUNK_SIZE: usize = PLAIN_CHUNK_SIZE + ENCRYPTION_OVERHEAD;
+const NONCE_SIZE: usize = 19;
 
 pub const BUF_SIZE: usize = 65536;
 
@@ -111,11 +130,6 @@ impl DavFile {
     }
 }
 
-use async_stream::stream;
-use futures::{Stream, StreamExt};
-use std::pin::Pin;
-use tokio::io::AsyncReadExt;
-
 pub struct Streamer<R>
 where
     R: AsyncRead + Unpin + Send + 'static,
@@ -148,6 +162,7 @@ where
         };
         stream.boxed()
     }
+
     // allow truncation as truncated remaining is always less than buf_size: usize
     fn into_stream_sized(
         mut self,
@@ -178,22 +193,6 @@ where
         stream.boxed()
     }
 }
-
-use chacha20poly1305::{
-    XChaCha20Poly1305,
-    aead::{
-        KeyInit, stream,
-        stream::{NewStream, StreamPrimitive},
-    },
-};
-use rand::{TryRngCore, rngs::OsRng};
-use std::io::ErrorKind;
-use tokio::io::AsyncWriteExt;
-
-const PLAIN_CHUNK_SIZE: usize = 1_000_000; // 1 MByte
-const ENCRYPTION_OVERHEAD: usize = 16;
-const ENCRYPTED_CHUNK_SIZE: usize = PLAIN_CHUNK_SIZE + ENCRYPTION_OVERHEAD;
-const NONCE_SIZE: usize = 19;
 
 struct EncryptedStreamer<I>
 where

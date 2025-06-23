@@ -17,7 +17,7 @@ class SystemInfo extends StatefulWidget {
 }
 
 class _SystemInfoState extends State<SystemInfo> {
-  Future<void> openLoginDialog(_) async {
+  Future<void> openLoginDialog(dynamic _) async {
     await showLoginDialog(context, mounted);
   }
 
@@ -63,7 +63,7 @@ class _SystemInfoState extends State<SystemInfo> {
                 // If error is 401, we log and retry
                 Future.delayed(Duration.zero, () async {
                   if (context.mounted) await showLoginDialog(context, mounted);
-                  await _getData();
+                  _getData();
                   setState(() {});
                 });
                 return const Center(child: CircularProgressIndicator());
@@ -129,7 +129,7 @@ class _SystemInfoState extends State<SystemInfo> {
     );
   }
 
-  _getData() {
+  Null _getData() {
     sysInfo = ApiProvider().getSysInfo();
   }
 }

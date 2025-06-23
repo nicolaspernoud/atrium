@@ -34,7 +34,7 @@ use crate::{
 use async_walkdir::WalkDir;
 use async_zip::{Compression, ZipEntryBuilder, tokio::write::ZipFileWriter};
 use axum::body::Body;
-use chrono::{TimeZone, Utc};
+use chrono::{DateTime, Duration, TimeZone, Utc};
 use futures_util::{FutureExt, StreamExt, future::BoxFuture};
 use headers::{
     AcceptRanges, ContentType, HeaderMap, HeaderMapExt, IfModifiedSince, IfNoneMatch, IfRange,
@@ -51,12 +51,17 @@ use quick_xml::{Reader, escape::escape, events::Event};
 use serde::Serialize;
 use std::{
     borrow::Cow,
+    collections::HashMap,
     io::Error,
     net::SocketAddr,
     path::{Path, PathBuf},
+    sync::{Arc, Mutex},
     time::SystemTime,
 };
-use tokio::{fs, io, io::AsyncWrite};
+use tokio::{
+    fs,
+    io::{self, AsyncWrite},
+};
 use tokio_util::io::StreamReader;
 use tracing::{debug, error};
 use uuid::Uuid;
@@ -68,11 +73,25 @@ pub type BoxResult<T> = Result<T, Box<dyn std::error::Error>>;
 static APPLICATION_JSON: HeaderValue = HeaderValue::from_static("application/json");
 static ACCEPTED: HeaderValue = HeaderValue::from_static("accepted");
 
-pub struct WebdavServer {}
+const LOCK_TIMEOUT: i64 = 24 * 60 * 60; // 24 hours in seconds
+
+#[derive(Debug)]
+pub struct LockInfo {
+    token: String,
+    expires_at: DateTime<Utc>,
+}
+
+pub type LockMap = Arc<Mutex<HashMap<PathBuf, LockInfo>>>;
+
+pub struct WebdavServer {
+    locks: LockMap,
+}
 
 impl WebdavServer {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            locks: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 
     pub async fn call(
@@ -105,20 +124,14 @@ impl WebdavServer {
 
     pub async fn handle(&self, req: Request, dav: &Dav) -> BoxResult<Response> {
         let mut res = Response::default();
+        let head_only = req.method() == Method::HEAD;
 
-        let req_path = &req.uri().path();
-        let headers = req.headers();
-        let method = req.method().clone();
-
-        let head_only = method == Method::HEAD;
-
-        let path = if let Some(v) = Self::extract_path(req_path, &dav.directory) {
+        let path = if let Some(v) = Self::extract_path(req.uri().path(), &dav.directory) {
             v
         } else {
             status_forbid(&mut res);
             return Ok(res);
         };
-
         let path = path.as_path();
 
         let query = extract_query_pairs(req.uri().query().unwrap_or_default());
@@ -143,8 +156,8 @@ impl WebdavServer {
             return Ok(res);
         }
 
-        match method {
-            Method::GET | Method::HEAD => {
+        match req.method() {
+            &Method::GET | &Method::HEAD => {
                 if is_dir {
                     if let Some(search_str) = query.get("q") {
                         if allow_search {
@@ -166,23 +179,23 @@ impl WebdavServer {
                     }
                 } else if is_file {
                     let inline = query.contains_key("inline");
-                    self.handle_send_file(path, headers, head_only, &mut res, key, inline)
+                    self.handle_send_file(path, req.headers(), head_only, &mut res, key, inline)
                         .await?;
                 } else {
                     status_not_found(&mut res);
                 }
             }
-            Method::OPTIONS => {
+            &Method::OPTIONS => {
                 set_webdav_headers(&mut res);
             }
-            Method::PUT => {
+            &Method::PUT => {
                 if !allow_upload || (!allow_delete && is_file && size > 0) {
                     status_forbid(&mut res);
                 } else {
                     self.handle_upload(path, req, &mut res, key).await?;
                 }
             }
-            Method::DELETE => {
+            &Method::DELETE => {
                 if !allow_delete {
                     status_forbid(&mut res);
                 } else if !is_miss {
@@ -196,7 +209,7 @@ impl WebdavServer {
                     if is_dir {
                         self.handle_propfind_dir(
                             path,
-                            headers,
+                            req.headers(),
                             &mut res,
                             &dav.directory,
                             dav.allow_symlinks,
@@ -218,8 +231,7 @@ impl WebdavServer {
                 }
                 "PROPPATCH" => {
                     if is_file {
-                        let req_path = &(*req_path).to_owned();
-                        self.handle_proppatch(req, path, req_path, &mut res).await?;
+                        self.handle_proppatch(req, path, &mut res).await?;
                     } else {
                         status_not_found(&mut res);
                     }
@@ -242,7 +254,7 @@ impl WebdavServer {
                     } else if is_miss {
                         status_not_found(&mut res);
                     } else {
-                        self.handle_copymove(path, req, method, &mut res, &dav.directory)
+                        self.handle_copymove(path, req, &mut res, &dav.directory)
                             .await?;
                     }
                 }
@@ -252,22 +264,22 @@ impl WebdavServer {
                     } else if is_miss {
                         status_not_found(&mut res);
                     } else {
-                        self.handle_copymove(path, req, method, &mut res, &dav.directory)
+                        self.handle_copymove(path, req, &mut res, &dav.directory)
                             .await?;
                     }
                 }
                 "LOCK" => {
-                    // Fake lock
                     if is_dir {
                         status_not_found(&mut res);
                     } else {
-                        Self::handle_lock(req_path, is_miss, &mut res)?;
+                        self.handle_lock(path, req, is_miss, &mut res)?;
                     }
                 }
                 "UNLOCK" => {
-                    // Fake unlock
                     if is_miss {
                         status_not_found(&mut res);
+                    } else {
+                        self.handle_unlock(path, req, &mut res)?;
                     }
                 }
                 _ => {
@@ -630,26 +642,106 @@ impl WebdavServer {
         }
     }
 
-    fn handle_lock(req_path: &str, is_miss: bool, res: &mut Response) -> BoxResult<()> {
-        let token = format!("opaquelocktoken:{}", Uuid::new_v4());
+    fn handle_lock(
+        &self,
+        path: &Path,
+        req: Request,
+        is_miss: bool,
+        res: &mut Response,
+    ) -> BoxResult<()> {
+        if let Ok(mut locks) = self.locks.lock() {
+            debug!("LockMap on lock: {:?}", locks);
+            clean_expired_locks(&mut locks);
 
-        res.headers_mut().insert(
-            CONTENT_TYPE,
-            HeaderValue::from_static("application/xml; charset=utf-8"),
-        );
-        res.headers_mut()
-            .insert("lock-token", format!("<{}>", token).parse().unwrap());
+            if locks.contains_key(path) {
+                *res.status_mut() = StatusCode::LOCKED;
+                *res.body_mut() = Body::from("Resource is already locked");
+                return Ok(());
+            }
 
-        *res.body_mut() = Body::from(format!(
-            r#"<?xml version="1.0" encoding="utf-8"?>
+            let timeout_secs = parse_timeout_header(req.headers());
+
+            let token = format!("opaquelocktoken:{}", Uuid::new_v4());
+            locks.insert(
+                path.to_path_buf(),
+                LockInfo {
+                    token: token.clone(),
+                    expires_at: Utc::now() + Duration::seconds(timeout_secs),
+                },
+            );
+            drop(locks);
+
+            // Timeout header in response
+            let timeout_resp = if timeout_secs == i64::MAX {
+                "Infinite".to_string()
+            } else {
+                format!("Second-{}", timeout_secs)
+            };
+            res.headers_mut().insert(
+                CONTENT_TYPE,
+                HeaderValue::from_static("application/xml; charset=utf-8"),
+            );
+            res.headers_mut()
+                .insert("lock-token", format!("<{}>", token).parse().unwrap());
+            res.headers_mut()
+                .insert("Timeout", HeaderValue::from_str(&timeout_resp).unwrap());
+
+            *res.body_mut() = Body::from(format!(
+                r#"<?xml version="1.0" encoding="utf-8"?>
 <D:prop xmlns:D="DAV:"><D:lockdiscovery><D:activelock>
 <D:locktoken><D:href>{}</D:href></D:locktoken>
 <D:lockroot><D:href>{}</D:href></D:lockroot>
+<D:timeout>{}</D:timeout>
 </D:activelock></D:lockdiscovery></D:prop>"#,
-            token, req_path
-        ));
-        if is_miss {
-            *res.status_mut() = StatusCode::CREATED;
+                token,
+                req.uri().path(),
+                timeout_resp
+            ));
+            if is_miss {
+                *res.status_mut() = StatusCode::CREATED;
+            }
+        } else {
+            *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+        }
+        Ok(())
+    }
+
+    fn handle_unlock(&self, path: &Path, req: Request, res: &mut Response) -> BoxResult<()> {
+        if let Ok(mut locks) = self.locks.lock() {
+            clean_expired_locks(&mut locks);
+            debug!("LockMap on lock: {:?}", locks);
+
+            // Extract Lock-Token header
+            let token_header = req
+                .headers()
+                .get("Lock-Token")
+                .and_then(|v| v.to_str().ok())
+                .map(|s| s.trim_matches(['<', '>'].as_ref()));
+            let token_header = if let Some(t) = token_header {
+                t
+            } else {
+                *res.status_mut() = StatusCode::BAD_REQUEST;
+                *res.body_mut() = Body::from("Missing Lock-Token header");
+                return Ok(());
+            };
+
+            // Check if lock exists and token matches
+            match locks.get(path) {
+                Some(lock_info) if lock_info.token == token_header => {
+                    locks.remove(path);
+                    *res.status_mut() = StatusCode::NO_CONTENT;
+                }
+                Some(_) => {
+                    *res.status_mut() = StatusCode::FORBIDDEN;
+                    *res.body_mut() = Body::from("Lock-Token does not match");
+                }
+                None => {
+                    *res.status_mut() = StatusCode::NOT_FOUND;
+                    *res.body_mut() = Body::from("No lock found on resource");
+                }
+            }
+        } else {
+            *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
         }
         Ok(())
     }
@@ -658,10 +750,10 @@ impl WebdavServer {
         &self,
         req: Request,
         path: &Path,
-        req_path: &str,
         res: &mut Response,
     ) -> BoxResult<()> {
         let output: String;
+        let req_path = req.uri().path().to_string();
         if let Ok(modtime) = Self::extract_lastmodified_value(req).await {
             filetime::set_file_mtime(path, filetime::FileTime::from_unix_time(modtime, 0))?;
             output = format!(
@@ -830,7 +922,6 @@ impl WebdavServer {
         &self,
         path: &Path,
         req: Request,
-        method: Method,
         res: &mut Response,
         dav_path: &str,
     ) -> BoxResult<()> {
@@ -838,7 +929,7 @@ impl WebdavServer {
         let overwrite = req.headers().typed_get::<Overwrite>().is_none_or(|o| o.0);
         let depth = match req.headers().typed_get::<Depth>() {
             Some(Depth::Infinity) | None => Depth::Infinity,
-            Some(Depth::Zero) if method.as_str() == "COPY" => Depth::Zero,
+            Some(Depth::Zero) if req.method().as_str() == "COPY" => Depth::Zero,
             _ => {
                 *res.status_mut() = StatusCode::BAD_REQUEST;
                 return Ok(());
@@ -890,7 +981,7 @@ impl WebdavServer {
         }
 
         // COPY or MOVE
-        if method.as_str() == "COPY" {
+        if req.method().as_str() == "COPY" {
             Self::do_copy(path, dest.path(), dest.path(), dest.is_dir(), depth).await?;
             if overwrite && dest.exists() {
                 *res.status_mut() = StatusCode::NO_CONTENT;
@@ -1297,4 +1388,26 @@ impl Destination {
             | Destination::FileToBe(p) => p.push(path),
         }
     }
+}
+
+fn clean_expired_locks(locks: &mut HashMap<PathBuf, LockInfo>) {
+    let now = Utc::now();
+    locks.retain(|_, info| now < info.expires_at);
+}
+
+fn parse_timeout_header(headers: &HeaderMap<HeaderValue>) -> i64 {
+    if let Some(timeout_header) = headers.get("Timeout") {
+        if let Ok(header_val) = timeout_header.to_str() {
+            // Support comma-separated list, take the first understood
+            for val in header_val.split(',') {
+                let val = val.trim();
+                if let Some(secs) = val.strip_prefix("Second-") {
+                    if let Ok(secs) = secs.parse::<i64>() {
+                        return secs.min(LOCK_TIMEOUT);
+                    }
+                }
+            }
+        }
+    }
+    LOCK_TIMEOUT
 }

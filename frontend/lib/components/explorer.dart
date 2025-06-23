@@ -147,6 +147,14 @@ class ExplorerState extends State<Explorer> {
               }),
         if (readWrite)
           Consumer<App>(builder: (context, app, child) {
+            var uploadStream = app.uploadAll();
+            uploadStream.listen((up) {
+              if (up != null && dirPath == up.destPath) {
+                setState(() {
+                  _getData();
+                });
+              }
+            });
             return Row(children: [
               IconButton(
                   icon: const Icon(Icons.upload),
@@ -160,18 +168,7 @@ class ExplorerState extends State<Explorer> {
                       for (var file in result.files) {
                         app.pushUpload(client, file, dirPath);
                       }
-                      while (app.uploads
-                          .where((element) => element.status == Status.pending)
-                          .isNotEmpty) {
-                        var currentUpload = await app.uploadOne();
-                        // We refresh the view only if we are still in the same directory
-                        if (currentUpload != null &&
-                            dirPath == currentUpload.destPath) {
-                          setState(() {
-                            _getData();
-                          });
-                        }
-                      }
+                      uploadStream = app.uploadAll();
                     }
                   }),
               if (app.hasUploads)
@@ -557,7 +554,8 @@ class ExplorerState extends State<Explorer> {
       IconButton(
           onPressed: () async {
             String result = await showSearch(
-                context: context, delegate: ExplorerSearchDelegate(widget.dav));
+                context: context,
+                delegate: ExplorerSearchDelegate(widget.dav, dirPath));
             dirPath = p.dirname(result);
             foundFile = result;
             setState(() {
@@ -608,7 +606,8 @@ class ExplorerState extends State<Explorer> {
 
 class ExplorerSearchDelegate extends SearchDelegate {
   DavModel dav;
-  ExplorerSearchDelegate(this.dav);
+  String dirPath;
+  ExplorerSearchDelegate(this.dav, this.dirPath);
 
   @override
   List<Widget>? buildActions(BuildContext context) => [
@@ -630,7 +629,7 @@ class ExplorerSearchDelegate extends SearchDelegate {
       return Center(child: Text(tr(context, "at_least_3_chars")));
     }
     return FutureBuilder<List<PathItem>>(
-      future: ApiProvider().searchDav(dav, query).then(
+      future: ApiProvider().searchDav(dav, dirPath, query).then(
             (value) => value
                 .where((element) =>
                     element.name.toLowerCase().contains(query.toLowerCase()))
@@ -698,7 +697,7 @@ FileType fileType(File? file) {
 }
 
 // Sort : folders first and then alphabetically
-int foldersFirstThenAlphabetically(a, b) {
+int foldersFirstThenAlphabetically(webdav.File a, webdav.File b) {
   if (a.isDir! && !(b.isDir!)) {
     return -1;
   }

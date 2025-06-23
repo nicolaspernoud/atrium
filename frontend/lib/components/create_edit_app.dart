@@ -299,7 +299,7 @@ class CreateEditAppState extends State<CreateEditApp> {
   }
 }
 
-pickIcon(BuildContext context, Model model) async {
+Future<void> pickIcon(BuildContext context, Model model) async {
   model.icon = await showDialog<String>(
         context: context,
         barrierDismissible: true,

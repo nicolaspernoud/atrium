@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show SynchronousFuture;
 
-String tr(context, String str) {
+String tr(BuildContext context, String str) {
   return MyLocalizations.of(context)!.tr(str);
 }
 

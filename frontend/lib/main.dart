@@ -44,7 +44,7 @@ class MyApp extends StatelessWidget {
             seedColor: Colors.indigo,
             surface: Colors.grey.shade50,
             surfaceTint: Colors.white),
-        cardTheme: const CardTheme(elevation: 2),
+        cardTheme: const CardThemeData(elevation: 2),
         appBarTheme: AppBarTheme(
           backgroundColor: Colors.indigo,
           foregroundColor: Colors.grey.shade50,
@@ -55,7 +55,7 @@ class MyApp extends StatelessWidget {
       darkTheme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
             seedColor: Colors.indigo, brightness: Brightness.dark),
-        cardTheme: const CardTheme(elevation: 2),
+        cardTheme: const CardThemeData(elevation: 2),
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.indigo,
           elevation: 4,

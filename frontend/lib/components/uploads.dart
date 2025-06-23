@@ -132,7 +132,7 @@ class Upload {
     App().reportProgress();
   }
 
-  void onProgress(c, t) {
+  void onProgress(int c, int t) {
     progress = c / t;
     App().reportProgress();
   }
@@ -141,20 +141,19 @@ class Upload {
 class Uploads {
   List<Upload> uploads = [];
 
-  Future<Upload?> uploadOne() async {
+  Stream<Upload?> uploadAll() async* {
     uploads.sort((a, b) => a.addTime.compareTo(b.addTime));
     for (var u in uploads) {
       if (u.status == Status.pending) {
         try {
           await u.doUpload();
-          return u;
+          yield u;
         } catch (e) {
           u.status = Status.error;
-          return null;
+          yield null;
         }
       }
     }
-    return null;
   }
 
   void push(

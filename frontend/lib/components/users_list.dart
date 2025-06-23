@@ -17,7 +17,7 @@ class UsersList extends StatefulWidget {
 }
 
 class _UsersListState extends State<UsersList> {
-  Future<void> openLoginDialog(_) async {
+  Future<void> openLoginDialog(dynamic _) async {
     await showLoginDialog(context, mounted);
   }
 
@@ -64,7 +64,7 @@ class _UsersListState extends State<UsersList> {
                     if (context.mounted) {
                       await showLoginDialog(context, mounted);
                     }
-                    await _getData();
+                    _getData();
                     setState(() {});
                   });
                   return const Center(child: CircularProgressIndicator());
@@ -84,13 +84,13 @@ class _UsersListState extends State<UsersList> {
                 MaterialPageRoute(
                   builder: (context) => CreateEditUser(user: user, isNew: true),
                 ));
-            await _getData();
+            _getData();
             setState(() {});
           }),
     );
   }
 
-  _getData() {
+  Null _getData() {
     users = ApiProvider().getUsers();
   }
 
@@ -118,7 +118,7 @@ class _UsersListState extends State<UsersList> {
                                   builder: (context) =>
                                       CreateEditUser(user: user, isNew: false),
                                 ));
-                            await _getData();
+                            _getData();
                             setState(() {});
                           }),
                       IconButton(
@@ -133,7 +133,7 @@ class _UsersListState extends State<UsersList> {
                                 user.isDeleting = true;
                               });
                               await ApiProvider().deleteUser(user.login);
-                              await _getData();
+                              _getData();
                               setState(() {});
                             }
                           }),

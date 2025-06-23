@@ -23,4 +23,5 @@ jobs:
           docker buildx build --push \
               --tag nicolaspernoud/atrium:nosetcap \
               --platform linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64 \
+              $(cat versions.env | grep -v '^#' | xargs -I {} echo --build-arg {}) \
               .

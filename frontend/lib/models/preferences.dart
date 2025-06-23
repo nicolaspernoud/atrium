@@ -76,7 +76,7 @@ class Preferences with LocalFilePersister {
 
   List<String> _log = [""];
 
-  addToLog(String v) async {
+  Future<void> addToLog(String v) async {
     if (_logEnabled) {
       _log.add("${formatTime(DateTime.now())} - $v");
       await write();
@@ -85,7 +85,7 @@ class Preferences with LocalFilePersister {
 
   List<String> get log => _log;
 
-  clearLog() {
+  void clearLog() {
     _log.clear();
     write();
   }
@@ -118,8 +118,8 @@ class Preferences with LocalFilePersister {
 }
 
 mixin LocalFilePersister {
-  fromJson(String source);
-  toJson();
+  void fromJson(String source);
+  String toJson();
 
   // Persistence
   final String _fileName = "settings.json";
@@ -134,7 +134,7 @@ mixin LocalFilePersister {
     return File('${directory.path}/$_fileName');
   }
 
-  read() async {
+  Future<void> read() async {
     if (kIsWeb) {
       SharedPreferences prefs = await SharedPreferences.getInstance();
       String? contents = prefs.getString("settings");
@@ -151,7 +151,7 @@ mixin LocalFilePersister {
     }
   }
 
-  write() async {
+  Future<void> write() async {
     if (kIsWeb) {
       SharedPreferences prefs = await SharedPreferences.getInstance();
       prefs.setString("settings", toJson());

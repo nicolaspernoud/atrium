@@ -39,7 +39,7 @@ Dio newDio(BaseOptions options) {
   return dio;
 }
 
-download(String url, webdav.Client client, webdav.File file,
+Future<void> download(String url, webdav.Client client, webdav.File file,
     BuildContext context) async {
   var shareToken = await ApiProvider()
       .getShareToken(url.split("://")[1].split(":")[0], file.path!);
@@ -48,7 +48,7 @@ download(String url, webdav.Client client, webdav.File file,
     ..click();
 }
 
-upload(String destPath, PlatformFile file, webdav.Client client,
+Future<void> upload(String destPath, PlatformFile file, webdav.Client client,
     Function(int, int)? onProgress, CancelToken cancelToken) async {
   var path = "$destPath${file.name}";
   client.c.options.contentType = "application/octet-stream";

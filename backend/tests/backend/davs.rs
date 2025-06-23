@@ -8,7 +8,7 @@ use quick_xml::escape::escape;
 use sha2::{Digest, Sha512};
 use std::{
     io::{self, BufWriter, Write},
-    time::Instant,
+    time::{Duration, Instant},
 };
 use tokio::fs::File;
 
@@ -408,6 +408,40 @@ async fn get_dir_search_not_existing() -> Result<()> {
         .await?;
     assert_eq!(resp.status(), 200);
     assert!(!resp.text().await?.contains("file3"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn get_dir_search_subdir() -> Result<()> {
+    let app = TestApp::spawn(None).await;
+
+    let resp = app
+        .client
+        .get(format!(
+            "http://files1.atrium.io:{}/dira/?q={}",
+            app.port, "subdira"
+        ))
+        .send()
+        .await?;
+    assert_eq!(resp.status(), 200);
+    assert!(resp.text().await?.contains("subdira"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn get_dir_search_wrong_subdir() -> Result<()> {
+    let app = TestApp::spawn(None).await;
+
+    let resp = app
+        .client
+        .get(format!(
+            "http://files1.atrium.io:{}/dirb/?q={}",
+            app.port, "subdira"
+        ))
+        .send()
+        .await?;
+    assert_eq!(resp.status(), 200);
+    assert!(!resp.text().await?.contains("subdira"));
     Ok(())
 }
 
@@ -935,19 +969,23 @@ async fn move_file_404() -> Result<()> {
 async fn lock_file() -> Result<()> {
     let app = TestApp::spawn(None).await;
     let url = format!("http://files1.atrium.io:{}/dira/file1", app.port);
+
+    // First lock should succeed
     let resp = lock(&app, &url).send().await?;
     assert_eq!(resp.status(), 200);
+    // Extract lock token from response
+    let _ = resp
+        .headers()
+        .get("lock-token")
+        .expect("Lock-Token header missing")
+        .to_str()?;
     let body = resp.text().await?;
     assert!(body.contains("<D:href>/dira/file1</D:href>"));
-    Ok(())
-}
 
-#[tokio::test]
-async fn lock_unexisting_file() -> Result<()> {
-    let app = TestApp::spawn(None).await;
-    let url = format!("http://files1.atrium.io:{}/file3", app.port);
-    let resp = lock(&app, &url).send().await?;
-    assert_eq!(resp.status(), 201);
+    // Second lock attempt should fail
+    let resp2 = lock(&app, &url).send().await?;
+    assert_eq!(resp2.status(), 423); // 423 Locked
+
     Ok(())
 }
 
@@ -955,17 +993,81 @@ async fn lock_unexisting_file() -> Result<()> {
 async fn unlock_file() -> Result<()> {
     let app = TestApp::spawn(None).await;
     let url = format!("http://files1.atrium.io:{}/dira/file1", app.port);
-    let resp = unlock(&app, &url).send().await?;
-    assert_eq!(resp.status(), 200);
+
+    // Lock first
+    let lock_resp = lock(&app, &url).send().await?;
+    let lock_token = lock_resp.headers().get("lock-token").unwrap();
+
+    // Proper unlock
+    let unlock_resp = unlock(&app, &url)
+        .header("Lock-Token", lock_token)
+        .send()
+        .await?;
+    assert_eq!(unlock_resp.status(), 204);
+
+    // Should be able to lock again after unlock
+    let relock_resp = lock(&app, &url).send().await?;
+    assert_eq!(relock_resp.status(), 200);
+
     Ok(())
 }
 
 #[tokio::test]
-async fn unlock_file_404() -> Result<()> {
+async fn lock_unlock_unexisting_file() -> Result<()> {
     let app = TestApp::spawn(None).await;
     let url = format!("http://files1.atrium.io:{}/file3", app.port);
-    let resp = unlock(&app, &url).send().await?;
-    assert_eq!(resp.status(), 404);
+
+    let resp = lock(&app, &url).send().await?;
+    assert_eq!(resp.status(), 201);
+
+    let lock_token = resp.headers().get("lock-token").unwrap();
+    let unlock_resp = unlock(&app, &url)
+        .header("Lock-Token", lock_token)
+        .send()
+        .await?;
+    assert_eq!(unlock_resp.status(), 404);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn unlock_with_invalid_token() -> Result<()> {
+    let app = TestApp::spawn(None).await;
+    let url = format!("http://files1.atrium.io:{}/dira/file1", app.port);
+
+    // Lock first
+    lock(&app, &url).send().await?;
+
+    // Try unlock with bad token
+    let resp = unlock(&app, &url)
+        .header("Lock-Token", "<invalidtoken>")
+        .send()
+        .await?;
+    assert_eq!(resp.status(), 403); // 403 Forbidden
+
+    Ok(())
+}
+
+
+#[tokio::test]
+async fn lock_expiration() -> Result<()> {
+    let app = TestApp::spawn(None).await;
+    let url = format!("http://files1.atrium.io:{}/dira/file1", app.port);
+
+    // Lock with 1 second timeout
+    let resp = lock(&app, &url)
+        .header("Timeout", "Second-1")
+        .send()
+        .await?;
+    assert_eq!(resp.status(), 200);
+
+    // Wait for lock to expire
+    tokio::time::sleep(Duration::from_secs(2)).await;
+
+    // Should be able to lock again
+    let resp2 = lock(&app, &url).send().await?;
+    assert_eq!(resp2.status(), 200);
+
     Ok(())
 }
 

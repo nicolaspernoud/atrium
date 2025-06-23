@@ -26,7 +26,7 @@ class AppsList extends StatefulWidget {
 }
 
 class _AppsListState extends State<AppsList> {
-  Future<void> openLoginDialog(_) async {
+  Future<void> openLoginDialog(dynamic _) async {
     await showLoginDialog(context, mounted);
   }
 
@@ -73,7 +73,7 @@ class _AppsListState extends State<AppsList> {
                     if (context.mounted) {
                       await showLoginDialog(context, mounted);
                     }
-                    await _getData();
+                    _getData();
                     setState(() {});
                   });
                   return const Center(child: CircularProgressIndicator());
@@ -174,7 +174,7 @@ class _AppsListState extends State<AppsList> {
                                                                         isNew:
                                                                             false),
                                                                   ));
-                                                              await _getData();
+                                                              _getData();
                                                               setState(() {});
                                                             });
                                                           },
@@ -215,7 +215,7 @@ class _AppsListState extends State<AppsList> {
                                                                 await ApiProvider()
                                                                     .deleteApp(
                                                                         app.id);
-                                                                await _getData();
+                                                                _getData();
                                                                 setState(() {});
                                                               }
                                                             });
@@ -262,14 +262,14 @@ class _AppsListState extends State<AppsList> {
                       builder: (context) =>
                           CreateEditApp(app: app, isNew: true),
                     ));
-                await _getData();
+                _getData();
                 setState(() {});
               })
           : null,
     );
   }
 
-  _getData() {
+  Null _getData() {
     apps = App().isAdmin ? ApiProvider().getApps() : ApiProvider().listApps();
   }
 }

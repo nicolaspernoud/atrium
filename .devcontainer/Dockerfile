@@ -1,4 +1,4 @@
-FROM ghcr.io/cirruslabs/flutter:3.29.3
+FROM ghcr.io/cirruslabs/flutter:stable
 
 # Install dependencies
 RUN apt update && apt install -y \

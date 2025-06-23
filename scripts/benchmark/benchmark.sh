@@ -114,7 +114,7 @@ kill $ATRIUM_PROXY_PID
 
 # Build for production
 cd ${WD}/../..
-docker build --platform linux/amd64 -t atrium_bench .
+docker build $(cat versions.env | grep -v '^#' | xargs -I {} echo --build-arg {}) --platform linux/amd64 -t atrium_bench .
 
 # Start proxy
 docker run -d --name atrium_bench \
