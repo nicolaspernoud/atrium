@@ -37,7 +37,7 @@ dependencies:
   file_picker: 10.2.0
   filesize: 2.0.1
   flutter_colorpicker: 1.1.0
-  flutter_local_notifications: 19.3.0
+  flutter_local_notifications: 19.4.0
   path_provider: 2.1.5
   pdfx: 2.9.2
   provider: 6.1.5
@@ -46,7 +46,7 @@ dependencies:
   video_player: 2.10.0
   webdav_client: 1.2.2
   webview_flutter: 4.13.0
-  webview_flutter_android: 4.7.0
+  webview_flutter_android: 4.8.2
   webview_cookie_manager_plus: 2.0.16
   path: 1.9.1
   scrollable_positioned_list: 0.3.8
