@@ -10,7 +10,6 @@ use chacha20poly1305::{
 use futures::{Stream, StreamExt};
 use headers::{ETag, LastModified};
 use rand::{TryRngCore, rngs::OsRng};
-use std::io::ErrorKind;
 use std::pin::Pin;
 use std::{fs::Metadata, io::Error, path::Path, time::SystemTime};
 use tokio::io::AsyncReadExt;
@@ -26,6 +25,8 @@ const ENCRYPTED_CHUNK_SIZE: usize = PLAIN_CHUNK_SIZE + ENCRYPTION_OVERHEAD;
 const NONCE_SIZE: usize = 19;
 
 pub const BUF_SIZE: usize = 65536;
+
+const SLICE_ERR: &str = "could not get buffer slice for decrypting";
 
 pub struct DavFile {
     file: File,
@@ -57,21 +58,19 @@ impl DavFile {
         let mtime = self.metadata.as_ref()?.modified().ok()?;
         let timestamp = mtime
             .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
+            .ok()?
             .as_millis() as u64;
         let size = self.metadata.as_ref()?.len();
-        let etag = format!(r#""{}-{}""#, timestamp, size)
-            .parse::<ETag>()
-            .unwrap();
-        let last_modified = LastModified::from(mtime);
-        Some((etag, last_modified))
+        if let Ok(etag) = format!(r#""{timestamp}-{size}""#).parse::<ETag>() {
+            let last_modified = LastModified::from(mtime);
+            Some((etag, last_modified))
+        } else {
+            None
+        }
     }
 
     pub fn len(&self) -> u64 {
-        if self.metadata.is_none() {
-            return 0;
-        };
-        let encrypted_size = self.metadata.as_ref().unwrap().len();
+        let encrypted_size = self.metadata.as_ref().map_or(0, |v| v.len());
         if self.key.is_some() {
             decrypted_size(encrypted_size)
         } else {
@@ -218,7 +217,7 @@ where
         let mut nonce = [0; NONCE_SIZE];
         OsRng
             .try_fill_bytes(&mut nonce)
-            .map_err(|e| Error::new(ErrorKind::Other, format!("error generating nonce: {}", e)))?;
+            .map_err(|e| Error::other(format!("error generating nonce: {e}")))?;
         let aead = XChaCha20Poly1305::new(self.key.as_ref().into());
         let mut stream_encryptor = stream::EncryptorBE32::from_aead(aead, nonce.as_ref().into());
 
@@ -228,7 +227,7 @@ where
 
         loop {
             let mut buffer = Vec::with_capacity(PLAIN_CHUNK_SIZE);
-            let mut chunked_reader = reader.take(PLAIN_CHUNK_SIZE.try_into().unwrap());
+            let mut chunked_reader = reader.take(PLAIN_CHUNK_SIZE as u64);
 
             let read_count = chunked_reader.read_to_end(&mut buffer).await?;
             total_count += read_count;
@@ -239,22 +238,12 @@ where
             if read_count == PLAIN_CHUNK_SIZE {
                 let ciphertext = stream_encryptor
                     .encrypt_next(buffer.as_slice())
-                    .map_err(|e| {
-                        Error::new(
-                            ErrorKind::Other,
-                            format!("error encrypting plaintext: {}", e),
-                        )
-                    })?;
+                    .map_err(|e| Error::other(format!("error encrypting plaintext: {e}")))?;
                 self.inner.write_all(&ciphertext).await?;
             } else {
                 let ciphertext = stream_encryptor
-                    .encrypt_last(&buffer[..read_count])
-                    .map_err(|e| {
-                        Error::new(
-                            ErrorKind::Other,
-                            format!("error encrypting plaintext: {}", e),
-                        )
-                    })?;
+                    .encrypt_last(buffer.get(..read_count).ok_or(Error::other(SLICE_ERR))?)
+                    .map_err(|e| Error::other(format!("error encrypting plaintext: {e}")))?;
                 self.inner.write_all(&ciphertext).await?;
                 break;
             }
@@ -276,7 +265,7 @@ where
 
         loop {
             let mut buffer = Vec::with_capacity(ENCRYPTED_CHUNK_SIZE);
-            let mut reader = self.inner.take(ENCRYPTED_CHUNK_SIZE.try_into().unwrap());
+            let mut reader = self.inner.take(ENCRYPTED_CHUNK_SIZE as u64);
 
             let read_count = reader.read_to_end(&mut buffer).await?;
             total_count += read_count;
@@ -287,24 +276,14 @@ where
             if read_count == ENCRYPTED_CHUNK_SIZE {
                 let plaintext = stream_decryptor
                     .decrypt_next(buffer.as_slice())
-                    .map_err(|e| {
-                        Error::new(
-                            ErrorKind::Other,
-                            format!("error decrypting ciphertext: {}", e),
-                        )
-                    })?;
+                    .map_err(|e| Error::other(format!("error decrypting ciphertext: {e}")))?;
                 writer.write_all(&plaintext).await?;
             } else if read_count == 0 {
                 break;
             } else {
                 let plaintext = stream_decryptor
-                    .decrypt_last(&buffer[..read_count])
-                    .map_err(|e| {
-                        Error::new(
-                            ErrorKind::Other,
-                            format!("error decrypting ciphertext: {}", e),
-                        )
-                    })?;
+                    .decrypt_last(buffer.get(..read_count).ok_or(Error::other(SLICE_ERR))?)
+                    .map_err(|e| Error::other(format!("error decrypting ciphertext: {e}")))?;
                 writer.write_all(&plaintext).await?;
                 break;
             }
@@ -322,7 +301,7 @@ where
 
              loop {
                 let mut buffer = Vec::with_capacity(ENCRYPTED_CHUNK_SIZE);
-                let mut reader = self.inner.take(ENCRYPTED_CHUNK_SIZE.try_into().unwrap());
+                let mut reader = self.inner.take(ENCRYPTED_CHUNK_SIZE as u64);
 
                 let read_count = reader.read_to_end(&mut buffer).await?;
 
@@ -333,16 +312,16 @@ where
                     let plaintext = match stream_decryptor
                         .decrypt_next(buffer.as_slice()) {
                             Ok(plaintext) => plaintext,
-                            Err(e) => {yield Err(Error::new(ErrorKind::Other, format!("error decrypting plaintext: {}", e)));break;}
+                            Err(e) => {yield Err(Error::other(format!("error decrypting plaintext: {e}")));break;}
                         };
                     yield Ok(plaintext);
                 } else if read_count == 0 {
                     break;
                 } else {
                     let plaintext = match stream_decryptor
-                    .decrypt_last(&buffer[..read_count]){
+                    .decrypt_last(buffer.get(..read_count).ok_or(Error::other(SLICE_ERR))?){
                             Ok(plaintext) => plaintext,
-                            Err(e) => {yield Err(Error::new(ErrorKind::Other, format!("error decrypting plaintext: {}", e)));break;}
+                            Err(e) => {yield Err(Error::other(format!("error decrypting plaintext: {e}")));break;}
                         };
                         yield Ok(plaintext);
                      break;
@@ -373,7 +352,7 @@ where
                     break;
                 }
                 let mut buffer = Vec::with_capacity(ENCRYPTED_CHUNK_SIZE);
-                let mut reader = self.inner.take(ENCRYPTED_CHUNK_SIZE.try_into().unwrap());
+                let mut reader = self.inner.take(ENCRYPTED_CHUNK_SIZE as u64);
                 let read_count = reader.read_to_end(&mut buffer).await?;
                 self.inner = reader.into_inner();
                 buffer.truncate(read_count);
@@ -383,7 +362,7 @@ where
                         .decrypt(chunked_position.active_chunk_counter as u32, false, buffer.as_slice()) {
                             Ok(plaintext) => plaintext,
                             Err(e) => {
-                                yield Err(Error::new(ErrorKind::Other, format!("error decrypting ciphertext: {}", e)));
+                                yield Err(Error::other(format!("error decrypting ciphertext: {e}")));
                                 break;
                             }
                         };
@@ -408,9 +387,9 @@ where
                     break;
                 } else {
                     let mut plaintext = match stream_decryptor
-                    .decrypt(chunked_position.active_chunk_counter as u32, true,&buffer[..read_count]){
+                    .decrypt(chunked_position.active_chunk_counter as u32, true, buffer.get(..read_count).ok_or(Error::other(SLICE_ERR))?){
                             Ok(plaintext) => plaintext,
-                            Err(e) => {yield Err(Error::new(ErrorKind::Other, format!("error decrypting ciphertext: {}", e)));break;}
+                            Err(e) => {yield Err(Error::other(format!("error decrypting ciphertext: {e}")));break;}
                         };
 
                         if start != 0 {

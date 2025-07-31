@@ -58,7 +58,11 @@ fn corresponding_disk_info(
     mut disksinfo: Vec<DiskInfo>,
     path: PathBuf,
 ) -> Result<DiskInfo, &'static str> {
-    disksinfo.sort_by(|a, b| b.mount_point.partial_cmp(&a.mount_point).unwrap());
+    disksinfo.sort_by(|a, b| {
+        b.mount_point
+            .partial_cmp(&a.mount_point)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     disksinfo
         .into_iter()
         .find(|disk| {
@@ -85,7 +89,7 @@ pub async fn system_info(_user: UserToken) -> Result<Json<SystemInfo>, ErrRespon
                 .with_memory(MemoryRefreshKind::nothing().with_ram())
                 .with_cpu(CpuRefreshKind::nothing().with_cpu_usage()),
         );
-        Ok(SystemInfo {
+        Ok::<SystemInfo, ErrResponse>(SystemInfo {
             total_memory: sys.total_memory(),
             used_memory: sys.used_memory(),
             cpu_usage: sys.global_cpu_usage(),

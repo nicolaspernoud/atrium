@@ -5,7 +5,6 @@ use crate::{
     users::{ADMINS_ROLE, User, UserInfo, create_user_cookie, user_to_token},
     utils::select_entries_by_value,
 };
-use anyhow::Result;
 use axum::{
     body::Body,
     extract::{ConnectInfo, Query, State},
@@ -72,26 +71,39 @@ pub async fn openid_configuration(cfg: &mut Option<OpenIdConfig>) {
             });
     }
 }
-async fn openid_configuration_internal(cfg: &mut Option<OpenIdConfig>) -> Result<()> {
+async fn openid_configuration_internal(cfg: &mut Option<OpenIdConfig>) -> Result<(), ErrResponse> {
+    let cfg = cfg
+        .as_mut()
+        .ok_or(ErrResponse::S500("no open id configuration"))?;
     let url = cfg
-        .as_ref()
-        .ok_or(anyhow::Error::msg("no open id configuration"))?
         .openid_configuration_url
         .as_ref()
-        .ok_or(anyhow::Error::msg("no open id configuration url"))?;
+        .ok_or(ErrResponse::S500("no open id configuration url"))?;
 
-    // Unwrap is ok since we tested before that the option was Some...
-    let client = HyperOAuth2Client::new(cfg.as_ref().unwrap().insecure_skip_verify);
-    let req = Request::builder().uri(url).body(Body::empty())?;
-    let res = client.request(req).await?;
+    let client = HyperOAuth2Client::new(cfg.insecure_skip_verify);
+    let req = Request::builder()
+        .uri(url)
+        .body(Body::empty())
+        .map_err(|_| ErrResponse::S500("could not get build OAuth2 client"))?;
+    let res = client
+        .request(req)
+        .await
+        .map_err(|_| ErrResponse::S500("error communicating with OpenID configuration endpoint"))?;
 
-    let body = res.into_body().collect().await?.aggregate();
-    let urls: OpenIdUrls = serde_json::from_reader(body.reader())?;
+    let body = res
+        .into_body()
+        .collect()
+        .await
+        .map_err(|_| {
+            ErrResponse::S500("error getting response from OpenID configuration endpoint")
+        })?
+        .aggregate();
+    let urls: OpenIdUrls = serde_json::from_reader(body.reader())
+        .map_err(|_| ErrResponse::S500("error parsing OpenID configuration endpoint response"))?;
 
-    // Unwrap is ok since we tested before that the option was Some...
-    cfg.as_mut().unwrap().auth_url = urls.authorization_endpoint;
-    cfg.as_mut().unwrap().token_url = urls.token_endpoint;
-    cfg.as_mut().unwrap().userinfo_url = urls.userinfo_endpoint;
+    cfg.auth_url = urls.authorization_endpoint;
+    cfg.token_url = urls.token_endpoint;
+    cfg.userinfo_url = urls.userinfo_endpoint;
     Ok(())
 }
 
@@ -138,18 +150,19 @@ pub async fn oauth2_login(
     State(config): State<ConfigState>,
     jar: CookieJar,
 ) -> Result<impl IntoResponse, ErrResponse> {
-    if config.openid_config.is_none() {
-        return Err(ErrResponse::S500("OpenID configuration is not available"));
-    }
+    let openid_config = config
+        .openid_config
+        .as_ref()
+        .ok_or(ErrResponse::S500("OpenID configuration is not available"))?;
     let client = oauth_client(
-        config.openid_config.as_ref().unwrap().clone(),
+        openid_config.clone(),
         format!("{}/auth/oauth2callback", config.full_domain()),
     )?;
 
     let mut client = client.authorize_url(CsrfToken::new_random);
 
-    for s in &config.as_ref().openid_config.as_ref().unwrap().scopes {
-        client = client.add_scope(Scope::new(s.to_string()));
+    for s in &openid_config.scopes {
+        client = client.add_scope(Scope::new(s.clone()));
     }
 
     let (auth_url, csrf_token) = client.url();
@@ -187,17 +200,19 @@ pub async fn oauth2_callback(
     State(config): State<ConfigState>,
     Host(hostname): Host,
 ) -> Result<(PrivateCookieJar, Redirect), ErrResponse> {
-    if config.openid_config.is_none() {
-        return Err(ErrResponse::S500("OpenID configuration is not available"));
-    }
-    let oidc_config = config.openid_config.as_ref().unwrap();
+    let oidc_config = config
+        .openid_config
+        .as_ref()
+        .ok_or(ErrResponse::S500("OpenID configuration is not available"))?;
     let oauth_client = oauth_client(
         oidc_config.clone(),
         format!("{}/auth/oauth2callback", config.full_domain()),
     )?;
 
     // Check the state
-    if jar.get(STATE_COOKIE).is_none() || jar.get(STATE_COOKIE).unwrap().value() != query.state {
+    if jar.get(STATE_COOKIE).is_none()
+        || jar.get(STATE_COOKIE).map_or("bad-state", |c| c.value()) != query.state
+    {
         return Err(ErrResponse::S403("OAuth2 state does not match"));
     }
 
@@ -241,7 +256,12 @@ pub async fn oauth2_callback(
     let user_roles = user_data
         .member_of
         .iter()
-        .map(|e| e.split(',').collect::<Vec<&str>>()[0].trim_start_matches("CN="))
+        .map(|e| {
+            e.split(',')
+                .next()
+                .expect("first entry")
+                .trim_start_matches("CN=")
+        })
         .collect();
     let mapped_roles = select_entries_by_value(&oidc_config.roles_map.0, user_roles);
 

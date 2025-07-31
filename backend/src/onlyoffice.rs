@@ -78,7 +78,7 @@ pub async fn onlyoffice_page(
         let title = config
             .onlyoffice_config
             .as_ref()
-            .unwrap()
+            .ok_or(ErrResponse::S500("could not get onlyoffice configuration"))?
             .title
             .as_ref()
             .unwrap_or(&"AtriumOffice".to_owned())
@@ -96,10 +96,10 @@ pub async fn onlyoffice_page(
                 .unwrap_or_default(),
         )
         .map_err(|_| QUERY_ERROR)?;
-        let url = format!("{}?token={}", file, share_token);
+        let url = format!("{file}?token={share_token}");
 
         let mut hasher = Sha256::new();
-        hasher.update(format!("{}{}", file, mtime));
+        hasher.update(format!("{file}{mtime}"));
         let key: String = format!("{:X}", hasher.finalize());
 
         let mut ooconf = OnlyOfficeConfiguration {
@@ -130,7 +130,7 @@ pub async fn onlyoffice_page(
                 config
                     .onlyoffice_config
                     .as_ref()
-                    .unwrap()
+                    .ok_or(ErrResponse::S500("could not get onlyoffice configuration"))?
                     .jwt_secret
                     .as_ref(),
             ),
@@ -178,9 +178,13 @@ pub async fn onlyoffice_callback(
         let client: Client<_, Body> = Client::builder(TokioExecutor::new()).build(https);
 
         // GET the binary content from url
-        let request = Request::get(payload.url.unwrap())
-            .body(Body::empty())
-            .map_err(|_| ErrResponse::S500("could not create GET request to OnlyOffice server"))?;
+        let request = Request::get(
+            payload
+                .url
+                .ok_or(ErrResponse::S500("could not get url from payload"))?,
+        )
+        .body(Body::empty())
+        .map_err(|_| ErrResponse::S500("could not create GET request to OnlyOffice server"))?;
         let response = client
             .request(request)
             .await
@@ -195,7 +199,7 @@ pub async fn onlyoffice_callback(
         // PUT the content on the ressource gotten from the query
         let request = Request::builder()
             .method(Method::PUT)
-            .uri(query.unwrap())
+            .uri(query.ok_or(ErrResponse::S500("could not get uri from query"))?)
             .header(CONTENT_TYPE, "application/octet-stream")
             .body(Body::new(response.into_body()))
             .map_err(|_| ErrResponse::S500("could not create PUT request to atrium file server"))?;

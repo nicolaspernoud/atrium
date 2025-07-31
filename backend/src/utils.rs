@@ -81,11 +81,11 @@ pub fn query_pairs_or_error(
 
 pub fn extract_query_pairs(query: &str) -> HashMap<&str, &str> {
     let mut ooq = std::collections::HashMap::new();
-    let query: Vec<&str> = query.split('&').collect();
-    for keyvalue in query {
-        let kv: Vec<&str> = keyvalue.split('=').collect();
-        let value = if kv.len() >= 2 { kv[1] } else { "" };
-        ooq.insert(kv[0], value);
+    for keyvalue in query.split('&') {
+        let mut kv = keyvalue.splitn(2, '=');
+        let key = kv.next().unwrap_or("");
+        let value = kv.next().unwrap_or("");
+        ooq.insert(key, value);
     }
     ooq
 }

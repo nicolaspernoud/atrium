@@ -2,11 +2,11 @@ use crate::{
     apps::{App, AppWithUri},
     appstate::{ConfigMap, ConfigState},
     davs::model::Dav,
+    errors::Error,
     oauth2::{RolesMap, openid_configuration},
     users::User,
     utils::{is_default, option_string_trim, string_trim},
 };
-use anyhow::Result;
 use axum::extract::{FromRef, FromRequestParts, OptionalFromRequestParts};
 use http::request::Parts;
 use hyper::StatusCode;
@@ -114,13 +114,13 @@ pub struct Config {
 }
 
 impl Config {
-    pub async fn from_file(filepath: &str) -> Result<Self> {
+    pub async fn from_file(filepath: &str) -> Result<Self, Error> {
         let data = tokio::fs::read_to_string(filepath).await?;
         let config = serde_yaml_ng::from_str::<Config>(&data)?;
         Ok(config)
     }
 
-    pub async fn to_file(&self, filepath: &str) -> Result<()> {
+    pub async fn to_file(&self, filepath: &str) -> Result<(), Error> {
         let contents = serde_yaml_ng::to_string::<Config>(self)?;
         tokio::fs::write(filepath, contents).await?;
         Ok(())
@@ -130,8 +130,10 @@ impl Config {
         mut self,
         filepath: &str,
     ) -> Result<(), (StatusCode, &'static str)> {
-        self.apps.sort_by(|a, b| a.id.partial_cmp(&b.id).unwrap());
-        self.davs.sort_by(|a, b| a.id.partial_cmp(&b.id).unwrap());
+        self.apps
+            .sort_by(|a, b| a.id.partial_cmp(&b.id).unwrap_or(std::cmp::Ordering::Equal));
+        self.davs
+            .sort_by(|a, b| a.id.partial_cmp(&b.id).unwrap_or(std::cmp::Ordering::Equal));
         self.to_file(filepath).await.map_err(|_| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -186,7 +188,7 @@ impl Config {
     }
 }
 
-pub async fn load_config(config_file: &str) -> Result<(ConfigState, ConfigMap), anyhow::Error> {
+pub async fn load_config(config_file: &str) -> Result<(ConfigState, ConfigMap), Error> {
     let mut config = Config::from_file(config_file).await?;
     // if the cookie encryption key is not present, generate it and store it
     if config.cookie_key.is_none() {
@@ -230,7 +232,13 @@ pub async fn load_config(config_file: &str) -> Result<(ConfigState, ConfigMap), 
     if config.single_proxy {
         hashmap.insert(
             config.hostname.clone(),
-            app_to_host_type(&config.apps[0], port),
+            app_to_host_type(
+                config
+                    .apps
+                    .first()
+                    .ok_or(Error("configuration must have at least an app"))?,
+                port,
+            ),
         );
     }
     // Insert apps subdomains

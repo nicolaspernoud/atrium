@@ -1,6 +1,3 @@
-extern crate headers;
-extern crate http;
-
 use headers::{Header, HeaderName, HeaderValue};
 
 pub struct XSRFToken(pub String);

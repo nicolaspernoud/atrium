@@ -1,5 +1,5 @@
 use reqwest::Client;
-use std::{fs, net::SocketAddr, sync::Once};
+use std::{fs, io, net::SocketAddr, sync::Once};
 use tokio::{net::TcpListener, sync::broadcast, task::JoinHandle};
 use tracing::info;
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
@@ -13,8 +13,6 @@ use atrium::{
     users::User,
     utils::random_string,
 };
-
-use anyhow::Result;
 
 pub struct TestApp {
     pub client: Client,
@@ -372,7 +370,7 @@ pub fn create_default_config(
     }
 }
 
-fn create_test_tree(base: &str) -> Result<()> {
+fn create_test_tree(base: &str) -> Result<(), io::Error> {
     for dir in &["dir1", "dir2", "dir3"] {
         fs::create_dir_all(format!("./data/{base}/{dir}/dira"))?;
         fs::create_dir_all(format!("./data/{base}/{dir}/dirb"))?;

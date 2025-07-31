@@ -16,7 +16,6 @@ use axum::{
 };
 use axum_extra::extract::Host;
 use http::Method;
-use hyper::StatusCode;
 use std::{net::SocketAddr, sync::LazyLock};
 use tracing::info;
 
@@ -27,9 +26,9 @@ static UNLOGGED_METHODS: LazyLock<[Method; 5]> = LazyLock::new(|| {
     [
         Method::OPTIONS,
         Method::HEAD,
-        Method::from_bytes(b"LOCK").unwrap(),
-        Method::from_bytes(b"UNLOCK").unwrap(),
-        Method::from_bytes(b"PROPFIND").unwrap(),
+        Method::from_bytes(b"LOCK").expect("infallible"),
+        Method::from_bytes(b"UNLOCK").expect("infallible"),
+        Method::from_bytes(b"PROPFIND").expect("infallible"),
     ]
 });
 
@@ -58,7 +57,7 @@ pub async fn webdav_handler(
             tokio::spawn(async move {
                 info!("FILE ACCESS DENIED: {log_str}");
             });
-            return access_denied_resp;
+            return *access_denied_resp;
         }
     }
 
@@ -67,19 +66,10 @@ pub async fn webdav_handler(
         _ => panic!("Service is not a dav !"),
     };
 
-    let query_str = req.uri().query().unwrap_or_default().to_owned();
-    match WEBDAV_SERVER.call(req, addr, &dav).await {
-        Ok(response) => {
-            if !UNLOGGED_METHODS.contains(&method) && query_str != "diskusage" {
-                tokio::spawn(async move {
-                    info!("FILE ACCESS: {log_str}");
-                });
-            }
-            response
-        }
-        Err(_) => Response::builder()
-            .status(StatusCode::INTERNAL_SERVER_ERROR)
-            .body(Body::empty())
-            .unwrap(),
-    }
+    if !UNLOGGED_METHODS.contains(&method) && req.uri().query().is_none_or(|q| q != "diskusage") {
+        tokio::spawn(async move {
+            info!("FILE ACCESS: {log_str}");
+        });
+    };
+    WEBDAV_SERVER.call(req, addr, &dav).await
 }

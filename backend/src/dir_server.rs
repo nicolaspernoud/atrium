@@ -20,7 +20,7 @@ pub async fn dir_handler(
     State(config): State<ConfigState>,
     req: Request<Body>,
 ) -> Result<impl IntoResponse, Response<Body>> {
-    authorized_or_redirect_to_login(&app, &user, &hostname, &req, &config)?;
+    authorized_or_redirect_to_login(&app, &user, &hostname, &req, &config).map_err(|b| *b)?;
 
     let app = match app {
         HostType::StaticApp(app) => app,
@@ -29,9 +29,9 @@ pub async fn dir_handler(
 
     match ServeDir::new(app.target).oneshot(req).await {
         Ok(res) => Ok(res),
-        Err(err) => Err(Response::builder()
+        Err(_) => Err(Response::builder()
             .status(StatusCode::INTERNAL_SERVER_ERROR)
-            .body(format!("Something went wrong: {}", err).into())
-            .unwrap()),
+            .body("could not serve dir".into())
+            .expect("infallible")),
     }
 }

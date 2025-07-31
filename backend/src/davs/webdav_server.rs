@@ -58,10 +58,7 @@ use std::{
     sync::{Arc, Mutex},
     time::SystemTime,
 };
-use tokio::{
-    fs,
-    io::{self, AsyncWrite},
-};
+use tokio::{fs, io::AsyncWrite};
 use tokio_util::io::StreamReader;
 use tracing::{debug, error};
 use uuid::Uuid;
@@ -94,32 +91,30 @@ impl WebdavServer {
         }
     }
 
-    pub async fn call(
-        &self,
-        req: Request,
-        addr: SocketAddr,
-        dav: &Dav,
-    ) -> Result<Response, hyper::Error> {
+    pub async fn call(&self, req: Request, addr: SocketAddr, dav: &Dav) -> Response {
         let method = req.method().clone();
         let uri = req.uri().clone();
 
-        let res = match self.handle(req, dav).await {
+        match self.handle(req, dav).await {
             Ok(res) => {
-                let status = res.status().as_u16();
-                debug!(r#"{} "{} {}" - {}"#, addr.ip(), method, uri, status,);
+                debug!(r#"{} "{} {}" - {}"#, addr.ip(), method, uri, res.status());
                 res
             }
             Err(err) => {
                 let mut res = Response::default();
                 let status = StatusCode::INTERNAL_SERVER_ERROR;
                 *res.status_mut() = status;
-                let status = status.as_u16();
-                error!(r#"{} "{} {}" - {} {}"#, addr.ip(), method, uri, status, err);
+                error!(
+                    r#"{} "{} {}" - {} {}"#,
+                    addr.ip(),
+                    method,
+                    uri,
+                    res.status(),
+                    err
+                );
                 res
             }
-        };
-
-        Ok(res)
+        }
     }
 
     pub async fn handle(&self, req: Request, dav: &Dav) -> BoxResult<Response> {
@@ -310,9 +305,7 @@ impl WebdavServer {
 
         let body_stream = body.into_data_stream();
 
-        let body_with_io_error = body_stream.map(|result| {
-            result.map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))
-        });
+        let body_with_io_error = body_stream.map(|result| result.map_err(std::io::Error::other));
 
         let mut body_reader = StreamReader::new(body_with_io_error);
 
@@ -330,7 +323,7 @@ impl WebdavServer {
                     .unwrap_or_default(),
                 parts.uri
             );
-            let _ = fs::remove_file(path).await;
+            drop(fs::remove_file(path).await);
             return Ok(());
         };
 
@@ -434,8 +427,7 @@ impl WebdavServer {
             HeaderValue::from_str(&format!(
                 "attachment; filename=\"{}.zip\"",
                 encode_uri(filename),
-            ))
-            .unwrap(),
+            ))?,
         );
         res.headers_mut()
             .insert(CONTENT_TYPE, HeaderValue::from_static("application/zip"));
@@ -509,18 +501,15 @@ impl WebdavServer {
 
         let filename = get_file_name(path)?;
         if inline_file {
-            res.headers_mut().insert(
-                CONTENT_DISPOSITION,
-                HeaderValue::from_str("inline").unwrap(),
-            );
+            res.headers_mut()
+                .insert(CONTENT_DISPOSITION, HeaderValue::from_str("inline")?);
         } else {
             res.headers_mut().insert(
                 CONTENT_DISPOSITION,
                 HeaderValue::from_str(&format!(
                     "attachment; filename=\"{}\"",
                     encode_uri(filename),
-                ))
-                .unwrap(),
+                ))?,
             );
         }
 
@@ -541,7 +530,7 @@ impl WebdavServer {
                 res.headers_mut()
                     .insert(CONTENT_RANGE, content_range.parse()?);
                 res.headers_mut()
-                    .insert(CONTENT_LENGTH, format!("{}", part_size).parse()?);
+                    .insert(CONTENT_LENGTH, format!("{part_size}").parse()?);
                 if head_only {
                     return Ok(());
                 }
@@ -550,11 +539,11 @@ impl WebdavServer {
             } else {
                 *res.status_mut() = StatusCode::RANGE_NOT_SATISFIABLE;
                 res.headers_mut()
-                    .insert(CONTENT_RANGE, format!("bytes */{}", size).parse()?);
+                    .insert(CONTENT_RANGE, format!("bytes */{size}").parse()?);
             }
         } else {
             res.headers_mut()
-                .insert(CONTENT_LENGTH, format!("{}", size).parse()?);
+                .insert(CONTENT_LENGTH, format!("{size}").parse()?);
             if head_only {
                 return Ok(());
             }
@@ -587,7 +576,7 @@ impl WebdavServer {
         let mut paths = vec![
             self.to_pathitem(path, base_path, directory, allow_symlinks, &key)
                 .await?
-                .unwrap(),
+                .ok_or(Error::other("no paths"))?,
         ];
         if depth != 0 {
             if let Ok(child) = self
@@ -675,16 +664,16 @@ impl WebdavServer {
             let timeout_resp = if timeout_secs == i64::MAX {
                 "Infinite".to_string()
             } else {
-                format!("Second-{}", timeout_secs)
+                format!("Second-{timeout_secs}")
             };
             res.headers_mut().insert(
                 CONTENT_TYPE,
                 HeaderValue::from_static("application/xml; charset=utf-8"),
             );
             res.headers_mut()
-                .insert("lock-token", format!("<{}>", token).parse().unwrap());
+                .insert("lock-token", format!("<{token}>").parse()?);
             res.headers_mut()
-                .insert("Timeout", HeaderValue::from_str(&timeout_resp).unwrap());
+                .insert("Timeout", HeaderValue::from_str(&timeout_resp)?);
 
             *res.body_mut() = Body::from(format!(
                 r#"<?xml version="1.0" encoding="utf-8"?>
@@ -807,7 +796,7 @@ impl WebdavServer {
                 }
                 Ok(Event::Text(e)) => {
                     if in_lastmodified_tag {
-                        lastmodified_value = e.unescape()?.into_owned();
+                        lastmodified_value = e.decode()?.into_owned();
                         break;
                     }
                 }
@@ -883,7 +872,7 @@ impl WebdavServer {
         key: &Option<[u8; 32]>,
     ) -> BoxResult<Option<PathItem>> {
         let path = path.as_ref();
-        let rel_path = path.strip_prefix(&base_path).unwrap();
+        let rel_path = path.strip_prefix(&base_path).unwrap_or(path);
         let (meta, meta2) = tokio::join!(fs::metadata(&path), fs::symlink_metadata(&path));
         let (meta, meta2) = (meta?, meta2?);
         let is_symlink = meta2.is_symlink();
@@ -951,7 +940,13 @@ impl WebdavServer {
         }
 
         // Fails if collection parent does not exist
-        if dest.path().parent().is_none() || !dest.path().parent().unwrap().exists() {
+        if dest.path().parent().is_none()
+            || !dest
+                .path()
+                .parent()
+                .ok_or(Error::other("no parent"))?
+                .exists()
+        {
             *res.status_mut() = StatusCode::CONFLICT;
             return Ok(());
         }
@@ -991,7 +986,7 @@ impl WebdavServer {
         } else {
             // if the source is a file but the destination is a directory, alter the destination
             if path.is_file() && dest.is_dir() {
-                dest.push(path.file_name().unwrap().into());
+                dest.push(path.file_name().ok_or(Error::other("no path"))?.into());
             }
             if path.is_dir() && dest.is_file() && dest.exists() {
                 *res.status_mut() = StatusCode::NO_CONTENT;
@@ -1035,9 +1030,11 @@ impl WebdavServer {
             // if it's a file we can overwrite it.
             if meta.is_file() {
                 if dest_is_dir_or_to_be {
-                    let destfile = dest.join(source.file_name().ok_or_else(|| {
-                        Error::new(io::ErrorKind::Other, "could not extract file name")
-                    })?);
+                    let destfile = dest.join(
+                        source
+                            .file_name()
+                            .ok_or_else(|| Error::other("could not extract file name"))?,
+                    );
                     return match fs::copy(source, destfile).await {
                         Ok(_) => Ok(()),
                         Err(e) => {
@@ -1111,7 +1108,7 @@ impl PathItem {
             .unwrap()
             .to_rfc2822();
         mtime.truncate(mtime.len() - 6);
-        let mtime = format!("{} GMT", mtime);
+        let mtime = format!("{mtime} GMT");
         let mut href = encode_uri(&format!("{}{}", prefix, &self.name));
         if self.is_dir() && !href.ends_with('/') {
             href.push('/');
@@ -1120,17 +1117,16 @@ impl PathItem {
         match self.path_type {
             PathType::Dir | PathType::SymlinkDir => format!(
                 r#"<D:response>
-<D:href>{}</D:href>
+<D:href>{href}</D:href>
 <D:propstat>
 <D:prop>
-<D:displayname>{}</D:displayname>
-<D:getlastmodified>{}</D:getlastmodified>
+<D:displayname>{displayname}</D:displayname>
+<D:getlastmodified>{mtime}</D:getlastmodified>
 <D:resourcetype><D:collection/></D:resourcetype>
 </D:prop>
 <D:status>HTTP/1.1 200 OK</D:status>
 </D:propstat>
-</D:response>"#,
-                href, displayname, mtime
+</D:response>"#
             ),
             PathType::File | PathType::SymlinkFile => format!(
                 r#"<D:response>
@@ -1170,8 +1166,7 @@ enum PathType {
 
 fn to_timestamp(time: &SystemTime) -> u64 {
     time.duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as u64
+        .map_or(0, |t| t.as_millis()) as u64
 }
 
 fn normalize_path<P: AsRef<Path>>(path: P) -> String {
@@ -1201,9 +1196,8 @@ fn res_multistatus(res: &mut Response, content: &str) {
     *res.body_mut() = Body::from(format!(
         r#"<?xml version="1.0" encoding="utf-8" ?>
 <D:multistatus xmlns:D="DAV:">
-{}
+{content}
 </D:multistatus>"#,
-        content,
     ));
 }
 
@@ -1255,11 +1249,11 @@ fn parse_range(headers: &HeaderMap<HeaderValue>) -> Option<RangeValue> {
     let range_hdr = headers.get(RANGE)?;
     let hdr = range_hdr.to_str().ok()?;
     let mut sp = hdr.splitn(2, '=');
-    let units = sp.next().unwrap();
+    let units = sp.next()?;
     if units == "bytes" {
         let range = sp.next()?;
         let mut sp_range = range.splitn(2, '-');
-        let start: u64 = sp_range.next().unwrap().parse().ok()?;
+        let start: u64 = sp_range.next()?.parse().ok()?;
         let end: Option<u64> = if let Some(end) = sp_range.next() {
             if end.is_empty() {
                 None
@@ -1314,7 +1308,7 @@ pub fn encode_uri(v: &str) -> String {
     parts.join("/")
 }
 
-pub fn decode_uri(v: &str) -> Option<Cow<str>> {
+pub fn decode_uri(v: &str) -> Option<Cow<'_, str>> {
     percent_encoding::percent_decode(v.as_bytes())
         .decode_utf8()
         .ok()

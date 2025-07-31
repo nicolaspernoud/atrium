@@ -23,16 +23,12 @@ pub fn city_from_ip(addr: SocketAddr, reader: OptionalMaxMindReader) -> String {
     let location = match ip {
         // Replace with https://doc.rust-lang.org/std/net/enum.IpAddr.html#method.is_global when stable
         V4(ip) if ip.is_private() => LOCAL_NETWORK.to_owned(),
-        V6(ip) if ip.to_ipv4_mapped().is_some() && ip.to_ipv4_mapped().unwrap().is_private() => {
-            LOCAL_NETWORK.to_owned()
-        }
+        V6(ip) if ip.to_ipv4_mapped().is_some_and(|ip| ip.is_private()) => LOCAL_NETWORK.to_owned(),
         _ if ip.is_loopback() => LOCALHOST.to_owned(), // Does not work for ipv4 mapped addresses
-        V6(ip) if ip.to_ipv4_mapped().is_some() && ip.to_ipv4_mapped().unwrap().is_loopback() => {
-            LOCALHOST.to_owned()
-        }
+        V6(ip) if ip.to_ipv4_mapped().is_some_and(|ip| ip.is_loopback()) => LOCALHOST.to_owned(),
         _ => {
             if let Some(reader) = reader {
-                match reader.lookup::<geoip2::City>(ip) {
+                match reader.lookup::<geoip2::City<'_>>(ip) {
                     Ok(Some(city)) => format!(
                         "{}, {}",
                         city.city.map_or(UNKNOWN_CITY, |c| c
@@ -49,7 +45,7 @@ pub fn city_from_ip(addr: SocketAddr, reader: OptionalMaxMindReader) -> String {
             }
         }
     };
-    format!("{location} ({})", ip)
+    format!("{location} ({ip})")
 }
 
 #[tracing::instrument(name = "Request", level = "debug", skip_all, fields(ip=%addr, uri = %req.uri(), method = %req.method()))]
@@ -167,12 +163,7 @@ where
     let bytes = body
         .collect()
         .await
-        .map_err(|e| {
-            (
-                StatusCode::BAD_REQUEST,
-                format!("failed to read body: {}", e),
-            )
-        })?
+        .map_err(|e| (StatusCode::BAD_REQUEST, format!("failed to read body: {e}")))?
         .to_bytes();
 
     let body_str = std::str::from_utf8(&bytes).unwrap_or("NOT UTF-8 (probably binary)");

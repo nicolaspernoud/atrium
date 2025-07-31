@@ -84,11 +84,9 @@ impl IntoResponse for ProxyError {
         match self {
             ProxyError::ForwardHeaderError => StatusCode::BAD_GATEWAY.into_response(),
             ProxyError::UpgradeError(s) => (StatusCode::BAD_GATEWAY, s).into_response(),
-            ProxyError::ClientError(s) => (
-                StatusCode::BAD_GATEWAY,
-                format!("Proxy client error: {}", s),
-            )
-                .into_response(),
+            ProxyError::ClientError(s) => {
+                (StatusCode::BAD_GATEWAY, format!("Proxy client error: {s}")).into_response()
+            }
             _ => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
         }
     }
@@ -108,35 +106,31 @@ fn remove_hop_headers(headers: &mut HeaderMap) {
 }
 
 fn get_upgrade_type(headers: &HeaderMap) -> Option<String> {
-    if headers.get(&CONNECTION_HEADER).is_some_and(|value| {
-        value
-            .to_str()
-            .unwrap()
-            .split(',')
-            .any(|e| e.trim() == UPGRADE_HEADER)
-    }) {
-        if let Some(upgrade_value) = headers.get(&UPGRADE_HEADER) {
-            debug!(
-                "Found upgrade header with value: {}",
-                upgrade_value.to_str().unwrap().to_owned()
-            );
-            return Some(upgrade_value.to_str().unwrap().to_lowercase());
-        }
+    if let Some(value) = headers.get(&CONNECTION_HEADER)
+        && let Ok(value) = value.to_str()
+        && value.split(',').any(|e| e.trim() == UPGRADE_HEADER)
+        && let Some(upgrade_value) = headers.get(&UPGRADE_HEADER)
+        && let Ok(upgrade_value) = upgrade_value.to_str()
+    {
+        debug!("Found upgrade header with value: {}", upgrade_value);
+        return Some(upgrade_value.to_lowercase());
     }
-
     None
 }
 
 fn remove_connection_headers(headers: &mut HeaderMap) {
-    if headers.get(&CONNECTION_HEADER).is_some() {
+    if let Some(value) = headers.get(&CONNECTION_HEADER)
+        && let Ok(value) = value.to_str()
+    {
         debug!("Removing connection headers");
-
-        let value = headers.get(&CONNECTION_HEADER).cloned().unwrap();
-
-        for name in value.to_str().unwrap().split(',') {
-            if !name.trim().is_empty() {
-                headers.remove(name.trim());
-            }
+        let names_to_remove: Vec<String> = value
+            .split(',')
+            .map(|name| name.trim())
+            .filter(|name| !name.is_empty())
+            .map(|name| name.to_string())
+            .collect();
+        for name in names_to_remove {
+            headers.remove(&name);
         }
     }
 }
@@ -157,20 +151,19 @@ fn create_proxied_request<B>(
 ) -> Result<Request<B>, ProxyError> {
     debug!("Creating proxied request");
 
-    let contains_te_trailers_value = request.headers().get(&TE_HEADER).is_some_and(|value| {
-        value
-            .to_str()
-            .unwrap()
-            .split(',')
-            .any(|e| e.trim() == TRAILERS_HEADER)
-    });
+    let contains_te_trailers_value = request
+        .headers()
+        .get(&TE_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.split(',').any(|e| e.trim() == TRAILERS_HEADER));
 
     debug!("Setting headers of proxied request");
 
     let mut request_parts = request.uri().clone().into_parts();
     request_parts.scheme = Some(forward_scheme);
     request_parts.authority = Some(forward_authority.clone());
-    *request.uri_mut() = Uri::from_parts(request_parts).unwrap();
+    *request.uri_mut() = Uri::from_parts(request_parts)
+        .map_err(|_| ProxyError::ClientError("request uri is malformed"))?;
 
     // Downgrade to HTTP/1.1 to be compatible with any website
     *request.version_mut() = http::Version::HTTP_11;
@@ -186,11 +179,11 @@ fn create_proxied_request<B>(
             .insert(&TE_HEADER, HeaderValue::from_static("trailers"));
     }
 
-    if let Some(value) = upgrade_type {
+    if let Some(value) = upgrade_type
+        && let Ok(value) = value.parse()
+    {
         debug!("Repopulate upgrade headers");
-        request
-            .headers_mut()
-            .insert(&UPGRADE_HEADER, value.parse().unwrap());
+        request.headers_mut().insert(&UPGRADE_HEADER, value);
         request
             .headers_mut()
             .insert(&CONNECTION_HEADER, HeaderValue::from_static("UPGRADE"));
@@ -208,11 +201,13 @@ fn create_proxied_request<B>(
             let client_ip_str = client_ip.to_string();
             let mut addr =
                 String::with_capacity(entry.get().as_bytes().len() + 2 + client_ip_str.len());
-            addr.push_str(std::str::from_utf8(entry.get().as_bytes()).unwrap());
-            addr.push(',');
-            addr.push(' ');
-            addr.push_str(&client_ip_str);
-            entry.insert(addr.parse()?);
+            if let Ok(entry_str) = std::str::from_utf8(entry.get().as_bytes()) {
+                addr.push_str(entry_str);
+                addr.push(',');
+                addr.push(' ');
+                addr.push_str(&client_ip_str);
+                entry.insert(addr.parse()?);
+            }
         }
     }
 
@@ -316,8 +311,7 @@ where
             }
         } else {
             Err(ProxyError::UpgradeError(format!(
-                "backend tried to switch to protocol {:?} when {:?} was requested",
-                response_upgrade_type, request_upgrade_type
+                "backend tried to switch to protocol {response_upgrade_type:?} when {request_upgrade_type:?} was requested"
             )))
         }
     } else {

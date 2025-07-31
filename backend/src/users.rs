@@ -235,7 +235,7 @@ fn cookie_from_password(
     jar: &PrivateCookieJar,
     password: &str,
 ) -> Result<UserToken, (StatusCode, &'static str)> {
-    let cookie = Cookie::parse_encoded(format!("{}={}", cookie_name, password)).map_err(|_| {
+    let cookie = Cookie::parse_encoded(format!("{cookie_name}={password}")).map_err(|_| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             "could not find user token",
@@ -649,30 +649,37 @@ pub fn check_user_has_role_or_forbid(
     target: &HostType,
     hostname: &str,
     path: &str,
-) -> Result<(), Response<Body>> {
+) -> Result<(), Box<Response<Body>>> {
     if let Some(user) = user {
-        if !check_user_has_role(user, target.roles())
-            || (user.share.is_some()
-                && (user.share.as_ref().unwrap().path
-                    != urlencoding::decode(path).clone().map_err(|_| forbidden())?
-                    || user.share.as_ref().unwrap().hostname != hostname))
-        {
-            return Err(forbidden());
+        if check_user_has_role(user, target.roles()) {
+            match &user.share {
+                None => return Ok(()),
+                Some(share) => {
+                    if share.hostname == hostname
+                        && let Ok(path) = urlencoding::decode(path)
+                        && share.path == path
+                    {
+                        return Ok(());
+                    }
+                }
+            }
         }
-        return Ok(());
+        return Err(Box::new(forbidden()));
     }
-    Err(Response::builder()
-        .status(StatusCode::UNAUTHORIZED)
-        .header(&WWWAUTHENTICATE, r#"Basic realm="server""#)
-        .body(Body::empty())
-        .unwrap())
+    Err(Box::new(
+        Response::builder()
+            .status(StatusCode::UNAUTHORIZED)
+            .header(&WWWAUTHENTICATE, r#"Basic realm="server""#)
+            .body(Body::empty())
+            .expect("cannot vary"),
+    ))
 }
 
 fn forbidden() -> http::Response<Body> {
     Response::builder()
         .status(StatusCode::FORBIDDEN)
         .body(Body::empty())
-        .unwrap()
+        .expect("constant method")
 }
 
 pub fn check_authorization(
@@ -680,7 +687,7 @@ pub fn check_authorization(
     user: Option<&UserToken>,
     hostname: &str,
     path: &str,
-) -> Result<(), Response<Body>> {
+) -> Result<(), Box<Response<Body>>> {
     if app.secured() {
         check_user_has_role_or_forbid(user, app, hostname, path)?;
     }
@@ -693,7 +700,7 @@ pub fn authorized_or_redirect_to_login(
     hostname: &str,
     req: &Request<Body>,
     config: &std::sync::Arc<crate::configuration::Config>,
-) -> Result<(), Response<Body>> {
+) -> Result<(), Box<Response<Body>>> {
     let domain = hostname.split(':').next().unwrap_or_default();
     if let Err(mut value) =
         check_authorization(app, user.as_ref().map(|u| &u.0), domain, req.uri().path())
@@ -703,12 +710,11 @@ pub fn authorized_or_redirect_to_login(
             if let Ok(mut hn) = HeaderValue::from_str(&config.full_domain()) {
                 *value.status_mut() = StatusCode::FOUND;
                 // If single proxy mode, redirect directly to IdP without passing through atrium main app
-                if config.single_proxy {
-                    hn = HeaderValue::from_str(&format!(
-                        "{}/auth/oauth2login",
-                        config.full_domain()
-                    ))
-                    .unwrap();
+                if config.single_proxy
+                    && let Ok(value) =
+                        HeaderValue::from_str(&format!("{}/auth/oauth2login", config.full_domain()))
+                {
+                    hn = value;
                 }
                 value.headers_mut().append(LOCATION, hn);
                 let cookie = Cookie::build((
@@ -721,10 +727,9 @@ pub fn authorized_or_redirect_to_login(
                 .secure(false)
                 .max_age(time::Duration::seconds(60))
                 .http_only(false);
-                value.headers_mut().append(
-                    SET_COOKIE,
-                    HeaderValue::from_str(&format!("{cookie}")).unwrap(),
-                );
+                if let Ok(header_value) = HeaderValue::from_str(&format!("{cookie}")) {
+                    value.headers_mut().append(SET_COOKIE, header_value);
+                }
             }
         }
         return Err(value);

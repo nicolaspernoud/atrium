@@ -24,6 +24,7 @@ use crate::{
         webdav_handler,
     },
     dir_server::dir_handler,
+    errors::Error,
     middlewares::{cors_middleware, debug_cors_middleware, inject_security_headers},
     oauth2::{oauth2_available, oauth2_callback, oauth2_login},
     onlyoffice::{onlyoffice_callback, onlyoffice_page},
@@ -40,7 +41,7 @@ pub struct Server {
 }
 
 impl Server {
-    pub async fn build(config_file: &str, tx: Sender<()>) -> Result<Self, anyhow::Error> {
+    pub async fn build(config_file: &str, tx: Sender<()>) -> Result<Self, Error> {
         let config = load_config(config_file).await?;
         tracing::info!("Atrium's main hostname: {}", config.0.hostname);
 
@@ -50,7 +51,7 @@ impl Server {
 
         let state = AppState::new(
             axum_extra::extract::cookie::Key::from(
-                config.0.cookie_key.as_ref().unwrap().as_bytes(),
+                config.0.cookie_key.as_ref().expect("cookie key").as_bytes(),
             ),
             config.0,
             config.1,

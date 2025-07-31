@@ -12,7 +12,10 @@ use serde::Deserialize;
 use tokio::net::TcpListener;
 
 pub async fn mock_proxied_server(listener: TcpListener) {
-    let port = listener.local_addr().unwrap().port();
+    let port = listener
+        .local_addr()
+        .expect("mock proxied server listener")
+        .port();
     let app = Router::new()
         .route("/", get(message))
         .layer(Extension(port))
@@ -46,7 +49,7 @@ async fn message(port: Extension<u16>, headers: HeaderMap) -> impl IntoResponse 
 }
 
 async fn headers(headers: HeaderMap) -> impl IntoResponse {
-    format!("HEADERS: {:?}", headers)
+    format!("HEADERS: {headers:?}")
 }
 
 pub async fn mock_oauth2_server(listener: TcpListener) {

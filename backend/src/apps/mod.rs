@@ -137,7 +137,7 @@ where
     S: tower_service::Service<Request<Body>, Response = http::Response<hyper::body::Incoming>>,
     <S as tower_service::Service<Request<Body>>>::Error: std::fmt::Debug,
 {
-    authorized_or_redirect_to_login(&app, &user, &hostname, &req, &config)?;
+    authorized_or_redirect_to_login(&app, &user, &hostname, &req, &config).map_err(|b| *b)?;
 
     let app = match app {
         HostType::SkipVerifyReverseApp(app) | HostType::ReverseApp(app) => app,
@@ -172,16 +172,16 @@ where
     }
 
     // If the app contains basic auth information, forge a basic auth header
-    if !app.inner.login.is_empty() && !app.inner.password.is_empty() {
-        let bauth = format!("{}:{}", app.inner.login, app.inner.password);
-        req.headers_mut().insert(
-            AUTHORIZATION,
-            HeaderValue::from_str(&format!(
-                "Basic {}",
-                base64ct::Base64::encode_string(bauth.as_bytes())
-            ))
-            .unwrap(),
-        );
+    if !app.inner.login.is_empty()
+        && !app.inner.password.is_empty()
+        && let Ok(basic_header) = HeaderValue::from_str(&format!(
+            "Basic {}",
+            base64ct::Base64::encode_string(
+                format!("{}:{}", app.inner.login, app.inner.password).as_bytes()
+            )
+        ))
+    {
+        req.headers_mut().insert(AUTHORIZATION, basic_header);
     }
 
     let mut response = proxy::call(
@@ -201,7 +201,7 @@ where
                 Ok(uri) => uri,
                 Err(_) => {
                     // Try to add a forward slash
-                    match format!("/{}", location).parse() {
+                    match format!("/{location}").parse() {
                         Ok(uri) => uri,
                         Err(e) => {
                             error!(
@@ -216,11 +216,9 @@ where
                 }
             };
             // test if the host of this url contains the target service host
-            if location_uri.host().is_some()
-                && location_uri
-                    .host()
-                    .unwrap()
-                    .contains(app.forward_authority.host())
+            if location_uri
+                .host()
+                .is_some_and(|h| h.contains(app.forward_authority.host()))
             {
                 // if so, replace the target service host with the front service host
                 let mut parts = location_uri.into_parts();
@@ -228,11 +226,11 @@ where
                 if let Ok(authority) = hostname.parse::<Authority>() {
                     parts.authority = Some(authority);
                 }
-                let uri = Uri::from_parts(parts).unwrap();
-
-                response
-                    .headers_mut()
-                    .insert(LOCATION, HeaderValue::from_str(&uri.to_string()).unwrap());
+                if let Ok(uri) = Uri::from_parts(parts)
+                    && let Ok(uri) = HeaderValue::from_str(&uri.to_string())
+                {
+                    response.headers_mut().insert(LOCATION, uri);
+                }
             }
         }
     }

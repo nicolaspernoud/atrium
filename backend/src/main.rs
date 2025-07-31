@@ -1,6 +1,6 @@
-use anyhow::Result;
 use atrium::{
     configuration::{Config, TlsMode},
+    errors::Error,
     mocks::{mock_oauth2_server, mock_proxied_server},
     server::Server,
 };
@@ -30,7 +30,7 @@ pub mod self_signed;
 
 pub const CONFIG_FILE: &str = "atrium.yaml";
 
-fn main() -> Result<()> {
+fn main() -> Result<(), Error> {
     // println!("MiMalloc version: {}", mimalloc::MiMalloc.version()); // mimalloc = { version = "0.1", features = ["extended"] } in Cargo.toml to use this
     // We need to work out the local time offset before entering multi-threaded context
     let cfg: Config = if let Ok(file) = File::open(CONFIG_FILE) {
@@ -45,7 +45,7 @@ fn main() -> Result<()> {
 }
 
 #[tokio::main]
-async fn run() -> Result<()> {
+async fn run() -> Result<(), Error> {
     let debug_mode = Config::from_file(CONFIG_FILE).await?.debug_mode;
     let ip_bind = if cfg!(windows) {
         "0.0.0.0"
@@ -254,7 +254,7 @@ async fn redirect_http_to_https(handle: Handle) -> tokio::io::Result<()> {
 
     let addr = format!("[::]:{}", 80)
         .parse::<std::net::SocketAddr>()
-        .unwrap();
+        .expect("constant address");
     axum_server::bind(addr)
         .handle(handle)
         .serve(redirect.into_make_service())

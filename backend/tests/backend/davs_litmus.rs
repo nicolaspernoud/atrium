@@ -5,7 +5,6 @@ use crate::{
     davs::{copy, mkcol, mv},
     helpers::TestApp,
 };
-use anyhow::Result;
 
 fn has_header(r: &Response, header_name: &str) {
     assert!(r.headers().get(header_name).is_some());
@@ -27,7 +26,7 @@ async fn body_contains(r: Response, content: &str) {
     assert!(body.contains(content));
 }
 
-async fn litmus_init() -> Result<TestApp> {
+async fn litmus_init() -> Result<TestApp, reqwest::Error> {
     let app = TestApp::spawn(None).await;
     let url = format!("http://secured-files.atrium.io:{}/litmus/", app.port);
 
@@ -51,7 +50,7 @@ async fn litmus_init() -> Result<TestApp> {
 }
 
 #[tokio::test]
-async fn litmus_basic() -> Result<()> {
+async fn litmus_basic() -> Result<(), reqwest::Error> {
     // 1. BEGIN
     let app = litmus_init().await?;
 
@@ -268,7 +267,7 @@ testing.
 }
 
 #[tokio::test]
-async fn litmus_copymove() -> Result<()> {
+async fn litmus_copymove() -> Result<(), reqwest::Error> {
     // 1. BEGIN
     let app = litmus_init().await?;
 

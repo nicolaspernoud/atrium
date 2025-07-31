@@ -12,13 +12,11 @@ pub async fn cors_middleware(
     req: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    let origin = req.headers().get("origin").map(|o| o.to_owned());
-    let hostname = if origin.is_some() && {
-        let this = &origin.as_ref().unwrap().to_str();
-        let f = |o: &str| o.contains(&cfg.domain);
-        matches!(this, Ok(x) if f(x))
-    } {
-        origin.unwrap()
+    let hostname = if let Some(origin_header) = req.headers().get("origin")
+        && let Ok(origin) = origin_header.to_str()
+        && origin.contains(&cfg.domain)
+    {
+        origin_header.clone()
     } else {
         cfg.full_domain()
             .parse()
@@ -51,10 +49,13 @@ fn allow_methods_headers_credentials(headers: &mut http::HeaderMap) {
         "Access-Control-Allow-Methods",
         "POST, GET, OPTIONS, PUT, DELETE, PROPFIND, PROPPATCH, MKCOL, MOVE, COPY"
             .parse()
-            .unwrap(),
+            .expect("infallible"),
     );
-    headers.insert("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, XSRF-TOKEN, Authorization, Depth, Destination, Overwrite, X-OC-Mtime".parse().unwrap());
-    headers.insert("Access-Control-Allow-Credentials", "true".parse().unwrap());
+    headers.insert("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, XSRF-TOKEN, Authorization, Depth, Destination, Overwrite, X-OC-Mtime".parse().expect("infallible"));
+    headers.insert(
+        "Access-Control-Allow-Credentials",
+        "true".parse().expect("infallible"),
+    );
 }
 
 pub async fn inject_security_headers(

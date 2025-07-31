@@ -4,6 +4,7 @@ import 'package:atrium/components/explorer.dart';
 import 'package:atrium/utils.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 import 'package:webdav_client/webdav_client.dart';
@@ -68,6 +69,18 @@ class _ImageViewerState extends State<ImageViewer> {
     _startHideTimer();
   }
 
+  void _onKey(KeyEvent event) {
+    _onUserInteraction();
+    if (event is KeyDownEvent) {
+      if (event.logicalKey == LogicalKeyboardKey.arrowLeft && index > 0) {
+        previousPage();
+      } else if (event.logicalKey == LogicalKeyboardKey.arrowRight &&
+          index < files.length - 1) {
+        nextPage();
+      }
+    }
+  }
+
   @override
   void dispose() {
     pageController.dispose();
@@ -78,98 +91,113 @@ class _ImageViewerState extends State<ImageViewer> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: _onUserInteraction,
-        child: Stack(
-          children: [
-            PhotoViewGallery.builder(
-              scrollPhysics: const BouncingScrollPhysics(),
-              builder: (BuildContext context, int index) {
-                return PhotoViewGalleryPageOptions(
-                    imageProvider: WebdavImage(files[index], widget.client),
-                    initialScale: PhotoViewComputedScale.contained,
-                    minScale: PhotoViewComputedScale.contained);
-              },
-              itemCount: files.length,
-              loadingBuilder: (context, event) => Center(
-                child: CircularProgressIndicator(),
-              ),
-              pageController: pageController,
-              onPageChanged: (value) {
-                _onUserInteraction();
-                setState(() {
-                  index = value;
-                });
-              },
-            ),
-
-            // Sliding + Fading AppBar
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: AnimatedSlide(
-                offset: _controlsVisible ? Offset.zero : const Offset(0, -1),
-                duration: const Duration(milliseconds: 300),
-                child: AnimatedOpacity(
-                  opacity: _controlsVisible ? 1.0 : 0.0,
-                  duration: const Duration(milliseconds: 300),
-                  child: AppBar(
-                    backgroundColor: Colors.black87,
-                    title: Text(files[index].name ?? ''),
+        backgroundColor: Colors.black,
+        body: KeyboardListener(
+          focusNode: FocusNode()..requestFocus(),
+          onKeyEvent: _onKey,
+          child: MouseRegion(
+            onHover: (_) => _onUserInteraction(),
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: _onUserInteraction,
+              child: Stack(
+                children: [
+                  PhotoViewGallery.builder(
+                    scrollPhysics: const BouncingScrollPhysics(),
+                    builder: (BuildContext context, int index) {
+                      return PhotoViewGalleryPageOptions(
+                          imageProvider:
+                              WebdavImage(files[index], widget.client),
+                          initialScale: PhotoViewComputedScale.contained,
+                          minScale: PhotoViewComputedScale.contained);
+                    },
+                    itemCount: files.length,
+                    loadingBuilder: (context, event) => Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                    pageController: pageController,
+                    onPageChanged: (value) {
+                      _onUserInteraction();
+                      setState(() {
+                        index = value;
+                      });
+                    },
                   ),
-                ),
-              ),
-            ),
 
-            // Sliding + Fading Bottom Bar
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: AnimatedSlide(
-                offset: _controlsVisible ? Offset.zero : const Offset(0, 1),
-                duration: const Duration(milliseconds: 300),
-                child: AnimatedOpacity(
-                  opacity: _controlsVisible ? 1.0 : 0.0,
-                  duration: const Duration(milliseconds: 300),
-                  child: OverflowBar(
-                    alignment: MainAxisAlignment.center,
-                    children: [
-                      IconButton(
-                        onPressed: index == 0
-                            ? null
-                            : () {
-                                _onUserInteraction();
-                                pageController.previousPage(
-                                  duration: const Duration(milliseconds: 350),
-                                  curve: Curves.easeInOut,
-                                );
-                              },
-                        icon: const Icon(Icons.arrow_left),
+                  // Sliding + Fading AppBar
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: AnimatedSlide(
+                      offset:
+                          _controlsVisible ? Offset.zero : const Offset(0, -1),
+                      duration: const Duration(milliseconds: 300),
+                      child: AnimatedOpacity(
+                        opacity: _controlsVisible ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 300),
+                        child: AppBar(
+                          backgroundColor: Colors.black87,
+                          title: Text(files[index].name ?? ''),
+                        ),
                       ),
-                      IconButton(
-                        onPressed: index == files.length - 1
-                            ? null
-                            : () {
-                                _onUserInteraction();
-                                pageController.nextPage(
-                                  duration: const Duration(milliseconds: 350),
-                                  curve: Curves.easeInOut,
-                                );
-                              },
-                        icon: const Icon(Icons.arrow_right),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
+
+                  // Sliding + Fading Bottom Bar
+                  Positioned(
+                    bottom: 8.0,
+                    left: 0,
+                    right: 0,
+                    child: AnimatedSlide(
+                      offset:
+                          _controlsVisible ? Offset.zero : const Offset(0, 1),
+                      duration: const Duration(milliseconds: 300),
+                      child: AnimatedOpacity(
+                        opacity: _controlsVisible ? 1.0 : 0.0,
+                        duration: const Duration(milliseconds: 300),
+                        child: OverflowBar(
+                          alignment: MainAxisAlignment.center,
+                          spacing: 8.0,
+                          children: [
+                            IconButton(
+                              style: IconButton.styleFrom(
+                                  backgroundColor: Colors.black87),
+                              onPressed: index == 0 ? null : previousPage,
+                              icon: const Icon(Icons.arrow_left),
+                            ),
+                            IconButton(
+                              style: IconButton.styleFrom(
+                                  backgroundColor: Colors.black87),
+                              onPressed:
+                                  index == files.length - 1 ? null : nextPage,
+                              icon: const Icon(Icons.arrow_right),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
+          ),
+        ));
+  }
+
+  void nextPage() {
+    _onUserInteraction();
+    pageController.nextPage(
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  void previousPage() {
+    _onUserInteraction();
+    pageController.previousPage(
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOut,
     );
   }
 }
