@@ -27,6 +27,13 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      builder: (context, child) {
+        return SafeArea(
+          top: false,
+          bottom: true,
+          child: child!,
+        );
+      },
       title: 'atrium',
       home: const HomePage(),
       localizationsDelegates: const [
