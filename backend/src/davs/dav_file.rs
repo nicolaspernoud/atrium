@@ -1,22 +1,23 @@
+use crate::davs::error::DavFileError;
 use async_stream::stream;
 use axum::body::Body;
 use chacha20poly1305::{
-    XChaCha20Poly1305,
     aead::{
-        KeyInit, stream,
         stream::{NewStream, StreamPrimitive},
+        KeyInit, stream,
     },
+    XChaCha20Poly1305,
 };
 use futures::{Stream, StreamExt};
 use headers::{ETag, LastModified};
-use rand::{TryRngCore, rngs::OsRng};
+use rand::{rngs::OsRng, TryRngCore};
 use std::pin::Pin;
-use std::{fs::Metadata, io::Error, path::Path, time::SystemTime};
+use std::{fs::Metadata, io, path::Path, time::SystemTime};
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 use tokio::{
     fs::{self, File},
-    io::{self, AsyncRead, AsyncSeekExt, AsyncWrite},
+    io::{AsyncRead, AsyncSeekExt, AsyncWrite},
 };
 
 const PLAIN_CHUNK_SIZE: usize = 1_000_000; // 1 MByte
@@ -25,8 +26,6 @@ const ENCRYPTED_CHUNK_SIZE: usize = PLAIN_CHUNK_SIZE + ENCRYPTION_OVERHEAD;
 const NONCE_SIZE: usize = 19;
 
 pub const BUF_SIZE: usize = 65536;
-
-const SLICE_ERR: &str = "could not get buffer slice for decrypting";
 
 pub struct DavFile {
     file: File,
@@ -78,21 +77,22 @@ impl DavFile {
         }
     }
 
-    pub async fn copy_from<R>(mut self, reader: &mut R) -> Result<(), Error>
+    pub async fn copy_from<R>(mut self, reader: &mut R) -> Result<(), DavFileError>
     where
         R: AsyncRead + Unpin + ?Sized,
     {
         if let Some(key) = self.key {
             let mut enc_file = EncryptedStreamer::new(self.file, key);
             enc_file.copy_from(reader).await?;
-            enc_file.inner.flush().await
+            enc_file.inner.flush().await?;
         } else {
-            io::copy(reader, &mut self.file).await?;
-            self.file.flush().await
+            tokio::io::copy(reader, &mut self.file).await?;
+            self.file.flush().await?;
         }
+        Ok(())
     }
 
-    pub async fn copy_to<W>(mut self, writer: &mut W) -> Result<(), Error>
+    pub async fn copy_to<W>(mut self, writer: &mut W) -> Result<(), DavFileError>
     where
         W: AsyncWrite + Unpin + ?Sized,
     {
@@ -100,12 +100,13 @@ impl DavFile {
             let encrypted_file = EncryptedStreamer::new(self.file, key);
             encrypted_file.copy_to(writer).await.map(|_| ())?;
         } else {
-            io::copy(&mut self.file, writer).await?;
+            tokio::io::copy(&mut self.file, writer).await?;
         }
-        writer.flush().await
+        writer.flush().await?;
+        Ok(())
     }
 
-    pub async fn into_body_sized(mut self, start: u64, max_length: u64) -> Result<Body, Error> {
+    pub async fn into_body_sized(mut self, start: u64, max_length: u64) -> Result<Body, io::Error> {
         if let Some(key) = self.key {
             let encrypted_file = EncryptedStreamer::new(self.file, key);
             Ok(Body::from_stream(
@@ -147,7 +148,7 @@ where
     }
     pub fn into_stream(
         mut self,
-    ) -> Pin<Box<impl ?Sized + Stream<Item = Result<Vec<u8>, Error>> + 'static>> {
+    ) -> Pin<Box<impl ?Sized + Stream<Item = Result<Vec<u8>, io::Error>> + 'static>> {
         let stream = stream! {
             loop {
                 let mut buf = vec![0; self.buf_size];
@@ -166,7 +167,7 @@ where
     fn into_stream_sized(
         mut self,
         max_length: u64,
-    ) -> Pin<Box<impl ?Sized + Stream<Item = Result<Vec<u8>, Error>> + 'static>> {
+    ) -> Pin<Box<impl ?Sized + Stream<Item = Result<Vec<u8>, io::Error>> + 'static>> {
         let stream = stream! {
         let mut remaining = max_length;
             loop {
@@ -210,14 +211,14 @@ where
         Self { inner, key }
     }
 
-    async fn copy_from<R>(&mut self, mut reader: &mut R) -> Result<u64, Error>
+    async fn copy_from<R>(&mut self, mut reader: &mut R) -> Result<u64, DavFileError>
     where
         R: AsyncRead + Unpin + ?Sized,
     {
         let mut nonce = [0; NONCE_SIZE];
         OsRng
             .try_fill_bytes(&mut nonce)
-            .map_err(|e| Error::other(format!("error generating nonce: {e}")))?;
+            .map_err(|e| DavFileError::NonceGeneration(e.to_string()))?;
         let aead = XChaCha20Poly1305::new(self.key.as_ref().into());
         let mut stream_encryptor = stream::EncryptorBE32::from_aead(aead, nonce.as_ref().into());
 
@@ -238,12 +239,12 @@ where
             if read_count == PLAIN_CHUNK_SIZE {
                 let ciphertext = stream_encryptor
                     .encrypt_next(buffer.as_slice())
-                    .map_err(|e| Error::other(format!("error encrypting plaintext: {e}")))?;
+                    .map_err(|e| DavFileError::Encryption(e.to_string()))?;
                 self.inner.write_all(&ciphertext).await?;
             } else {
                 let ciphertext = stream_encryptor
-                    .encrypt_last(buffer.get(..read_count).ok_or(Error::other(SLICE_ERR))?)
-                    .map_err(|e| Error::other(format!("error encrypting plaintext: {e}")))?;
+                    .encrypt_last(buffer.get(..read_count).ok_or(DavFileError::Slice)?)
+                    .map_err(|e| DavFileError::Encryption(e.to_string()))?;
                 self.inner.write_all(&ciphertext).await?;
                 break;
             }
@@ -252,7 +253,7 @@ where
         Ok(total_count as u64)
     }
 
-    async fn copy_to<W>(mut self, writer: &mut W) -> Result<u64, Error>
+    async fn copy_to<W>(mut self, writer: &mut W) -> Result<u64, DavFileError>
     where
         W: AsyncWrite + Unpin + ?Sized,
     {
@@ -276,14 +277,14 @@ where
             if read_count == ENCRYPTED_CHUNK_SIZE {
                 let plaintext = stream_decryptor
                     .decrypt_next(buffer.as_slice())
-                    .map_err(|e| Error::other(format!("error decrypting ciphertext: {e}")))?;
+                    .map_err(|e| DavFileError::Decryption(e.to_string()))?;
                 writer.write_all(&plaintext).await?;
             } else if read_count == 0 {
                 break;
             } else {
                 let plaintext = stream_decryptor
-                    .decrypt_last(buffer.get(..read_count).ok_or(Error::other(SLICE_ERR))?)
-                    .map_err(|e| Error::other(format!("error decrypting ciphertext: {e}")))?;
+                    .decrypt_last(buffer.get(..read_count).ok_or(DavFileError::Slice)?)
+                    .map_err(|e| DavFileError::Decryption(e.to_string()))?;
                 writer.write_all(&plaintext).await?;
                 break;
             }
@@ -293,7 +294,7 @@ where
 
     fn into_stream(
         mut self,
-    ) -> Pin<Box<impl ?Sized + Stream<Item = Result<Vec<u8>, Error>> + 'static>> {
+    ) -> Pin<Box<impl ?Sized + Stream<Item = Result<Vec<u8>, io::Error>> + 'static>> {
         let stream = stream! {
             let aead = XChaCha20Poly1305::new(self.key.as_ref().into());
             let nonce = self.retrieve_nonce().await?;
@@ -312,16 +313,16 @@ where
                     let plaintext = match stream_decryptor
                         .decrypt_next(buffer.as_slice()) {
                             Ok(plaintext) => plaintext,
-                            Err(e) => {yield Err(Error::other(format!("error decrypting plaintext: {e}")));break;}
+                            Err(e) => {yield Err(DavFileError::Decryption(e.to_string()).into());break;}
                         };
                     yield Ok(plaintext);
                 } else if read_count == 0 {
                     break;
                 } else {
                     let plaintext = match stream_decryptor
-                    .decrypt_last(buffer.get(..read_count).ok_or(Error::other(SLICE_ERR))?){
+                    .decrypt_last(buffer.get(..read_count).ok_or(DavFileError::Slice)?){
                             Ok(plaintext) => plaintext,
-                            Err(e) => {yield Err(Error::other(format!("error decrypting plaintext: {e}")));break;}
+                            Err(e) => {yield Err(DavFileError::Decryption(e.to_string()).into());break;}
                         };
                         yield Ok(plaintext);
                      break;
@@ -332,16 +333,23 @@ where
         stream.boxed()
     }
 
-    // allow truncation as truncated remaining is always less than buf_size: usize
+    /// Creates a stream that reads and decrypts a sized portion of the file.
+    /// This is used to handle HTTP Range requests on encrypted files.
+    /// The implementation is complex because it needs to map a plaintext range
+    /// to a range in the encrypted file, which is non-trivial due to the
+    /// chunked encryption format.
     fn into_stream_sized(
         mut self,
         start: u64,
         max_length: u64,
-    ) -> Pin<Box<impl ?Sized + Stream<Item = Result<Vec<u8>, Error>> + 'static>> {
+    ) -> Pin<Box<impl ?Sized + Stream<Item = Result<Vec<u8>, io::Error>> + 'static>> {
         let stream = stream! {
+            // Initialize the decryptor
             let aead = XChaCha20Poly1305::new(self.key.as_ref().into());
             let nonce = self.retrieve_nonce().await?;
             let stream_decryptor = stream::StreamBE32::from_aead(aead, nonce.as_ref().into());
+
+            // Calculate the starting position in the encrypted stream
             let mut chunked_position = ChunkedPosition::new(start);
             self.inner.seek(std::io::SeekFrom::Start(chunked_position.beginning_of_active_chunk)).await?;
 
@@ -358,14 +366,13 @@ where
                 buffer.truncate(read_count);
 
                 if read_count == ENCRYPTED_CHUNK_SIZE {
-                    let mut plaintext = match stream_decryptor
-                        .decrypt(chunked_position.active_chunk_counter as u32, false, buffer.as_slice()) {
-                            Ok(plaintext) => plaintext,
-                            Err(e) => {
-                                yield Err(Error::other(format!("error decrypting ciphertext: {e}")));
-                                break;
-                            }
-                        };
+                    let mut plaintext = match Self::decrypt_chunk(&stream_decryptor, &buffer, chunked_position.active_chunk_counter as u32, false) {
+                        Ok(plaintext) => plaintext,
+                        Err(e) => {
+                            yield Err(e.into());
+                            break;
+                        }
+                    };
 
                         chunked_position.active_chunk_counter+= 1;
 
@@ -386,11 +393,13 @@ where
                 } else if read_count == 0 {
                     break;
                 } else {
-                    let mut plaintext = match stream_decryptor
-                    .decrypt(chunked_position.active_chunk_counter as u32, true, buffer.get(..read_count).ok_or(Error::other(SLICE_ERR))?){
-                            Ok(plaintext) => plaintext,
-                            Err(e) => {yield Err(Error::other(format!("error decrypting ciphertext: {e}")));break;}
-                        };
+                    let mut plaintext = match Self::decrypt_chunk(&stream_decryptor, &buffer, chunked_position.active_chunk_counter as u32, true) {
+                        Ok(plaintext) => plaintext,
+                        Err(e) => {
+                            yield Err(e.into());
+                            break;
+                        }
+                    };
 
                         if start != 0 {
                             plaintext.drain(0..chunked_position.offset_in_active_chunk as usize);
@@ -406,6 +415,17 @@ where
             }
         };
         stream.boxed()
+    }
+
+    fn decrypt_chunk(
+        decryptor: &stream::StreamBE32<XChaCha20Poly1305>,
+        buffer: &[u8],
+        position: u32,
+        is_last: bool,
+    ) -> Result<Vec<u8>, DavFileError> {
+        decryptor
+            .decrypt(position, is_last, buffer)
+            .map_err(|e| DavFileError::Decryption(e.to_string()))
     }
 
     async fn retrieve_nonce(&mut self) -> Result<[u8; NONCE_SIZE], std::io::Error> {
@@ -433,19 +453,28 @@ fn encrypted_offset(dec_offset: u64) -> u64 {
     dec_offset + ENCRYPTION_OVERHEAD as u64 * number_of_chunks + NONCE_SIZE as u64
 }
 
+/// Represents a position within the encrypted file, mapped from a plaintext offset.
 #[derive(PartialEq, Debug)]
 struct ChunkedPosition {
+    /// The byte offset of the beginning of the chunk that contains the target plaintext offset.
     beginning_of_active_chunk: u64,
+    /// The byte offset within the decrypted chunk where the target plaintext offset is located.
     offset_in_active_chunk: u64,
+    /// The index of the chunk that contains the target plaintext offset.
     active_chunk_counter: u64,
 }
 
 impl ChunkedPosition {
+    /// Creates a new `ChunkedPosition` from a plaintext offset.
     fn new(plain_offset: u64) -> Self {
+        // Calculate which chunk the plaintext offset falls into.
         let active_chunk_counter = plain_offset / PLAIN_CHUNK_SIZE as u64;
+        // Calculate the starting position of that chunk in the encrypted file.
         let beginning_of_active_chunk =
             active_chunk_counter * ENCRYPTED_CHUNK_SIZE as u64 + NONCE_SIZE as u64;
+        // Calculate the encrypted offset corresponding to the plaintext offset.
         let start = encrypted_offset(plain_offset);
+        // Calculate the offset within the decrypted chunk.
         let offset_in_active_chunk =
             start - (beginning_of_active_chunk + ENCRYPTION_OVERHEAD as u64);
         Self {
