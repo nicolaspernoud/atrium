@@ -55,3 +55,10 @@ unused-features analyze --bins --lib --tests && unused-features build-report --i
 ```
 flutter run -d chrome --web-hostname atrium.127.0.0.1.nip.io --web-port 3000 --web-browser-flag "--unsafely-treat-insecure-origin-as-secure=http://atrium.127.0.0.1.nip.io:3000"
 ```
+
+### Regenerate the frontend
+
+```
+mv frontend frontend_old
+flutter create --template=app --platforms="android,web" --description="Atrium's frontend app" --org="fr.ninico" --project-name="atrium" frontend
+```

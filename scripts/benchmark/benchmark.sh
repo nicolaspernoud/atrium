@@ -1,11 +1,11 @@
 #!/bin/bash
 
 WD="$(
-  cd "$(dirname "$0")"
+  cd "$(dirname "$0")" || exit
   pwd -P
 )"
 
-mkdir $WD/reports
+mkdir "$WD"/reports
 REPORT_FILE="$WD/reports/$(date +"%Y-%m-%d_%H:%M:%S")_test_atrium.txt"
 
 PROXY=http://app1.atrium.127.0.0.1.nip.io:8180
@@ -38,7 +38,7 @@ fi
 monitor_memory_usage() {
   local pid=$1
   while true; do
-    mem=$(ps -p $pid -o rss=)
+    mem=$(ps -p "$pid" -o rss=)
     if [ -z "$mem" ]; then
       echo "Process $pid not found. Exiting loop."
       break
@@ -58,10 +58,10 @@ monitor_memory_usage() {
 #####################################################################
 
 # Build for production
-cd ${WD}/actix_backend
+cd "${WD}"/actix_backend || exit
 cargo build --release
 # Start
-${WD}/actix_backend/target/release/actix_backend &
+"${WD}"/actix_backend/target/release/actix_backend &
 BACKEND_PID=$!
 sleep 2
 
@@ -71,15 +71,15 @@ sleep 2
 
 # Start proxy
 docker run -d --name nginx_bench \
-  -v ${WD}/nginx_default.conf:/etc/nginx/conf.d/default.conf \
+  -v "${WD}"/nginx_default.conf:/etc/nginx/conf.d/default.conf \
   --net=host \
   nginx
 sleep 2
 
 # Test proxy
-echo -e "#######################\n### NGINX IN DOCKER ###\n#######################\n" >>$REPORT_FILE
+echo -e "#######################\n### NGINX IN DOCKER ###\n#######################\n" >>"$REPORT_FILE"
 test_proxy
-eval ${BENCH_CMD}
+eval "${BENCH_CMD}"
 
 # Shutdown
 docker stop nginx_bench
@@ -90,21 +90,21 @@ docker rm nginx_bench
 #####################################################################
 
 # Build for production
-cd ${WD}/../../backend
+cd "${WD}"/../../backend || exit
 cargo build --release
 # Copy configuration
-cp ${WD}/atrium.yaml ${WD}/../../backend/target/release/
+cp "${WD}"/atrium.yaml "${WD}"/../../backend/target/release/
 # Start proxy
-cd ${WD}/../../backend/target/release/
+cd "${WD}"/../../backend/target/release/ || exit
 ./atrium &
 ATRIUM_PROXY_PID=$!
-cd $WD
+cd "$WD" || exit
 sleep 2
 monitor_memory_usage $ATRIUM_PROXY_PID &
 # Test proxy
-echo -e "##############\n### ATRIUM ###\n##############\n" >>$REPORT_FILE
+echo -e "##############\n### ATRIUM ###\n##############\n" >>"$REPORT_FILE"
 test_proxy
-eval ${BENCH_CMD}
+eval "${BENCH_CMD}"
 # Shutdown
 kill $ATRIUM_PROXY_PID
 
@@ -113,20 +113,20 @@ kill $ATRIUM_PROXY_PID
 #####################################################################
 
 # Build for production
-cd ${WD}/../..
-docker build $(cat versions.env | grep -v '^#' | xargs -I {} echo --build-arg {}) --platform linux/amd64 -t atrium_bench .
+cd "${WD}"/../.. || exit
+docker build "$(cat versions.env | grep -v '^#' | xargs -I {} echo --build-arg {})" --platform linux/amd64 -t atrium_bench .
 
 # Start proxy
 docker run -d --name atrium_bench \
-  -v ${WD}/atrium.yaml:/app/atrium.yaml \
+  -v "${WD}"/atrium.yaml:/app/atrium.yaml \
   --net=host \
   atrium_bench
 sleep 2
 
 # Test proxy
-echo -e "########################\n### ATRIUM IN DOCKER ###\n########################\n" >>$REPORT_FILE
+echo -e "########################\n### ATRIUM IN DOCKER ###\n########################\n" >>"$REPORT_FILE"
 test_proxy
-eval ${BENCH_CMD}
+eval "${BENCH_CMD}"
 
 # Shutdown
 docker stop atrium_bench
@@ -139,4 +139,4 @@ docker rm atrium_bench
 # Shutdown backend
 kill $BACKEND_PID
 
-cat $REPORT_FILE
+cat "$REPORT_FILE"

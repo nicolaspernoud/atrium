@@ -207,6 +207,7 @@ class ApiProvider {
 
   Future<Response> _reloadConfigurationAndWaitUntilReady() async {
     await _dio.get('/reload');
+    await Future.delayed(const Duration(seconds: 1));
     const int maxRetries = 100;
     int retries = 0;
     while (retries < maxRetries) {

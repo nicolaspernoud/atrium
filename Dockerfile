@@ -7,7 +7,7 @@ ARG RUST_VERSION
 ARG FLUTTER_VERSION
 
 # Set up an environnement to cross-compile the app for musl to create a statically-linked binary
-FROM --platform=$BUILDPLATFORM rust:${RUST_VERSION} AS backend-builder
+FROM --platform=$BUILDPLATFORM rust:${RUST_VERSION}-bookworm AS backend-builder
 ARG TARGETPLATFORM
 RUN case "$TARGETPLATFORM" in \
     "linux/amd64") echo x86_64-unknown-linux-gnu > /rust_target.txt ;; \
@@ -17,9 +17,7 @@ RUN case "$TARGETPLATFORM" in \
     *) exit 1 ;; \
     esac
 RUN rustup target add $(cat /rust_target.txt)
-RUN apt update && apt install -y binutils-arm-linux-gnueabihf clang cmake gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf libc6-dev-i386 libcap2-bin libclang-dev musl-dev musl-tools
-RUN ln -s /usr/bin/arm-linux-gnueabihf-gcc /usr/bin/arm-linux-musleabihf-gcc
-RUN ln -s /usr/bin/aarch64-linux-gnu-gcc /usr/bin/aarch64-linux-musl-gcc
+RUN apt update && apt install -y clang cmake gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf libc6-dev-i386 libcap2-bin libclang-dev musl-dev musl-tools
 RUN ln -s /usr/include/asm-generic /usr/include/asm
 
 # Create appuser

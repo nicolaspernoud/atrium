@@ -350,6 +350,9 @@ impl WebdavServer {
             true => fs::remove_dir_all(path).await?,
             false => fs::remove_file(path).await?,
         }
+        self.locks.lock().ok().map(|mut locks| {
+            locks.remove(path);
+        });
 
         status_no_content(res);
         Ok(())

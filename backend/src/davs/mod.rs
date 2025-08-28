@@ -1,4 +1,5 @@
 pub(crate) mod dav_file;
+pub mod error;
 pub(crate) mod headers;
 pub mod model;
 pub(crate) mod webdav_server;

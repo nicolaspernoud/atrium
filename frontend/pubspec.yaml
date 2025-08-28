@@ -1,9 +1,8 @@
 name: atrium
-description: Atrium's frontend app
-
+description: "Atrium's frontend app"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
-publish_to: "none" # Remove this line if you wish to publish to pub.dev
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
 # The following defines the version and build number for your application.
 # A version number is three numbers separated by dots, like 1.2.43
@@ -12,13 +11,15 @@ publish_to: "none" # Remove this line if you wish to publish to pub.dev
 # build by specifying --build-name and --build-number, respectively.
 # In Android, build-name is used as versionName while build-number used as versionCode.
 # Read more about Android versioning at https://developer.android.com/studio/publish/versioning
-# In iOS, build-name is used as CFBundleShortVersionString while build-number used as CFBundleVersion.
+# In iOS, build-name is used as CFBundleShortVersionString while build-number is used as CFBundleVersion.
 # Read more about iOS versioning at
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
+# In Windows, build-name is used as the major, minor, and patch parts
+# of the product and file versions while build-number is used as the build suffix.
 version: 1.5.0
 
 environment:
-  sdk: ">=3.3.4 <4.0.0"
+  sdk: ^3.9.0
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -33,11 +34,11 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
-  dio: 5.8.0+1
-  file_picker: 10.2.0
+  dio: 5.9.0
+  file_picker: 10.3.2
   filesize: 2.0.1
   flutter_colorpicker: 1.1.0
-  flutter_local_notifications: 19.3.0
+  flutter_local_notifications: 19.4.1
   path_provider: 2.1.5
   pdfx: 2.9.2
   provider: 6.1.5
@@ -46,7 +47,7 @@ dependencies:
   video_player: 2.10.0
   webdav_client: 1.2.2
   webview_flutter: 4.13.0
-  webview_flutter_android: 4.7.0
+  webview_flutter_android: 4.10.1
   webview_cookie_manager_plus: 2.0.16
   path: 1.9.1
   scrollable_positioned_list: 0.3.8
@@ -57,7 +58,6 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_launcher_icons: 0.14.4
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -65,6 +65,8 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: 6.0.0
+
+  flutter_launcher_icons: 0.14.4
 
 flutter_launcher_icons: # generate with `flutter pub run flutter_launcher_icons:main`.
   android: "launcher_icon"
@@ -84,6 +86,7 @@ flutter_launcher_icons: # generate with `flutter pub run flutter_launcher_icons:
 
 # The following section is specific to Flutter packages.
 flutter:
+
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
@@ -95,10 +98,10 @@ flutter:
   #   - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see
-  # https://flutter.dev/assets-and-images/#resolution-aware
+  # https://flutter.dev/to/resolution-aware-images
 
   # For details regarding adding assets from package dependencies, see
-  # https://flutter.dev/assets-and-images/#from-packages
+  # https://flutter.dev/to/asset-from-package
 
   # To add custom fonts to your application, add a fonts section here,
   # in this "flutter" section. Each entry in this list should have a
@@ -118,4 +121,4 @@ flutter:
   #         weight: 700
   #
   # For details regarding fonts from package dependencies,
-  # see https://flutter.dev/custom-fonts/#from-packages
+  # see https://flutter.dev/to/font-from-package
