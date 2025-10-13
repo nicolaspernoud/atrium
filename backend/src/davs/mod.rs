@@ -1,4 +1,4 @@
-pub(crate) mod dav_file;
+pub mod dav_file;
 pub mod error;
 pub(crate) mod headers;
 pub mod model;
@@ -51,15 +51,14 @@ pub async fn webdav_handler(
     );
     let domain = hostname.split(':').next().unwrap_or_default();
 
-    if method != Method::OPTIONS {
-        if let Err(access_denied_resp) =
+    if method != Method::OPTIONS
+        && let Err(access_denied_resp) =
             check_authorization(&dav, user.as_ref(), domain, req.uri().path())
-        {
-            tokio::spawn(async move {
-                info!("FILE ACCESS DENIED: {log_str}");
-            });
-            return *access_denied_resp;
-        }
+    {
+        tokio::spawn(async move {
+            info!("FILE ACCESS DENIED: {log_str}");
+        });
+        return *access_denied_resp;
     }
 
     let dav = match dav {

@@ -22,11 +22,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
-use super::{
-    dav_file::{BUF_SIZE, Streamer, decrypted_size},
-    headers::Depth,
-    model::Dav,
-};
+use super::{dav_file::decrypted_size, headers::Depth, model::Dav};
 use crate::{
     davs::{dav_file::DavFile, headers::Overwrite},
     utils::extract_query_pairs,
@@ -52,14 +48,21 @@ use serde::Serialize;
 use std::{
     borrow::Cow,
     collections::HashMap,
-    io::Error,
+    io::{Error, SeekFrom},
     net::SocketAddr,
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
     time::SystemTime,
 };
-use tokio::{fs, io::AsyncWrite};
-use tokio_util::io::StreamReader;
+use tokio::io::AsyncWriteExt;
+use tokio::{
+    fs,
+    io::{AsyncReadExt, AsyncSeekExt},
+};
+use tokio_util::{
+    compat::FuturesAsyncWriteCompatExt,
+    io::{ReaderStream, StreamReader},
+};
 use tracing::{debug, error};
 use uuid::Uuid;
 
@@ -71,6 +74,7 @@ static APPLICATION_JSON: HeaderValue = HeaderValue::from_static("application/jso
 static ACCEPTED: HeaderValue = HeaderValue::from_static("accepted");
 
 const LOCK_TIMEOUT: i64 = 24 * 60 * 60; // 24 hours in seconds
+const BUF_SIZE: usize = 65536;
 
 #[derive(Debug)]
 pub struct LockInfo {
@@ -294,7 +298,7 @@ impl WebdavServer {
     ) -> BoxResult<()> {
         ensure_path_parent(path).await?;
 
-        let file = if let Ok(v) = DavFile::create(path, key).await {
+        let mut file = if let Ok(v) = DavFile::create(path, key).await {
             v
         } else {
             status_forbid(res);
@@ -302,43 +306,38 @@ impl WebdavServer {
         };
 
         let (parts, body) = req.into_parts();
-
         let body_stream = body.into_data_stream();
-
         let body_with_io_error = body_stream.map(|result| result.map_err(std::io::Error::other));
-
         let mut body_reader = StreamReader::new(body_with_io_error);
 
-        if let Ok(()) = file.copy_from(&mut body_reader).await {
-        } else {
+        if let Err(e) = tokio::io::copy(&mut body_reader, &mut file).await {
             *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
             *res.body_mut() = Body::from("error writing file");
             error!(
-                "WARNING: The file creation on {}{} encountered an error. The file was not created or was deleted !",
+                "WARNING: The file creation on {}{} encountered an error: {}. The file was not created or was deleted !",
                 parts
                     .headers
                     .get(http::header::HOST)
                     .unwrap_or(&HeaderValue::from_static("<no host>"))
                     .to_str()
                     .unwrap_or_default(),
-                parts.uri
+                parts.uri,
+                e
             );
             drop(fs::remove_file(path).await);
             return Ok(());
         };
 
+        file.shutdown().await?;
+
         // If the X-OC-Mtime header is present, alter the file modified time according to that header's value.
-        if let Some(h) = parts.headers.get("X-OC-Mtime") {
-            if let Ok(h) = h.to_str() {
-                if let Ok(t) = h.parse::<i64>() {
-                    if filetime::set_file_mtime(path, filetime::FileTime::from_unix_time(t, 0))
-                        .is_ok()
-                    {
-                        // Respond with the appropriate header on success
-                        res.headers_mut().insert("X-OC-Mtime", ACCEPTED.clone());
-                    }
-                }
-            }
+        if let Some(h) = parts.headers.get("X-OC-Mtime")
+            && let Ok(h) = h.to_str()
+            && let Ok(t) = h.parse::<i64>()
+            && filetime::set_file_mtime(path, filetime::FileTime::from_unix_time(t, 0)).is_ok()
+        {
+            // Respond with the appropriate header on success
+            res.headers_mut().insert("X-OC-Mtime", ACCEPTED.clone());
         };
 
         *res.status_mut() = StatusCode::CREATED;
@@ -350,9 +349,9 @@ impl WebdavServer {
             true => fs::remove_dir_all(path).await?,
             false => fs::remove_file(path).await?,
         }
-        self.locks.lock().ok().map(|mut locks| {
+        if let Ok(mut locks) = self.locks.lock() {
             locks.remove(path);
-        });
+        }
 
         status_no_content(res);
         Ok(())
@@ -423,7 +422,7 @@ impl WebdavServer {
         res: &mut Response,
         key: Option<[u8; 32]>,
     ) -> BoxResult<()> {
-        let (mut writer, reader) = tokio::io::duplex(BUF_SIZE);
+        let (writer, reader) = tokio::io::duplex(BUF_SIZE);
         let filename = get_file_name(path)?;
         res.headers_mut().insert(
             CONTENT_DISPOSITION,
@@ -439,12 +438,11 @@ impl WebdavServer {
         }
         let path = path.to_owned();
         tokio::spawn(async move {
-            if let Err(e) = zip_dir(&mut writer, &path, key).await {
+            if let Err(e) = zip_dir(writer, &path, key).await {
                 error!("Failed to zip {}, {}", path.display(), e);
             }
         });
-        let reader = Streamer::new(reader, BUF_SIZE);
-        *res.body_mut() = Body::from_stream(reader.into_stream());
+        *res.body_mut() = Body::from_stream(ReaderStream::new(reader));
         Ok(())
     }
 
@@ -457,10 +455,10 @@ impl WebdavServer {
         key: Option<[u8; 32]>,
         inline_file: bool,
     ) -> BoxResult<()> {
-        let file = DavFile::open(path, key).await?;
+        let mut file = DavFile::open(path, key).await?;
 
         let mut use_range = true;
-        if let Some((etag, last_modified)) = file.cache_headers() {
+        if let Some((etag, last_modified)) = file.cache_headers().await {
             let cached = {
                 if let Some(if_none_match) = headers.typed_get::<IfNoneMatch>() {
                     !if_none_match.precondition_passes(&etag)
@@ -518,16 +516,13 @@ impl WebdavServer {
 
         res.headers_mut().typed_insert(AcceptRanges::bytes());
 
-        let size = file.len();
+        let size = file.len().await;
 
         if let Some(range) = range {
             debug!("Requesting range: {:?}", range);
-            if range
-                .end
-                .map_or_else(|| range.start < size, |v| v >= range.start)
-            {
+            if range.start < size {
                 let end = range.end.unwrap_or(size - 1).min(size - 1);
-                let part_size = end - range.start + 1;
+                let part_size = end.saturating_sub(range.start) + 1;
                 *res.status_mut() = StatusCode::PARTIAL_CONTENT;
                 let content_range = format!("bytes {}-{}/{}", range.start, end, size);
                 res.headers_mut()
@@ -538,7 +533,9 @@ impl WebdavServer {
                     return Ok(());
                 }
 
-                *res.body_mut() = file.into_body_sized(range.start, part_size).await?;
+                file.seek(SeekFrom::Start(range.start)).await?;
+                let reader = file.take(part_size);
+                *res.body_mut() = Body::from_stream(ReaderStream::new(reader));
             } else {
                 *res.status_mut() = StatusCode::RANGE_NOT_SATISFIABLE;
                 res.headers_mut()
@@ -550,7 +547,9 @@ impl WebdavServer {
             if head_only {
                 return Ok(());
             }
-            *res.body_mut() = file.into_body();
+            // Buffer the file to reduce syscalls and improve throughput
+            let reader = tokio::io::BufReader::with_capacity(BUF_SIZE, file);
+            *res.body_mut() = Body::from_stream(ReaderStream::new(reader));
         }
         Ok(())
     }
@@ -895,7 +894,7 @@ impl WebdavServer {
         let mtime = to_timestamp(&meta.modified()?);
         let size = match path_type {
             PathType::Dir | PathType::SymlinkDir => None,
-            PathType::File | PathType::SymlinkFile => Some(if let Some(_key) = key {
+            PathType::File | PathType::SymlinkFile => Some(if key.is_some() {
                 decrypted_size(meta.len())
             } else {
                 meta.len()
@@ -1182,11 +1181,12 @@ fn normalize_path<P: AsRef<Path>>(path: P) -> String {
 }
 
 async fn ensure_path_parent(path: &Path) -> BoxResult<()> {
-    if let Some(parent) = path.parent() {
-        if fs::symlink_metadata(parent).await.is_err() {
-            fs::create_dir_all(&parent).await?;
-        }
+    if let Some(parent) = path.parent()
+        && fs::symlink_metadata(parent).await.is_err()
+    {
+        fs::create_dir_all(&parent).await?;
     }
+
     Ok(())
 }
 
@@ -1204,12 +1204,12 @@ fn res_multistatus(res: &mut Response, content: &str) {
     ));
 }
 
-async fn zip_dir<W: AsyncWrite + Unpin>(
-    writer: &mut W,
+async fn zip_dir<W: tokio::io::AsyncWrite + Unpin>(
+    writer: W,
     dir: &Path,
     key: Option<[u8; 32]>,
 ) -> BoxResult<()> {
-    let mut writer = ZipFileWriter::with_tokio(writer);
+    let mut zip_writer = ZipFileWriter::with_tokio(writer);
     let mut walkdir = WalkDir::new(dir);
     while let Some(entry) = walkdir.next().await {
         if let Ok(entry) = entry {
@@ -1226,19 +1226,18 @@ async fn zip_dir<W: AsyncWrite + Unpin>(
                 None => continue,
             };
 
-            let file = DavFile::open(&entry_path, key).await?;
+            let mut file = DavFile::open(&entry_path, key).await?;
 
             let builder = ZipEntryBuilder::new(filename.into(), Compression::Deflate);
-            let entry_writer = writer.write_entry_stream(builder).await?;
-            let mut entry_writer_compat =
-                tokio_util::compat::FuturesAsyncWriteCompatExt::compat_write(entry_writer);
+            let entry_writer = zip_writer.write_entry_stream(builder).await?;
+            let mut entry_writer_compat = entry_writer.compat_write();
 
-            file.copy_to(&mut entry_writer_compat).await?;
+            tokio::io::copy(&mut file, &mut entry_writer_compat).await?;
 
             entry_writer_compat.into_inner().close().await?;
         }
     }
-    writer.close().await?;
+    zip_writer.close().await?;
     Ok(())
 }
 
@@ -1327,16 +1326,17 @@ enum Destination {
 impl Destination {
     async fn new(dest: PathBuf, is_new_dir: bool) -> Destination {
         if let Ok(meta) = fs::symlink_metadata(&dest).await {
-            if meta.is_symlink() {
-                if let Ok(m) = fs::metadata(&dest).await {
-                    if m.is_file() {
-                        return Destination::ExistingFile(dest);
-                    }
-                    if m.is_dir() {
-                        return Destination::ExistingDir(dest);
-                    }
+            if meta.is_symlink()
+                && let Ok(m) = fs::metadata(&dest).await
+            {
+                if m.is_file() {
+                    return Destination::ExistingFile(dest);
+                }
+                if m.is_dir() {
+                    return Destination::ExistingDir(dest);
                 }
             }
+
             if meta.is_file() {
                 Destination::ExistingFile(dest)
             } else {
@@ -1393,16 +1393,16 @@ fn clean_expired_locks(locks: &mut HashMap<PathBuf, LockInfo>) {
 }
 
 fn parse_timeout_header(headers: &HeaderMap<HeaderValue>) -> i64 {
-    if let Some(timeout_header) = headers.get("Timeout") {
-        if let Ok(header_val) = timeout_header.to_str() {
-            // Support comma-separated list, take the first understood
-            for val in header_val.split(',') {
-                let val = val.trim();
-                if let Some(secs) = val.strip_prefix("Second-") {
-                    if let Ok(secs) = secs.parse::<i64>() {
-                        return secs.min(LOCK_TIMEOUT);
-                    }
-                }
+    if let Some(timeout_header) = headers.get("Timeout")
+        && let Ok(header_val) = timeout_header.to_str()
+    {
+        // Support comma-separated list, take the first understood
+        for val in header_val.split(',') {
+            let val = val.trim();
+            if let Some(secs) = val.strip_prefix("Second-")
+                && let Ok(secs) = secs.parse::<i64>()
+            {
+                return secs.min(LOCK_TIMEOUT);
             }
         }
     }

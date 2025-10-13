@@ -194,43 +194,43 @@ where
     .await?;
 
     // If the response contains a location, alter the redirect location if the redirection is relative to the proxied host
-    if let Some(location) = response.headers().get("location") {
-        if let Ok(location) = location.to_str() {
-            // parse location as an url
-            let location_uri: Uri = match location.trim_start_matches('.').parse() {
-                Ok(uri) => uri,
-                Err(_) => {
-                    // Try to add a forward slash
-                    match format!("/{location}").parse() {
-                        Ok(uri) => uri,
-                        Err(e) => {
-                            error!(
-                                "proxy redirect location header parsing for {:?} gave error: {:?}",
-                                location, e
-                            );
-                            return Err(<ProxyError as Into<axum::response::Response>>::into(
-                                ProxyError::BadRedirectResponseError,
-                            ));
-                        }
+    if let Some(location) = response.headers().get("location")
+        && let Ok(location) = location.to_str()
+    {
+        // parse location as an url
+        let location_uri: Uri = match location.trim_start_matches('.').parse() {
+            Ok(uri) => uri,
+            Err(_) => {
+                // Try to add a forward slash
+                match format!("/{location}").parse() {
+                    Ok(uri) => uri,
+                    Err(e) => {
+                        error!(
+                            "proxy redirect location header parsing for {:?} gave error: {:?}",
+                            location, e
+                        );
+                        return Err(<ProxyError as Into<axum::response::Response>>::into(
+                            ProxyError::BadRedirectResponseError,
+                        ));
                     }
                 }
-            };
-            // test if the host of this url contains the target service host
-            if location_uri
-                .host()
-                .is_some_and(|h| h.contains(app.forward_authority.host()))
+            }
+        };
+        // test if the host of this url contains the target service host
+        if location_uri
+            .host()
+            .is_some_and(|h| h.contains(app.forward_authority.host()))
+        {
+            // if so, replace the target service host with the front service host
+            let mut parts = location_uri.into_parts();
+            parts.scheme = Some(app.app_scheme);
+            if let Ok(authority) = hostname.parse::<Authority>() {
+                parts.authority = Some(authority);
+            }
+            if let Ok(uri) = Uri::from_parts(parts)
+                && let Ok(uri) = HeaderValue::from_str(&uri.to_string())
             {
-                // if so, replace the target service host with the front service host
-                let mut parts = location_uri.into_parts();
-                parts.scheme = Some(app.app_scheme);
-                if let Ok(authority) = hostname.parse::<Authority>() {
-                    parts.authority = Some(authority);
-                }
-                if let Ok(uri) = Uri::from_parts(parts)
-                    && let Ok(uri) = HeaderValue::from_str(&uri.to_string())
-                {
-                    response.headers_mut().insert(LOCATION, uri);
-                }
+                response.headers_mut().insert(LOCATION, uri);
             }
         }
     }

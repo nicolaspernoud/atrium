@@ -141,20 +141,19 @@ where
             .expect("Cookie jar retrieval is Infallible");
 
         // Get the serialized user_token from the cookie jar, and check the xsrf token
-        if let Some(cookie) = jar.get(AUTH_COOKIE) {
-            if let Ok(TypedHeader(XSRFToken(xsrf_token))) =
+        if let Some(cookie) = jar.get(AUTH_COOKIE)
+            && let Ok(TypedHeader(XSRFToken(xsrf_token))) =
                 <TypedHeader<XSRFToken> as FromRequestParts<S>>::from_request_parts(parts, state)
                     .await
-            {
-                // Deserialize the user_token and return him/her
-                let serialized_user_token = cookie.value();
-                let user_token = UserToken::from_json(serialized_user_token)?;
+        {
+            // Deserialize the user_token and return him/her
+            let serialized_user_token = cookie.value();
+            let user_token = UserToken::from_json(serialized_user_token)?;
 
-                if user_token.xsrf_token != xsrf_token {
-                    return Err((StatusCode::FORBIDDEN, "xsrf token doesn't match"));
-                }
-                return Ok(user_token);
+            if user_token.xsrf_token != xsrf_token {
+                return Err((StatusCode::FORBIDDEN, "xsrf token doesn't match"));
             }
+            return Ok(user_token);
         }
 
         // OR Try to get user_token from the query
@@ -706,30 +705,30 @@ pub fn authorized_or_redirect_to_login(
         check_authorization(app, user.as_ref().map(|u| &u.0), domain, req.uri().path())
     {
         // Redirect to login page if user is not logged, write where to get back after login in a cookie
-        if value.status() == StatusCode::UNAUTHORIZED {
-            if let Ok(mut hn) = HeaderValue::from_str(&config.full_domain()) {
-                *value.status_mut() = StatusCode::FOUND;
-                // If single proxy mode, redirect directly to IdP without passing through atrium main app
-                if config.single_proxy
-                    && let Ok(value) =
-                        HeaderValue::from_str(&format!("{}/auth/oauth2login", config.full_domain()))
-                {
-                    hn = value;
-                }
-                value.headers_mut().append(LOCATION, hn);
-                let cookie = Cookie::build((
-                    "ATRIUM_REDIRECT",
-                    format!("{}://{hostname}", config.scheme()),
-                ))
-                .domain(config.domain.clone())
-                .path("/")
-                .same_site(SameSite::Lax)
-                .secure(false)
-                .max_age(time::Duration::seconds(60))
-                .http_only(false);
-                if let Ok(header_value) = HeaderValue::from_str(&format!("{cookie}")) {
-                    value.headers_mut().append(SET_COOKIE, header_value);
-                }
+        if value.status() == StatusCode::UNAUTHORIZED
+            && let Ok(mut hn) = HeaderValue::from_str(&config.full_domain())
+        {
+            *value.status_mut() = StatusCode::FOUND;
+            // If single proxy mode, redirect directly to IdP without passing through atrium main app
+            if config.single_proxy
+                && let Ok(value) =
+                    HeaderValue::from_str(&format!("{}/auth/oauth2login", config.full_domain()))
+            {
+                hn = value;
+            }
+            value.headers_mut().append(LOCATION, hn);
+            let cookie = Cookie::build((
+                "ATRIUM_REDIRECT",
+                format!("{}://{hostname}", config.scheme()),
+            ))
+            .domain(config.domain.clone())
+            .path("/")
+            .same_site(SameSite::Lax)
+            .secure(false)
+            .max_age(time::Duration::seconds(60))
+            .http_only(false);
+            if let Ok(header_value) = HeaderValue::from_str(&format!("{cookie}")) {
+                value.headers_mut().append(SET_COOKIE, header_value);
             }
         }
         return Err(value);

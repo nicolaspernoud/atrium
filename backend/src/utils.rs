@@ -28,10 +28,10 @@ where
     D: de::Deserializer<'de>,
 {
     let mut de_string: Option<String> = Option::deserialize(d)?;
-    if let Some(ref mut de_string) = de_string {
-        if de_string.trim_in_place().is_empty() {
-            return Ok(None);
-        }
+    if let Some(ref mut de_string) = de_string
+        && de_string.trim_in_place().is_empty()
+    {
+        return Ok(None);
     }
     Ok(de_string)
 }
