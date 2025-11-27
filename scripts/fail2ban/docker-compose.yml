@@ -1,0 +1,19 @@
+---
+services:
+  fail2ban:
+    image: lscr.io/linuxserver/fail2ban:latest
+    container_name: fail2ban
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Europe/Paris
+    volumes:
+      - ./atrium-config/jail.d/atrium.local:/config/fail2ban/jail.d/atrium.local
+      - ./atrium-config/filter.d/atrium-denied.conf:/config/fail2ban/filter.d/atrium-denied.conf
+      - ./jail.local:/config/fail2ban/jail.local
+      - <path to atrium logs directory>:/remotelogs/atrium
+    restart: unless-stopped

@@ -19,7 +19,7 @@ See [atrium.yaml](https://github.com/nicolaspernoud/atrium/blob/main/backend/atr
 
 The `hostname` configuration can be overridden with the environment variable `MAIN_HOSTNAME`.
 
-## DNS
+### DNS
 
 Your DNS configuration should be as below :
 |Domain|Type|Target|
@@ -27,6 +27,47 @@ Your DNS configuration should be as below :
 |your.hostname|A|Your machine IPv4|
 |your.hostname|AAAA|Your machine IPv6|
 |\*.your.hostname|CNAME|your.hostname|
+
+### Fail2ban
+
+To block IPs that are trying to access files without authorization, you can use the provided fail2ban configuration, which runs in a Docker container.
+
+#### Prerequisites
+
+- Docker and Docker Compose must be installed on your system.
+
+#### Installation & Configuration
+
+1.  **Navigate to the fail2ban directory:**
+
+    ```bash
+    cd scripts/fail2ban
+    ```
+
+2.  **Verify Configuration:**
+
+    - **Container:** Open `docker-compose.yml`. Alter the timezone and ensure the host side of the log volume mount (`/remotelogs/atrium`) points to your actual atrium log directory.
+      ```yaml
+      environment:
+        # ...
+        - TZ=Europe/Paris # <- Alter the timezone to match the one of the server
+      volumes:
+        # ...
+        - <path to atrium logs directory>:/remotelogs/atrium # <- Alter this path
+      ```
+    - **Ignore IPs:** To prevent being locked out, add your own IP addresses to the `ignoreip` list in `jail.local`.
+      ```
+      ignoreip = 127.0.0.1/8 ::1 YOUR.IP.HERE
+      ```
+
+3.  **Start the container:**
+
+    ```bash
+    ./up.sh
+    ```
+
+The fail2ban service will now monitor the atrium logs and automatically ban IPs that trigger the "FILE ACCESS DENIED" or the "AUTHENTICATION ERROR" rules.
+The new logs won't be added automatically, so use the reload.sh script a a crontab to load new log files : `crontab -e` => `10 * * * * /services/fail2ban/reload.sh >/dev/null 2>&1`
 
 ## Development
 

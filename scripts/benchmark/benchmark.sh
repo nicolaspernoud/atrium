@@ -114,7 +114,8 @@ kill $ATRIUM_PROXY_PID
 
 # Build for production
 cd "${WD}"/../.. || exit
-docker build "$(cat versions.env | grep -v '^#' | xargs -I {} echo --build-arg {})" --platform linux/amd64 -t atrium_bench .
+# shellcheck disable=SC2046
+docker build $(cat versions.env | grep -v '^#' | xargs -I {} echo --build-arg {}) --platform linux/amd64 -t atrium_bench .
 
 # Start proxy
 docker run -d --name atrium_bench \

@@ -1,0 +1,9 @@
+[atrium-denied]
+enabled = true
+port = http,https
+filter = atrium-denied
+chain = INPUT
+logpath = /remotelogs/atrium/atrium.log*
+maxretry = 3
+findtime = 60
+bantime = 2678400
