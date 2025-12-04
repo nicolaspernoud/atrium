@@ -6,6 +6,7 @@ use hyper::{Method, header::RANGE};
 use quick_xml::escape::escape;
 use sha2::{Digest, Sha512};
 use std::{
+    fs,
     io::{self, BufWriter, Write},
     time::{Duration, Instant},
 };
@@ -233,10 +234,10 @@ async fn get_correct_range() -> BoxResult<()> {
             .send()
             .await?;
         assert_eq!(resp.status(), 206);
-        assert_eq!(
-            resp.text().await?,
-            "estie vitae volutpat eget, aliquet ac ipsum. Quisqu"
-        );
+
+        let file_content = fs::read("tests/data/lorem.txt")?;
+        let expected_content = &file_content[20000..=20050];
+        assert_eq!(resp.bytes().await?, expected_content);
     }
 
     Ok(())

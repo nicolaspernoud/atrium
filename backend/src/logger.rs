@@ -28,17 +28,16 @@ pub fn city_from_ip(addr: SocketAddr, reader: OptionalMaxMindReader) -> String {
         V6(ip) if ip.to_ipv4_mapped().is_some_and(|ip| ip.is_loopback()) => LOCALHOST.to_owned(),
         _ => {
             if let Some(reader) = reader {
-                match reader.lookup::<geoip2::City<'_>>(ip) {
-                    Ok(Some(city)) => format!(
+                if let Ok(result) = reader.lookup(ip)
+                    && let Ok(Some(city)) = result.decode::<geoip2::City<'_>>()
+                {
+                    format!(
                         "{}, {}",
-                        city.city.map_or(UNKNOWN_CITY, |c| c
-                            .names
-                            .map_or(UNKNOWN_CITY, |n| n.get("en").unwrap_or(&UNKNOWN_CITY))),
-                        city.country.map_or(UNKNOWN_COUNTRY, |c| c
-                            .names
-                            .map_or(UNKNOWN_COUNTRY, |n| n.get("en").unwrap_or(&UNKNOWN_COUNTRY)))
-                    ),
-                    Ok(None) | Err(_) => "unknown location".to_owned(),
+                        city.city.names.english.unwrap_or(UNKNOWN_CITY),
+                        city.country.names.english.unwrap_or(UNKNOWN_COUNTRY),
+                    )
+                } else {
+                    "unknown location".to_owned()
                 }
             } else {
                 "unknown location (no geo ip database)".to_owned()

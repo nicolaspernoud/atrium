@@ -48,11 +48,9 @@ impl TestApp {
         install_tracing();
         let id = random_string(16);
         create_test_tree(&id).ok();
-        let main_listener =
-            std::net::TcpListener::bind("127.0.0.1:0").expect("failed to bind to random port");
-        main_listener
-            .set_nonblocking(true)
-            .expect("non blocking listener");
+        let main_listener = TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("tcp listener");
         let main_addr = (main_listener).local_addr().unwrap();
         let main_port = main_addr.port();
         let mock1_listener = TcpListener::bind("127.0.0.1:0")
@@ -89,15 +87,18 @@ impl TestApp {
         let (server_status, server_started) = broadcast::channel(16);
 
         let server_handle = tokio::spawn(async move {
+            let std_listener = main_listener.into_std().expect("std listener");
             loop {
+                let cloned_listener = std_listener.try_clone().expect("std listener");
+                let tokio_listener =
+                    TcpListener::from_std(cloned_listener).expect("tokio tcp listener");
                 info!("Configuration read !");
                 let mut rx = tx.subscribe();
                 let app = Server::build(&fp, tx.clone())
                     .await
                     .expect("could not build server from configuration");
                 let server = axum::serve(
-                    TcpListener::from_std(main_listener.try_clone().expect("cloned main listener"))
-                        .expect("tokio listener"),
+                    tokio_listener,
                     app.router
                         .into_make_service_with_connect_info::<SocketAddr>(),
                 )
