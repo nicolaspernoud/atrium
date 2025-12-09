@@ -23,6 +23,12 @@ jobs:
     name: Build backend with web frontend as docker image and push to docker hub
     runs-on: ubuntu-latest
     steps:
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: false
+          android: false
+          docker-images: false
       - name: Code Checkout
         uses: actions/checkout@v3
       - name: Set up QEMU

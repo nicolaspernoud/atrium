@@ -7,15 +7,16 @@ ARG RUST_VERSION
 ARG FLUTTER_VERSION
 
 # Set up an environnement to cross-compile the app for musl to create a statically-linked binary
-FROM --platform=$BUILDPLATFORM rust:${RUST_VERSION}-bookworm AS backend-builder
+FROM --platform=$BUILDPLATFORM rust:${RUST_VERSION}-trixie AS backend-builder
 ARG TARGETPLATFORM
 RUN case "$TARGETPLATFORM" in \
     "linux/amd64") echo x86_64-unknown-linux-gnu > /rust_target.txt ;; \
     "linux/arm64") echo aarch64-unknown-linux-gnu > /rust_target.txt ;; \
     "linux/arm/v7") echo armv7-unknown-linux-gnueabihf > /rust_target.txt ;; \
-    "linux/arm/v6") echo arm-unknown-linux-musleabihf > /rust_target.txt ;; \
+    "linux/arm/v6") wget https://github.com/cross-tools/musl-cross/releases/download/20250929/arm-unknown-linux-musleabihf.tar.xz -O - | tar -xJf - -C /opt && echo arm-unknown-linux-musleabihf > /rust_target.txt ;; \
     *) exit 1 ;; \
     esac
+ENV PATH="/opt/arm-unknown-linux-musleabihf/bin:$PATH"
 RUN rustup target add $(cat /rust_target.txt)
 RUN apt update && apt install -y clang cmake gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf libc6-dev-i386 libcap2-bin libclang-dev musl-dev musl-tools
 RUN ln -s /usr/include/asm-generic /usr/include/asm
@@ -66,9 +67,9 @@ RUN flutter build web
 # Stage 3 : Final image #
 #########################
 
-FROM --platform=linux/amd64 gcr.io/distroless/cc-debian12 AS base-amd64
-FROM --platform=linux/arm64 gcr.io/distroless/cc-debian12 AS base-arm64
-FROM --platform=linux/arm/v7 gcr.io/distroless/cc-debian12 AS base-armv7
+FROM --platform=linux/amd64 gcr.io/distroless/cc-debian13 AS base-amd64
+FROM --platform=linux/arm64 gcr.io/distroless/cc-debian13 AS base-arm64
+FROM --platform=linux/arm/v7 gcr.io/distroless/cc-debian13 AS base-armv7
 FROM --platform=linux/arm/v6 scratch AS base-armv6
 
 FROM base-${TARGETARCH}${TARGETVARIANT}
