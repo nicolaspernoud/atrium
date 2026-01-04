@@ -548,6 +548,12 @@ class ExplorerState extends State<Explorer> {
             itemPositionsListener: itemPositionsListener,
           ),
         ),
+        Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Text(
+            "${list.length} ${tr(context, "item")}${list.length != 1 ? "s" : ""}",
+          ),
+        ),
       ],
     );
   }

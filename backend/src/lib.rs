@@ -4,6 +4,7 @@ pub mod configuration;
 pub mod davs;
 pub mod dir_server;
 pub mod errors;
+pub mod extract;
 pub mod headers;
 pub mod logger;
 pub mod middlewares;

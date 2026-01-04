@@ -1,3 +1,4 @@
+use atrium::extract::Host;
 use atrium::{
     configuration::{Config, TlsMode},
     errors::Error,
@@ -5,7 +6,6 @@ use atrium::{
     server::Server,
 };
 use axum::{BoxError, handler::HandlerWithoutStateExt, response::Redirect};
-use axum_extra::extract::Host;
 use axum_server::Handle;
 use http::{StatusCode, Uri};
 use rustls::ServerConfig;
@@ -234,19 +234,19 @@ fn setup_logger(debug_mode: bool, log_to_file: bool) -> Vec<WorkerGuard> {
     guards
 }
 
-async fn redirect_http_to_https(handle: Handle) -> tokio::io::Result<()> {
-    fn make_https(host: &str, uri: Uri) -> Result<Uri, BoxError> {
+async fn redirect_http_to_https(handle: Handle<SocketAddr>) -> tokio::io::Result<()> {
+    fn make_https(host: Host, uri: Uri) -> Result<Uri, BoxError> {
         let mut parts = uri.into_parts();
         parts.scheme = Some(axum::http::uri::Scheme::HTTPS);
         if parts.path_and_query.is_none() {
             parts.path_and_query = Some("/".parse()?);
         }
-        parts.authority = Some(host.parse()?);
+        parts.authority = Some(host.into());
         Ok(Uri::from_parts(parts)?)
     }
 
-    async fn redirect(Host(host): Host, uri: Uri) -> Result<Redirect, (StatusCode, &'static str)> {
-        match make_https(&host, uri) {
+    async fn redirect(host: Host, uri: Uri) -> Result<Redirect, (StatusCode, &'static str)> {
+        match make_https(host, uri) {
             Ok(uri) => Ok(Redirect::permanent(&uri.to_string())),
             Err(_) => Err((StatusCode::BAD_REQUEST, "redirect to HTTPS failed")),
         }

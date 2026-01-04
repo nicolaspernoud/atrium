@@ -4,6 +4,7 @@ use crate::{
     configuration::{Config, HostType, config_or_error, trim_host},
     davs::model::Dav,
     errors::ErrResponse,
+    extract::Host,
     headers::XSRFToken,
     logger::city_from_ip,
     utils::{
@@ -23,10 +24,7 @@ use axum::{
 };
 use axum_extra::{
     TypedHeader,
-    extract::{
-        Host,
-        cookie::{Cookie, Key, PrivateCookieJar, SameSite},
-    },
+    extract::cookie::{Cookie, Key, PrivateCookieJar, SameSite},
 };
 use chacha20poly1305::aead::OsRng;
 use headers::{Authorization, HeaderName, authorization::Basic};
@@ -329,14 +327,14 @@ pub async fn local_auth(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     jar: PrivateCookieJar,
     State(config): State<ConfigState>,
-    Host(hostname): Host,
+    host: Host,
     Json(payload): Json<LocalAuth>,
 ) -> Result<(PrivateCookieJar, Json<AuthResponse>), (StatusCode, &'static str)> {
     // Find the user in configuration
     let (user, user_token) = authenticate_local_user(&config, payload, MAXMIND_READER.get(), addr)?;
     let cookie = create_user_cookie(
         &user_token,
-        hostname,
+        &host,
         &config,
         addr,
         MAXMIND_READER.get(),
@@ -352,18 +350,16 @@ pub async fn local_auth(
     ))
 }
 
-pub async fn logout(
-    jar: PrivateCookieJar,
-    Host(hostname): Host,
-) -> Result<PrivateCookieJar, ErrResponse> {
-    let domain = domain_from_hostname(hostname)?;
-    let cookie = Cookie::build((AUTH_COOKIE, "")).path("/").domain(domain);
+pub async fn logout(jar: PrivateCookieJar, host: Host) -> Result<PrivateCookieJar, ErrResponse> {
+    let cookie = Cookie::build((AUTH_COOKIE, ""))
+        .path("/")
+        .domain(host.hostname().to_owned());
     Ok(jar.remove(cookie))
 }
 
 pub(crate) fn create_user_cookie(
     user_token: &UserToken,
-    hostname: String,
+    host: &Host,
     config: &Config,
     addr: SocketAddr,
     reader: OptionalMaxMindReader,
@@ -371,9 +367,8 @@ pub(crate) fn create_user_cookie(
 ) -> Result<Cookie<'static>, ErrResponse> {
     let encoded = serde_json::to_string(user_token)
         .map_err(|_| ErrResponse::S500("could not encode user"))?;
-    let domain = domain_from_hostname(hostname)?;
     let cookie = Cookie::build((AUTH_COOKIE, encoded))
-        .domain(domain)
+        .domain(host.hostname().to_owned())
         .path("/")
         .same_site(axum_extra::extract::cookie::SameSite::Lax)
         .secure(config.tls_mode.is_secure())
@@ -386,15 +381,6 @@ pub(crate) fn create_user_cookie(
         city_from_ip(addr, reader)
     );
     Ok(cookie)
-}
-
-fn domain_from_hostname(hostname: String) -> Result<String, ErrResponse> {
-    let domain = hostname
-        .split(':')
-        .next()
-        .ok_or(ErrResponse::S500("could not find domain"))?
-        .to_owned();
-    Ok(domain)
 }
 
 pub fn authenticate_local_user(

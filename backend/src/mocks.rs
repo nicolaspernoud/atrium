@@ -1,3 +1,4 @@
+use super::extract::Host;
 use crate::middlewares::debug_cors_middleware;
 use axum::{
     Extension, Router,
@@ -6,7 +7,6 @@ use axum::{
     response::{Html, IntoResponse, Redirect},
     routing::{get, post},
 };
-use axum_extra::extract::Host;
 use http::{HeaderMap, HeaderValue, StatusCode, header};
 use serde::Deserialize;
 use tokio::net::TcpListener;
@@ -71,7 +71,7 @@ pub async fn mock_oauth2_server(listener: TcpListener) {
         .expect("failed to build mock server");
 }
 
-async fn well_known_openid(Host(host): Host) -> impl IntoResponse {
+async fn well_known_openid(host: Host) -> impl IntoResponse {
     (
         [(header::CONTENT_TYPE, "application/json")],
         format!(

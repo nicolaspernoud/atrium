@@ -1,5 +1,5 @@
 [target.arm-unknown-linux-musleabihf]
-linker = "arm-linux-gnueabihf-gcc"
+linker = "arm-unknown-linux-musleabihf-gcc"
 
 [target.armv7-unknown-linux-gnueabihf]
 linker = "arm-linux-gnueabihf-gcc"

@@ -12,7 +12,7 @@ const KEY_PATH: &str = "key.pem";
 pub async fn serve_with_self_signed_cert(
     ip: &str,
     port: &u16,
-    handle: Handle,
+    handle: Handle<SocketAddr>,
     app: IntoMakeServiceWithConnectInfo<MethodRouter, SocketAddr>,
 ) -> Result<(), Error> {
     // Certificates

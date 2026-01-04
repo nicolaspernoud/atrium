@@ -54,6 +54,7 @@ class MyLocalizations {
       "insecure_skip_verify": "Do not check server certificates",
       "is_proxy": "Is a proxy",
       "is_writable": "Is writable",
+      "item": "item",
       "family_name": "Last name",
       "leave_empty_to_keep_current_password":
           "Leave empty to keep current password",
@@ -135,6 +136,7 @@ class MyLocalizations {
       "insecure_skip_verify": "Ne pas vérifier les certificats serveur",
       "is_proxy": "Serveur proxy",
       "is_writable": "Accès en écriture",
+      "item": "élément",
       "family_name": "Nom",
       "leave_empty_to_keep_current_password":
           "Laisser vide pour garder le mot de passe actuel",

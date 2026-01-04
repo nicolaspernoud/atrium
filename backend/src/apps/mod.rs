@@ -1,3 +1,4 @@
+use super::extract::Host;
 use axum::{
     Json,
     body::Body,
@@ -8,7 +9,6 @@ use axum::{
     },
     response::IntoResponse,
 };
-use axum_extra::extract::Host;
 use base64ct::Encoding;
 use headers::HeaderValue;
 use http::{
@@ -128,7 +128,7 @@ pub async fn proxy_handler<S>(
     user: Option<UserTokenWithoutXSRFCheck>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     app: HostType,
-    Host(hostname): Host,
+    host: Host,
     State(config): State<ConfigState>,
     State(client): State<S>,
     mut req: Request<Body>,
@@ -137,7 +137,7 @@ where
     S: tower_service::Service<Request<Body>, Response = http::Response<hyper::body::Incoming>>,
     <S as tower_service::Service<Request<Body>>>::Error: std::fmt::Debug,
 {
-    authorized_or_redirect_to_login(&app, &user, &hostname, &req, &config).map_err(|b| *b)?;
+    authorized_or_redirect_to_login(&app, &user, host.as_str(), &req, &config).map_err(|b| *b)?;
 
     let app = match app {
         HostType::SkipVerifyReverseApp(app) | HostType::ReverseApp(app) => app,
@@ -153,11 +153,11 @@ where
     if app.forward_authority.port().is_some() {
         req.headers_mut().insert(
             "X-Forwarded-Host",
-            HeaderValue::from_str(&hostname).map_err(ProxyError::from)?,
+            HeaderValue::from_str(host.as_str()).map_err(ProxyError::from)?,
         );
         req.headers_mut().insert(
             HOST,
-            HeaderValue::from_str(&hostname).map_err(ProxyError::from)?,
+            HeaderValue::from_str(host.as_str()).map_err(ProxyError::from)?,
         );
         req.headers_mut().insert(
             "X-Forwarded-Proto",
@@ -224,9 +224,7 @@ where
             // if so, replace the target service host with the front service host
             let mut parts = location_uri.into_parts();
             parts.scheme = Some(app.app_scheme);
-            if let Ok(authority) = hostname.parse::<Authority>() {
-                parts.authority = Some(authority);
-            }
+            parts.authority = Some(host.into());
             if let Ok(uri) = Uri::from_parts(parts)
                 && let Ok(uri) = HeaderValue::from_str(&uri.to_string())
             {

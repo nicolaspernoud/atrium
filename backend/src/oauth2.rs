@@ -2,6 +2,7 @@ use crate::{
     appstate::{ConfigState, MAXMIND_READER},
     configuration::OpenIdConfig,
     errors::ErrResponse,
+    extract::Host,
     users::{ADMINS_ROLE, User, UserInfo, create_user_cookie, user_to_token},
     utils::select_entries_by_value,
 };
@@ -10,10 +11,7 @@ use axum::{
     extract::{ConnectInfo, Query, State},
     response::{IntoResponse, Redirect},
 };
-use axum_extra::extract::{
-    Host,
-    cookie::{Cookie, CookieJar, PrivateCookieJar},
-};
+use axum_extra::extract::cookie::{Cookie, CookieJar, PrivateCookieJar};
 use http::{HeaderValue, Request, StatusCode, Uri, header::AUTHORIZATION};
 use http_body_util::BodyExt;
 use hyper::body::Buf;
@@ -198,7 +196,7 @@ pub async fn oauth2_callback(
     jar: CookieJar,
     private_jar: PrivateCookieJar,
     State(config): State<ConfigState>,
-    Host(hostname): Host,
+    host: Host,
 ) -> Result<(PrivateCookieJar, Redirect), ErrResponse> {
     let oidc_config = config
         .openid_config
@@ -279,7 +277,7 @@ pub async fn oauth2_callback(
     let user_token = user_to_token(&user, &config);
     let cookie = create_user_cookie(
         &user_token,
-        hostname,
+        &host,
         &config,
         addr,
         MAXMIND_READER.get(),

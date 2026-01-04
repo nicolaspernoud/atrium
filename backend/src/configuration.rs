@@ -3,6 +3,7 @@ use crate::{
     appstate::{ConfigMap, ConfigState},
     davs::model::Dav,
     errors::Error,
+    extract,
     oauth2::{RolesMap, openid_configuration},
     users::User,
     utils::{is_default, option_string_trim, string_trim},
@@ -366,17 +367,13 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let configmap = ConfigMap::from_ref(state);
 
-        let host = <axum_extra::extract::Host as FromRequestParts<S>>::from_request_parts(
-            parts, state,
-        )
-        .await
-        .map_err(|_| StatusCode::NOT_FOUND)?;
-
-        let hostname = host.0.split_once(':').unwrap_or((&host.0, "")).0;
+        let host = <extract::Host as FromRequestParts<S>>::from_request_parts(parts, state)
+            .await
+            .map_err(|_| StatusCode::NOT_FOUND)?;
 
         // Work out where to target to
         let target = configmap
-            .get(hostname)
+            .get(host.hostname())
             .ok_or(())
             .map_err(|_| StatusCode::NOT_FOUND)?;
         let target = (*target).clone();
