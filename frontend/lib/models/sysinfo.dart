@@ -6,11 +6,13 @@ class SysInfo {
     required this.usedMemory,
     required this.cpuUsagePercent,
     required this.uptime,
+    required this.atriumVersion,
   });
   late final int totalMemory;
   late final int usedMemory;
   late final double cpuUsagePercent;
   late final int uptime;
+  late final String atriumVersion;
 
   double get memoryUsage {
     return usedMemory / totalMemory;
@@ -29,6 +31,7 @@ class SysInfo {
     usedMemory = json['used_memory'];
     cpuUsagePercent = json['cpu_usage'];
     uptime = json['uptime'];
+    atriumVersion = json['atrium_version'];
   }
 
   Map<String, dynamic> toJson() {
@@ -37,6 +40,7 @@ class SysInfo {
     data['used_memory'] = usedMemory;
     data['cpu_usage'] = cpuUsagePercent;
     data['uptime'] = uptime;
+    data['atrium_version'] = atriumVersion;
     return data;
   }
 }

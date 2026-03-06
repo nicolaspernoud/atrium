@@ -7,7 +7,7 @@ use chacha20poly1305::{
 };
 use futures::ready;
 use headers::{ETag, LastModified};
-use rand::{TryRngCore, rngs::OsRng};
+use rand::{TryRng, rngs::SysRng};
 use std::io::{self, SeekFrom};
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -50,7 +50,7 @@ impl DavFile {
         match key {
             Some(key) => {
                 let mut nonce = [0u8; NONCE_SIZE];
-                TryRngCore::try_fill_bytes(&mut OsRng, &mut nonce)
+                TryRng::try_fill_bytes(&mut SysRng, &mut nonce)
                     .map_err(|e| io::Error::other(e.to_string()))?;
                 file.write_all(&nonce).await?;
                 file.flush().await?;

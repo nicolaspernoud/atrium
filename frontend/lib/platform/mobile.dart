@@ -24,62 +24,97 @@ class NotificationsPlugin {
     flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
     flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.requestNotificationsPermission();
-    var android =
-        const AndroidInitializationSettings('@drawable/notification_icon');
+    var android = const AndroidInitializationSettings(
+      '@drawable/notification_icon',
+    );
     var settings = InitializationSettings(android: android);
-    flutterLocalNotificationsPlugin.initialize(settings,
-        onDidReceiveNotificationResponse: onReceiveNotificationResponse);
+    flutterLocalNotificationsPlugin.initialize(
+      onDidReceiveNotificationResponse: onReceiveNotificationResponse,
+      settings: settings,
+    );
   }
 
   void onReceiveNotificationResponse(
-      NotificationResponse notificationResponse) async {
+    NotificationResponse notificationResponse,
+  ) async {
     var payload = notificationResponse.payload;
     if (payload != null) OpenFile.open(payload);
   }
 
   Future showSimpleNotification(String title, String message) async {
     var androidPlatformChannelSpecifics = const AndroidNotificationDetails(
-        'atrium-id', 'atrium',
-        channelDescription: 'atrium-channel',
-        importance: Importance.max,
-        priority: Priority.high,
-        color: Colors.indigo,
-        enableVibration: false);
-    var platformChannelSpecifics =
-        NotificationDetails(android: androidPlatformChannelSpecifics);
-    await flutterLocalNotificationsPlugin
-        .show(0, title, message, platformChannelSpecifics, payload: null);
+      'atrium-id',
+      'atrium',
+      channelDescription: 'atrium-channel',
+      importance: Importance.max,
+      priority: Priority.high,
+      color: Colors.indigo,
+      enableVibration: false,
+    );
+    var platformChannelSpecifics = NotificationDetails(
+      android: androidPlatformChannelSpecifics,
+    );
+    await flutterLocalNotificationsPlugin.show(
+      id: 0,
+      title: title,
+      body: message,
+      notificationDetails: platformChannelSpecifics,
+      payload: null,
+    );
   }
 
-  Future showProgressNotification(String title, String body, int progressId,
-      int currentProgress, int maxProgress, String savePath) async {
+  Future showProgressNotification(
+    String title,
+    String body,
+    int progressId,
+    int currentProgress,
+    int maxProgress,
+    String savePath,
+  ) async {
     final AndroidNotificationDetails androidNotificationDetails =
-        AndroidNotificationDetails('progress channel', 'progress channel',
-            channelDescription: 'progress channel description',
-            channelShowBadge: false,
-            importance: Importance.max,
-            priority: Priority.high,
-            onlyAlertOnce: true,
-            showProgress: true,
-            maxProgress: maxProgress,
-            progress: currentProgress,
-            playSound: false,
-            enableVibration: false);
-    final NotificationDetails notificationDetails =
-        NotificationDetails(android: androidNotificationDetails);
+        AndroidNotificationDetails(
+          'progress channel',
+          'progress channel',
+          channelDescription: 'progress channel description',
+          channelShowBadge: false,
+          importance: Importance.max,
+          priority: Priority.high,
+          onlyAlertOnce: true,
+          showProgress: true,
+          maxProgress: maxProgress,
+          progress: currentProgress,
+          playSound: false,
+          enableVibration: false,
+        );
+    final NotificationDetails notificationDetails = NotificationDetails(
+      android: androidNotificationDetails,
+    );
     await flutterLocalNotificationsPlugin.show(
-        progressId, title, body, notificationDetails,
-        payload: currentProgress == maxProgress ? savePath : null);
+      id: progressId,
+      title: title,
+      body: body,
+      notificationDetails: notificationDetails,
+      payload: currentProgress == maxProgress ? savePath : null,
+    );
   }
 }
 
 // Create new client configured for mobile
-webdav.Client newExplorerClient(String uri,
-    {String user = '', String password = '', bool debug = false}) {
-  var client =
-      webdav.newClient(uri, user: user, password: password, debug: debug);
+webdav.Client newExplorerClient(
+  String uri, {
+  String user = '',
+  String password = '',
+  bool debug = false,
+}) {
+  var client = webdav.newClient(
+    uri,
+    user: user,
+    password: password,
+    debug: debug,
+  );
   client.auth = webdav.BasicAuth(user: user, pwd: password);
   return client;
 }
@@ -88,19 +123,39 @@ Dio newDio(BaseOptions options) {
   return Dio(options);
 }
 
-Future<void> download(String url, webdav.Client client, webdav.File file,
-    BuildContext context) async {
+Future<void> download(
+  String url,
+  webdav.Client client,
+  webdav.File file,
+  BuildContext context,
+) async {
   var downloadingTitle = tr(context, "downloading");
   var successTitle = tr(context, "download_success");
   var id = Random().nextInt(9999);
   String? dir = await getDownloadPath();
   var savePath = '$dir/${file.name!}${file.isDir! ? ".zip" : ""}';
-  await client.read2File(file.path!, savePath, onProgress: (c, t) {
-    NotificationsPlugin().showProgressNotification(
-        downloadingTitle, file.name!, id, c, t, savePath);
-  });
+  await client.read2File(
+    file.path!,
+    savePath,
+    onProgress: (c, t) {
+      NotificationsPlugin().showProgressNotification(
+        downloadingTitle,
+        file.name!,
+        id,
+        c,
+        t,
+        savePath,
+      );
+    },
+  );
   NotificationsPlugin().showProgressNotification(
-      successTitle, file.name!, id, 100, 100, savePath);
+    successTitle,
+    file.name!,
+    id,
+    100,
+    100,
+    savePath,
+  );
 }
 
 Future webDownload(String url, String fileName) async {
@@ -114,14 +169,21 @@ Future webDownload(String url, String fileName) async {
       url,
       savePath,
       onReceiveProgress: (c, t) {
-        NotificationsPlugin()
-            .showProgressNotification(fileName, "atrium", id, c, t, savePath);
+        NotificationsPlugin().showProgressNotification(
+          fileName,
+          "atrium",
+          id,
+          c,
+          t,
+          savePath,
+        );
       },
       options: Options(
-          followRedirects: false,
-          validateStatus: (status) {
-            return status != null && status < 500;
-          }),
+        followRedirects: false,
+        validateStatus: (status) {
+          return status != null && status < 500;
+        },
+      ),
     );
   } catch (e) {
     if (kDebugMode) {
@@ -148,10 +210,19 @@ Future<String?> getDownloadPath() async {
   return directory?.path;
 }
 
-Future<void> upload(String destPath, PlatformFile file, webdav.Client client,
-    Function(int, int)? onProgress, CancelToken cancelToken) async {
-  await client.writeFromFile(file.path!, "$destPath/${file.name}",
-      onProgress: onProgress, cancelToken: cancelToken);
+Future<void> upload(
+  String destPath,
+  PlatformFile file,
+  webdav.Client client,
+  Function(int, int)? onProgress,
+  CancelToken cancelToken,
+) async {
+  await client.writeFromFile(
+    file.path!,
+    "$destPath/${file.name}",
+    onProgress: onProgress,
+    cancelToken: cancelToken,
+  );
 }
 
 Future<void> openIdConnectLogin(BuildContext context) async {
@@ -187,9 +258,7 @@ class _OpenIdWebViewState extends State<OpenIdWebView> {
     controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setNavigationDelegate(
-        NavigationDelegate(
-          onNavigationRequest: _interceptNavigation,
-        ),
+        NavigationDelegate(onNavigationRequest: _interceptNavigation),
       )
       ..loadRequest(Uri.parse("${App().prefs.hostname}/auth/oauth2login"));
   }
@@ -198,16 +267,14 @@ class _OpenIdWebViewState extends State<OpenIdWebView> {
   Widget build(BuildContext context) {
     if (!_dstReached) {
       return Scaffold(
-          appBar: AppBar(
-            title: const Text("Open Id Connect"),
-          ),
-          body: WebViewWidget(
-            controller: controller,
-          ));
+        appBar: AppBar(title: const Text("Open Id Connect")),
+        body: WebViewWidget(controller: controller),
+      );
     } else {
       cookieManager.getCookies(App().prefs.hostname).then((value) {
-        var authCookie =
-            value.singleWhere((element) => element.name == "ATRIUM_AUTH");
+        var authCookie = value.singleWhere(
+          (element) => element.name == "ATRIUM_AUTH",
+        );
         App().cookie = "ATRIUM_AUTH=${authCookie.value}";
         if (context.mounted) Navigator.pop(context, 'OK');
       });
@@ -221,8 +288,10 @@ class _OpenIdWebViewState extends State<OpenIdWebView> {
 
   NavigationDecision _interceptNavigation(NavigationRequest request) {
     if (request.url.contains("is_admin")) {
-      String xsrfToken =
-          request.url.toString().split('xsrf_token=')[1].split('&')[0];
+      String xsrfToken = request.url
+          .toString()
+          .split('xsrf_token=')[1]
+          .split('&')[0];
       bool isAdmin =
           request.url.toString().split('is_admin=')[1].split('&')[0] == "true";
       String username = request.url.toString().split('user=')[1].split('&')[0];

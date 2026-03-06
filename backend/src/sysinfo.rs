@@ -21,6 +21,8 @@ pub struct SystemInfo {
     pub used_memory: u64,
     pub cpu_usage: f32,
     pub uptime: u64,
+    #[serde(skip_deserializing)]
+    pub atrium_version: &'static str,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -94,6 +96,7 @@ pub async fn system_info(_user: UserToken) -> Result<Json<SystemInfo>, ErrRespon
             used_memory: sys.used_memory(),
             cpu_usage: sys.global_cpu_usage(),
             uptime: System::uptime(),
+            atrium_version: env!("CARGO_PKG_VERSION"),
         })
     })
     .await

@@ -17,6 +17,11 @@ jobs:
           docker-images: false
       - name: Code Checkout
         uses: actions/checkout@v3
+      - name: Dotenv Action
+        id: dotenv
+        uses: falti/dotenv-action@v1.1.4
+        with:
+          path: versions.env
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
       - name: Set up Docker Buildx
@@ -27,7 +32,8 @@ jobs:
         run: |
           sed -i '/^RUN setcap/d' Dockerfile && \
           docker buildx build --push \
-              --tag nicolaspernoud/atrium:nosetcap \
-              --platform linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64 \
-              $(cat versions.env | grep -v '^#' | xargs -I {} echo --build-arg {}) \
-              .
+            --tag nicolaspernoud/atrium:nosetcap \
+            --platform linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64 \
+            --build-arg RUST_VERSION=${{ steps.dotenv.outputs.rust_version }} \
+            --build-arg FLUTTER_VERSION=${{ steps.dotenv.outputs.flutter_version }} \
+            .

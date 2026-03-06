@@ -2,6 +2,7 @@ use crate::{
     appstate::ConfigState,
     errors::ErrResponse,
     utils::{is_default, query_pairs_or_error},
+    web::Assets,
 };
 use axum::{
     Json,
@@ -15,7 +16,6 @@ use hyper_util::{client::legacy::Client, rt::TokioExecutor};
 use jsonwebtoken::{EncodingKey, Header, encode};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use tokio::fs::{self};
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -72,9 +72,10 @@ pub async fn onlyoffice_page(
     let oo_user = ooq.get("user").ok_or(QUERY_ERROR)?;
 
     if let Some(server) = &config.onlyoffice_config.as_ref().map(|c| c.server.clone()) {
-        let template = fs::read_to_string("./web/onlyoffice/index.tmpl")
-            .await
-            .map_err(|_| ErrResponse::S500("couldn't read onlyoffice template file"))?;
+        let template_asset = Assets::get("onlyoffice/index.tmpl")
+            .ok_or(ErrResponse::S500("couldn't read onlyoffice template file"))?;
+        let template = std::str::from_utf8(template_asset.data.as_ref())
+            .map_err(|_| ErrResponse::S500("onlyoffice template is not valid utf8"))?;
         let title = config
             .onlyoffice_config
             .as_ref()

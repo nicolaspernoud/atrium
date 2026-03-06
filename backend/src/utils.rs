@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use http::StatusCode;
-use rand::{Rng, distr::Alphanumeric, rng};
+use rand::{RngExt, distr::Alphanumeric, rng};
 
 pub fn random_string(size: usize) -> std::string::String {
     rng()

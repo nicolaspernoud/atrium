@@ -7,10 +7,16 @@ Rust/Flutter version of Vestibule.
 
 ## Installation
 
-Example docker installation can be found [HERE](https://github.com/nicolaspernoud/atrium/blob/main/scripts/deploy/up.sh).  
+Example service installation can be found [HERE](https://github.com/nicolaspernoud/atrium/blob/main/scripts/systemd/install_atrium.sh).
+
+**OR**
+
+Example docker installation can be found [HERE](https://github.com/nicolaspernoud/atrium/blob/main/scripts/deploy/up.sh).
 Use your own GeoLite2-City.mmdb or remove the line.
 
-Example configuration can be found [HERE](https://github.com/nicolaspernoud/atrium/blob/main/backend/atrium.yaml).  
+In any case you will need to provide a configuration file. Atrium will start without one and create a minimal one, but since it will not even have users, it will be pretty much useless.
+
+Example configuration can be found [HERE](https://github.com/nicolaspernoud/atrium/blob/main/backend/atrium.yaml).
 To start quickly : configure your hostname, and set `tls_mode` to `Auto`.
 
 ## Configuration
@@ -28,46 +34,30 @@ Your DNS configuration should be as below :
 |your.hostname|AAAA|Your machine IPv6|
 |\*.your.hostname|CNAME|your.hostname|
 
-### Fail2ban
+### Integrated Fail2ban style Jail
 
-To block IPs that are trying to access files without authorization, you can use the provided fail2ban configuration, which runs in a Docker container.
+Atrium includes an integrated, stateless fail2ban style jail to block IPs that are trying to access files without authorization or failing to authenticate.
+
+It uses `ip(6)tables` to ban IPs on the host machine.
+
+**It would not work with docker deployments, as the docker image does not contain the iptables binaries.**
+
+#### Configuration
+
+The jail is configured in the `jail` section of `atrium.yaml`.
+
+```yaml
+jail:
+  enabled: true # Enable the fail2ban style jail
+  max_retry: 3 # Number of fails before banning the IP
+  find_time: 60 # Time window in seconds to count fails
+  ban_time: 30 # Ban duration in days
+```
 
 #### Prerequisites
 
-- Docker and Docker Compose must be installed on your system.
-
-#### Installation & Configuration
-
-1.  **Navigate to the fail2ban directory:**
-
-    ```bash
-    cd scripts/fail2ban
-    ```
-
-2.  **Verify Configuration:**
-
-    - **Container:** Open `docker-compose.yml`. Alter the timezone and ensure the host side of the log volume mount (`/remotelogs/atrium`) points to your actual atrium log directory.
-      ```yaml
-      environment:
-        # ...
-        - TZ=Europe/Paris # <- Alter the timezone to match the one of the server
-      volumes:
-        # ...
-        - <path to atrium logs directory>:/remotelogs/atrium # <- Alter this path
-      ```
-    - **Ignore IPs:** To prevent being locked out, add your own IP addresses to the `ignoreip` list in `jail.local`.
-      ```
-      ignoreip = 127.0.0.1/8 ::1 YOUR.IP.HERE
-      ```
-
-3.  **Start the container:**
-
-    ```bash
-    ./up.sh
-    ```
-
-The fail2ban service will now monitor the atrium logs and automatically ban IPs that trigger the "FILE ACCESS DENIED" or the "AUTHENTICATION ERROR" rules.
-The new logs won't be added automatically, so use the reload.sh script a a crontab to load new log files : `crontab -e` => `10 * * * * /services/fail2ban/reload.sh >/dev/null 2>&1`
+- When running in Docker, the container must use the **host network mode** (`network_mode: host`) and have the `NET_ADMIN` capability to alter the host's `iptables`.
+- `iptables` must be installed on the host.
 
 ## Development
 

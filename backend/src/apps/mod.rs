@@ -224,7 +224,7 @@ where
             // if so, replace the target service host with the front service host
             let mut parts = location_uri.into_parts();
             parts.scheme = Some(app.app_scheme);
-            parts.authority = Some(host.into());
+            parts.authority = host.into();
             if let Ok(uri) = Uri::from_parts(parts)
                 && let Ok(uri) = HeaderValue::from_str(&uri.to_string())
             {

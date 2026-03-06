@@ -131,9 +131,12 @@ where
     S: Send + Sync,
     Key: FromRef<S>,
     ConfigState: FromRef<S>,
+    crate::OptionalJail: FromRef<S>,
 {
     type Rejection = (StatusCode, &'static str);
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        #[cfg(target_os = "linux")]
+        let jail = crate::OptionalJail::from_ref(state);
         let jar = PrivateCookieJar::from_request_parts(parts, state)
             .await
             .expect("Cookie jar retrieval is Infallible");
@@ -195,7 +198,13 @@ where
                     addr.0,
                 ) {
                     Ok(user) => Ok(user.1),
-                    Err(e) => Err((e.0, "no user found in basic auth")),
+                    Err(e) => {
+                        #[cfg(target_os = "linux")]
+                        if let Some(jail) = jail {
+                            jail.report_failure(addr.0.ip());
+                        }
+                        Err((e.0, "no user found in basic auth"))
+                    }
                 };
             }
         }
@@ -212,6 +221,7 @@ where
     S: Send + Sync,
     Key: FromRef<S>,
     ConfigState: FromRef<S>,
+    crate::OptionalJail: FromRef<S>,
 {
     type Rejection = Infallible;
 
@@ -256,6 +266,7 @@ where
     S: Send + Sync,
     Key: FromRef<S>,
     ConfigState: FromRef<S>,
+    crate::OptionalJail: FromRef<S>,
 {
     type Rejection = (StatusCode, &'static str);
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
@@ -327,11 +338,18 @@ pub async fn local_auth(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     jar: PrivateCookieJar,
     State(config): State<ConfigState>,
+    #[cfg(target_os = "linux")] State(jail): State<crate::OptionalJail>,
     host: Host,
     Json(payload): Json<LocalAuth>,
 ) -> Result<(PrivateCookieJar, Json<AuthResponse>), (StatusCode, &'static str)> {
     // Find the user in configuration
-    let (user, user_token) = authenticate_local_user(&config, payload, MAXMIND_READER.get(), addr)?;
+    let (user, user_token) = authenticate_local_user(&config, payload, MAXMIND_READER.get(), addr)
+        .inspect_err(|_| {
+            #[cfg(target_os = "linux")]
+            if let Some(jail) = jail {
+                jail.report_failure(addr.ip());
+            }
+        })?;
     let cookie = create_user_cookie(
         &user_token,
         &host,

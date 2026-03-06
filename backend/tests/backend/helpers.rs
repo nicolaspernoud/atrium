@@ -352,6 +352,7 @@ pub fn create_default_config(
         http_port: *main_port,
         cookie_key: None,
         log_to_file: false,
+        jail: Default::default(),
         apps,
         davs,
         users,

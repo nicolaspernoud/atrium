@@ -1,26 +1,87 @@
-###########################
-# Stage 1 : Backend build #
-###########################
+# syntax=docker/dockerfile:1
 
-# Versions
-ARG RUST_VERSION
-ARG FLUTTER_VERSION
+# Default versions (can be overridden with --build-arg)
+ARG RUST_VERSION=1.93
+ARG FLUTTER_VERSION=3.41.2
 
-# Set up an environnement to cross-compile the app for musl to create a statically-linked binary
-FROM --platform=$BUILDPLATFORM rust:${RUST_VERSION}-trixie AS backend-builder
+# --- Frontend Builder ---
+# Use the Flutter image to build the web assets
+FROM --platform=$BUILDPLATFORM ghcr.io/cirruslabs/flutter:${FLUTTER_VERSION} AS frontend-builder
+WORKDIR /src
+# Build the Flutter web app
+COPY --exclude=.dart_tool frontend .
+RUN flutter build web --release
+# Add the static web assets
+COPY --exclude=index.html backend/web/. build/web/
+# Gzip assets for the backend to serve gzipped files
+RUN find build/web -type f ! -name "*.gz" ! -name "*.tmpl" -exec gzip -9 {} +
+
+# --- Backend Builder ---
+FROM --platform=$BUILDPLATFORM rust:${RUST_VERSION}-bookworm AS backend-builder
 ARG TARGETPLATFORM
-RUN case "$TARGETPLATFORM" in \
-    "linux/amd64") echo x86_64-unknown-linux-gnu > /rust_target.txt ;; \
-    "linux/arm64") echo aarch64-unknown-linux-gnu > /rust_target.txt ;; \
-    "linux/arm/v7") echo armv7-unknown-linux-gnueabihf > /rust_target.txt ;; \
-    "linux/arm/v6") wget https://github.com/cross-tools/musl-cross/releases/download/20250929/arm-unknown-linux-musleabihf.tar.xz -O - | tar -xJf - -C /opt && echo arm-unknown-linux-musleabihf > /rust_target.txt ;; \
-    *) exit 1 ;; \
-    esac
-ENV PATH="/opt/arm-unknown-linux-musleabihf/bin:$PATH"
-RUN rustup target add $(cat /rust_target.txt)
-RUN apt update && apt install -y clang cmake gcc-aarch64-linux-gnu gcc-arm-linux-gnueabihf libc6-dev-i386 libcap2-bin libclang-dev musl-dev musl-tools
+
+# Install cross-compilation dependencies
+RUN apt-get update && apt-get install -y \
+    clang \
+    cmake \
+    gcc-aarch64-linux-gnu \
+    gcc-arm-linux-gnueabihf \
+    libc6-dev-i386 \
+    libcap2-bin \
+    libclang-dev \
+    musl-dev \
+    musl-tools \
+    wget \
+    xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN ln -s /usr/include/asm-generic /usr/include/asm
 
+# Handle armv6 musl toolchain if needed
+RUN if [ "$TARGETPLATFORM" = "linux/arm/v6" ]; then \
+    wget https://github.com/cross-tools/musl-cross/releases/download/20250929/arm-unknown-linux-musleabihf.tar.xz -O - | tar -xJf - -C /opt; \
+    fi
+ENV PATH="/opt/arm-unknown-linux-musleabihf/bin:$PATH"
+
+WORKDIR /app
+
+# Determine the rust target
+RUN case "$TARGETPLATFORM" in \
+    "linux/amd64") RUST_TARGET="x86_64-unknown-linux-gnu" ;; \
+    "linux/arm64") RUST_TARGET="aarch64-unknown-linux-gnu" ;; \
+    "linux/arm/v7") RUST_TARGET="armv7-unknown-linux-gnueabihf" ;; \
+    "linux/arm/v6") RUST_TARGET="arm-unknown-linux-musleabihf" ;; \
+    *) RUST_TARGET="x86_64-unknown-linux-gnu" ;; \
+    esac; \
+    echo "$RUST_TARGET" > /rust_target_name && \
+    rustup target add "$RUST_TARGET"
+
+# Copy frontend assets from frontend-builder
+# We copy them to backend/dist because backend/src/web.rs uses #[folder = "dist/"]
+COPY --from=frontend-builder /src/build/web ./backend/dist
+
+# Copy backend source
+COPY backend/Cargo.toml ./backend/
+COPY backend/.cargo ./backend/.cargo
+COPY backend/src ./backend/src
+
+WORKDIR /app/backend
+RUN RUST_TARGET=$(cat /rust_target_name) && \
+    cargo build --profile release_optimized --target "$RUST_TARGET" && \
+    cp target/"$RUST_TARGET"/release_optimized/atrium /atrium
+
+# --- Binary Exporter ---
+# This stage is used to extract the binary locally
+FROM scratch AS binary-exporter
+ARG TARGETARCH
+ARG TARGETVARIANT
+COPY --from=backend-builder /atrium /atrium-${TARGETARCH}${TARGETVARIANT}
+
+# --- Final Prep ---
+# Prepare the binary and environment in a temporary stage
+FROM --platform=$BUILDPLATFORM debian:trixie-slim AS prep
+ARG TARGETPLATFORM
+RUN apt-get update && apt-get install -y adduser libcap2-bin && rm -rf /var/lib/apt/lists/*
 # Create appuser
 ENV USER=appuser
 ENV UID=1000
@@ -33,54 +94,25 @@ RUN adduser \
     --uid "${UID}" \
     "${USER}"
 
-WORKDIR /build
-
-COPY ./backend/.cargo ./.cargo
-COPY ./backend/Cargo.toml ./
-COPY ./backend/src ./src
-COPY ./backend/tests ./tests
-
-#RUN cargo test --release --target $(cat /rust_target.txt)
-RUN cargo build --profile release_optimized --target $(cat /rust_target.txt)
-RUN cp target/$(cat /rust_target.txt)/release_optimized/atrium .
-RUN chown -f "${UID}":"${UID}" ./atrium
-# Allow running on ports < 1000
-RUN setcap cap_net_bind_service=+ep ./atrium
-
 RUN mkdir -p /myapp/app
-COPY ./backend/atrium.yaml /myapp/app
-COPY ./backend/web/onlyoffice/ /myapp/app/web/onlyoffice/
-COPY ./backend/web/oauth2/ /myapp/app/web/oauth2/
-RUN chown -Rf "${UID}":"${UID}" /myapp
+COPY --from=backend-builder /atrium /myapp/app/atrium
+RUN chown -Rf "${UID}":"${UID}" /myapp/app/
+# Allow running on ports < 1000
+RUN setcap cap_net_bind_service=+ep /myapp/app/atrium
 
-############################
-# Stage 2 : Frontend build #
-############################
-
-FROM --platform=$BUILDPLATFORM ghcr.io/cirruslabs/flutter:${FLUTTER_VERSION} AS frontend-builder
-WORKDIR /build
-COPY ./frontend .
-RUN flutter pub get
-RUN flutter build web
-
-#########################
-# Stage 3 : Final image #
-#########################
-
+# --- Final Image ---
 FROM --platform=linux/amd64 gcr.io/distroless/cc-debian13 AS base-amd64
 FROM --platform=linux/arm64 gcr.io/distroless/cc-debian13 AS base-arm64
 FROM --platform=linux/arm/v7 gcr.io/distroless/cc-debian13 AS base-armv7
 FROM --platform=linux/arm/v6 scratch AS base-armv6
 
+ARG TARGETARCH
+ARG TARGETVARIANT
 FROM base-${TARGETARCH}${TARGETVARIANT}
+COPY --from=prep /etc/passwd /etc/passwd
+COPY --from=prep /etc/group /etc/group
+COPY --from=prep --chown=appuser:appuser /myapp /
 
-COPY --from=backend-builder /etc/passwd /etc/passwd
-COPY --from=backend-builder /etc/group /etc/group
-
-COPY --from=backend-builder /myapp /
 WORKDIR /app
-COPY --from=backend-builder /build/atrium ./
-COPY --chown=appuser:appuser --from=frontend-builder /build/build/web/ /app/web/
-
 USER appuser:appuser
 ENTRYPOINT ["./atrium"]

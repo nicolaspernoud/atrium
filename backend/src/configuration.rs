@@ -12,6 +12,7 @@ use axum::extract::{FromRef, FromRequestParts, OptionalFromRequestParts};
 use http::request::Parts;
 use hyper::StatusCode;
 use serde::{Deserialize, Serialize};
+use std::net::IpAddr;
 use std::{collections::HashMap, convert::Infallible, sync::Arc};
 
 fn http_port() -> u16 {
@@ -72,6 +73,42 @@ impl TlsMode {
     }
 }
 
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Clone)]
+pub struct JailConfig {
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub enabled: bool,
+    #[serde(default = "default_max_retry")]
+    pub max_retry: u32,
+    #[serde(default = "default_find_time")]
+    pub find_time: u64, // seconds
+    #[serde(default = "default_ban_time")]
+    pub ban_time: u64, // days
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub whitelist: Vec<IpAddr>,
+}
+
+fn default_max_retry() -> u32 {
+    3
+}
+fn default_find_time() -> u64 {
+    60
+}
+fn default_ban_time() -> u64 {
+    30
+}
+
+impl Default for JailConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            max_retry: default_max_retry(),
+            find_time: default_find_time(),
+            ban_time: default_ban_time(),
+            whitelist: Vec::new(),
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize, Debug, Default, PartialEq, Eq, Clone)]
 pub struct Config {
     #[serde(default = "hostname", deserialize_with = "string_trim")]
@@ -106,6 +143,8 @@ pub struct Config {
     pub onlyoffice_config: Option<OnlyOfficeConfig>,
     #[serde(default, skip_serializing_if = "is_default")]
     pub openid_config: Option<OpenIdConfig>,
+    #[serde(default, skip_serializing_if = "is_default")]
+    pub jail: JailConfig,
     #[serde(default, skip_serializing_if = "is_default")]
     pub apps: Vec<App>,
     #[serde(default, skip_serializing_if = "is_default")]
@@ -504,6 +543,7 @@ mod tests {
             letsencrypt_email: "foo@bar.com".to_owned(),
             cookie_key: None,
             log_to_file: false,
+            jail: Default::default(),
             apps,
             davs,
             users,

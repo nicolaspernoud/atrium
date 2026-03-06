@@ -7,6 +7,12 @@ tls_mode: No # required, defaults to No : use No for development/test http mode,
 letsencrypt_email: foo@bar.com # required if `tls_mode: Auto` is used : email for receiving Let's Encrypt information
 #cookie_key : # required, will be generated on first start : cookies and token signing key !!! SENSITIVE INFORMATION : TO BE KEPT HIDDEN !!!
 log_to_file: false # optional, defaults to false : log to a file in addition to std out
+jail: # optional : integrated fail2ban style jail
+  enabled: false # optional, defaults to false : if true, enable the fail2ban style jail
+  max_retry: 3 # optional, defaults to 3 : number of fails before banning the IP
+  find_time: 60 # optional, defaults to 60 : time window in seconds to count fails
+  ban_time: 30 # optional, defaults to 30 : ban duration in days
+  whitelist: ["192.168.1.10", "2001:db8::8a2e:370:7334"] # optional, defaults to empty list : IPs that will never be banned
 session_duration_days: 1 # optional, defaults to 1 : lifetime of session cookies in days
 onlyoffice_config: # optional : OnlyOffice connector integration
   title: AtriumOffice # optional, defaults to AtriumOffice

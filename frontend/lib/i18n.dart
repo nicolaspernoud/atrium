@@ -97,6 +97,7 @@ class MyLocalizations {
       "user_created": "User created or altered with success",
       "user": "User",
       "users": "Users",
+      "atrium_version": "Atrium version",
     },
     'fr': {
       "allow_symlinks": "Autoriser le suivi des liens symboliques",
@@ -179,6 +180,7 @@ class MyLocalizations {
       "user_created": "Utilisateur créé ou modifié avec succès",
       "user": "Utilisateur",
       "users": "Utilisateurs",
+      "atrium_version": "Version d'atrium",
     },
   };
 

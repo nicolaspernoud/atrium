@@ -50,9 +50,9 @@ impl Host {
     }
 }
 
-impl From<Host> for Authority {
+impl From<Host> for Option<Authority> {
     fn from(host: Host) -> Self {
-        Authority::from_maybe_shared(host.0).expect("valid authority")
+        Authority::from_maybe_shared(host.0).ok()
     }
 }
 

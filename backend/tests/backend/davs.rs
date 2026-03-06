@@ -203,7 +203,7 @@ fn create_big_binary_file(size: usize, path: &str) {
     while remaining_size > 0 {
         let to_write = std::cmp::min(remaining_size, buffer.len());
         let buffer = &mut buffer[..to_write];
-        rand::Rng::fill(&mut rng, buffer);
+        rand::RngExt::fill(&mut rng, buffer);
         io::Write::write(&mut writer, buffer).unwrap();
         remaining_size -= to_write;
     }

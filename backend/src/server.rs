@@ -3,18 +3,17 @@ use axum::{
     body::Body,
     handler::Handler,
     middleware,
-    response::{Html, IntoResponse},
-    routing::{MethodRouter, any, delete, get, get_service, post},
+    response::Html,
+    routing::{MethodRouter, any, delete, get, post},
 };
 
-use http::StatusCode;
 use hyper::Request;
 use tokio::sync::broadcast::Sender;
 
 use tower::ServiceExt;
 
-use tower_http::services::ServeDir;
-
+#[cfg(target_os = "linux")]
+use crate::jail::Jail;
 use crate::{
     apps::{add_app, delete_app, get_apps, proxy_handler},
     appstate::{AppState, Client, InsecureSkipVerifyClient},
@@ -26,6 +25,8 @@ use crate::{
     dir_server::dir_handler,
     errors::Error,
     middlewares::{cors_middleware, debug_cors_middleware, inject_security_headers},
+};
+use crate::{
     oauth2::{oauth2_available, oauth2_callback, oauth2_login},
     onlyoffice::{onlyoffice_callback, onlyoffice_page},
     sysinfo::system_info,
@@ -48,6 +49,22 @@ impl Server {
         let debug_mode = config.0.debug_mode;
         let http_port = config.0.http_port;
         let single_proxy = config.0.single_proxy;
+        #[cfg(target_os = "linux")]
+        let jail = Jail::new_from_config(&config.0.jail);
+
+        // Start pruning task once a day
+        #[cfg(target_os = "linux")]
+        if let Some(jail) = jail.as_ref() {
+            let jail_clone = std::sync::Arc::clone(jail);
+            tokio::spawn(async move {
+                let mut interval =
+                    tokio::time::interval(tokio::time::Duration::from_secs(24 * 3600));
+                loop {
+                    jail_clone.prune_expired_rules();
+                    interval.tick().await;
+                }
+            });
+        }
 
         let state = AppState::new(
             axum_extra::extract::cookie::Key::from(
@@ -56,6 +73,8 @@ impl Server {
             config.0,
             config.1,
             config_file.to_owned(),
+            #[cfg(target_os = "linux")]
+            jail,
         );
 
         let user_router = Router::new()
@@ -112,7 +131,7 @@ impl Server {
             })
         } else {
             let main_router = main_router
-                .fallback_service(get_service(ServeDir::new("web")).handle_error(error_500))
+                .fallback(crate::web::static_handler)
                 .with_state(state.clone());
             let proxy_router = proxy_handler::<Client>.with_state(state.clone());
             let unsecure_proxy_router =
@@ -159,8 +178,4 @@ impl Server {
             port: http_port,
         })
     }
-}
-
-async fn error_500(_err: std::convert::Infallible) -> impl IntoResponse {
-    (StatusCode::INTERNAL_SERVER_ERROR, "Something went wrong...")
 }

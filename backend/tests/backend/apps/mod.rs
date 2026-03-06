@@ -274,6 +274,7 @@ async fn redirect_test() {
         http_port: app.port,
         cookie_key: None,
         log_to_file: false,
+        jail: Default::default(),
         apps,
         davs: vec![],
         users: vec![],

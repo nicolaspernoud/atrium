@@ -241,7 +241,7 @@ async fn redirect_http_to_https(handle: Handle<SocketAddr>) -> tokio::io::Result
         if parts.path_and_query.is_none() {
             parts.path_and_query = Some("/".parse()?);
         }
-        parts.authority = Some(host.into());
+        parts.authority = host.into();
         Ok(Uri::from_parts(parts)?)
     }
 

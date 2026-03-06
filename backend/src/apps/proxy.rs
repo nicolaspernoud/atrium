@@ -263,7 +263,7 @@ where
     */
     let mut response = client.call(proxied_request).await.map_err(|_| {
         ProxyError::ClientError(
-            "invalid TLS certificate, use option to skip verification if needed",
+            "error connecting to backend, use option to skip TLS certificate verification if needed",
         )
     })?;
 

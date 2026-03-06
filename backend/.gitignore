@@ -14,3 +14,4 @@ data/dir2/**
 letsencrypt_cache
 GeoLite2-City.mmdb
 atrium.log.*
+dist/

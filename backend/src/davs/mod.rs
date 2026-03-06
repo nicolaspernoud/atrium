@@ -11,6 +11,8 @@ use crate::{
     logger::city_from_ip,
     users::{UserToken, check_authorization},
 };
+#[cfg(target_os = "linux")]
+use axum::extract::State;
 use axum::{
     body::Body,
     extract::ConnectInfo,
@@ -36,6 +38,7 @@ static UNLOGGED_METHODS: LazyLock<[Method; 5]> = LazyLock::new(|| {
 pub async fn webdav_handler(
     user: Option<UserToken>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    #[cfg(target_os = "linux")] State(jail): State<crate::OptionalJail>,
     dav: HostType,
     host: Host,
     req: Request<Body>,
@@ -53,6 +56,10 @@ pub async fn webdav_handler(
         && let Err(access_denied_resp) =
             check_authorization(&dav, user.as_ref(), host.hostname(), req.uri().path())
     {
+        #[cfg(target_os = "linux")]
+        if let Some(jail) = jail {
+            jail.report_failure(addr.ip());
+        }
         tokio::spawn(async move {
             info!("FILE ACCESS DENIED: {log_str}");
         });

@@ -1,4 +1,6 @@
 use crate::configuration::{Config, HostType};
+#[cfg(target_os = "linux")]
+use crate::jail::Jail;
 use axum::{body::Body, extract::FromRef};
 use axum_extra::extract::cookie::Key;
 use hyper_hickory::{HickoryResolver, TokioHickoryResolver};
@@ -30,6 +32,8 @@ pub struct AppState {
     config_file: ConfigFile,
     client: Client,
     insecure_skip_verify_client: InsecureSkipVerifyClient,
+    #[cfg(target_os = "linux")]
+    pub jail: Option<Arc<Jail>>,
 }
 
 impl AppState {
@@ -38,6 +42,7 @@ impl AppState {
         config: ConfigState,
         config_map: ConfigMap,
         config_file: String,
+        #[cfg(target_os = "linux")] jail: Option<Arc<Jail>>,
     ) -> Self {
         if let Ok(r) = maxminddb::Reader::open_readfile("GeoLite2-City.mmdb") {
             MAXMIND_READER.get_or_init(|| r);
@@ -78,6 +83,8 @@ impl AppState {
             config_file: Arc::new(config_file),
             client,
             insecure_skip_verify_client: unsecure_client,
+            #[cfg(target_os = "linux")]
+            jail,
         }
     }
 }
@@ -115,6 +122,20 @@ impl FromRef<AppState> for Client {
 impl FromRef<AppState> for InsecureSkipVerifyClient {
     fn from_ref(state: &AppState) -> Self {
         state.insecure_skip_verify_client.clone()
+    }
+}
+
+impl FromRef<AppState> for crate::OptionalJail {
+    #[allow(unused_variables)]
+    fn from_ref(state: &AppState) -> Self {
+        #[cfg(target_os = "linux")]
+        {
+            state.jail.clone()
+        }
+        #[cfg(not(target_os = "linux"))]
+        {
+            ()
+        }
     }
 }
 

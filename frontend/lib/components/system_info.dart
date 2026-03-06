@@ -123,6 +123,19 @@ class _SystemInfoState extends State<SystemInfo> {
                     ),
                   ),
                 ),
+                Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(10.0),
+                      child: ListTile(
+                        leading: const Icon(Icons.info_outline),
+                        title: Text(tr(context, "atrium_version")),
+                        subtitle: Text(snapshot.data!.atriumVersion),
+                      ),
+                    ),
+                  ),
+                ),
               ]);
             }),
       ),
