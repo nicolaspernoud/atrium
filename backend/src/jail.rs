@@ -51,10 +51,7 @@ impl Jail {
             .unwrap_or(false)
         {
             ipt.insert("filter", "INPUT", "-j ATRIUM_JAIL", 1)?;
-            info!(
-                "Linked {} chain ATRIUM_JAIL to INPUT",
-                ipt.cmd
-            );
+            info!("Linked {} chain ATRIUM_JAIL to INPUT", ipt.cmd);
         }
         Ok(())
     }
@@ -86,6 +83,8 @@ impl Jail {
     }
 
     pub fn report_failure(&self, ip: IpAddr) {
+        let ip = Self::normalize_ip(ip);
+
         if ip.is_loopback() || self.config.whitelist.contains(&ip) {
             return;
         }
@@ -102,6 +101,20 @@ impl Jail {
         ) {
             self.ban_ip(ip);
             failures.remove(&ip);
+        }
+    }
+
+    #[inline]
+    fn normalize_ip(ip: IpAddr) -> IpAddr {
+        match ip {
+            IpAddr::V6(v6) => {
+                if let Some(v4) = v6.to_ipv4_mapped() {
+                    IpAddr::V4(v4)
+                } else {
+                    IpAddr::V6(v6)
+                }
+            }
+            IpAddr::V4(_) => ip,
         }
     }
 
@@ -140,21 +153,11 @@ impl Jail {
         }
     }
 
+    #[inline]
     fn generate_ban_rule(ip: IpAddr, timestamp: u64) -> (String, bool) {
-        let (ip_str, is_ipv6) = match ip {
-            IpAddr::V6(v6) => {
-                if let Some(v4) = v6.to_ipv4_mapped() {
-                    (format!("{v4}"), false)
-                } else {
-                    (format!("{v6}"), true)
-                }
-            }
-            IpAddr::V4(_) => (format!("{ip}"), false),
-        };
-        (
-            format!("-s {} -j DROP -m comment --comment {}", ip_str, timestamp),
-            is_ipv6,
-        )
+        let is_ipv6 = matches!(ip, IpAddr::V6(_));
+        let rule = format!("-s {} -j DROP -m comment --comment {}", ip, timestamp);
+        (rule, is_ipv6)
     }
 
     pub fn prune_expired_rules(&self) {
@@ -311,7 +314,8 @@ mod tests {
         assert!(is_ipv6);
 
         // Test IPv4-mapped IPv6
-        let ip_v4_mapped: IpAddr = IpAddr::V6(Ipv4Addr::new(1, 2, 3, 4).to_ipv6_mapped());
+        let ip_v4_mapped: IpAddr =
+            Jail::normalize_ip(IpAddr::V6(Ipv4Addr::new(1, 2, 3, 4).to_ipv6_mapped()));
         let (rule, is_ipv6) = Jail::generate_ban_rule(ip_v4_mapped, 12345);
         assert_eq!(rule, "-s 1.2.3.4 -j DROP -m comment --comment 12345");
         assert!(!is_ipv6);
