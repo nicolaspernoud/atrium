@@ -30,7 +30,7 @@ use chacha20poly1305::aead::OsRng;
 use headers::{Authorization, HeaderName, authorization::Basic};
 use http::{
     HeaderValue, StatusCode,
-    header::{CONTENT_LENGTH, LOCATION, SET_COOKIE},
+    header::{LOCATION, SET_COOKIE},
     request::Parts,
 };
 
@@ -142,7 +142,7 @@ where
             .expect("Cookie jar retrieval is Infallible");
 
         // Get the serialized user_token from the cookie jar, and check the xsrf token
-        if let Some(cookie) = jar.get(AUTH_COOKIE)
+        if let Some(cookie) = jar.get(AUTH_COOKIE).or(jar.get(SHARE_TOKEN))
             && let Ok(TypedHeader(XSRFToken(xsrf_token))) =
                 <TypedHeader<XSRFToken> as FromRequestParts<S>>::from_request_parts(parts, state)
                     .await
@@ -163,23 +163,22 @@ where
             .ok()
             .map(|hm| hm.get("token").map(|v| v.to_owned()))
         {
-            let res = cookie_from_password(AUTH_COOKIE, &jar, password);
+            let res = decrypt_user_token(AUTH_COOKIE, &jar, password);
             if res.is_ok() {
                 return res;
             } else {
-                return cookie_from_password(SHARE_TOKEN, &jar, password);
+                return decrypt_user_token(SHARE_TOKEN, &jar, password);
             }
         }
 
         // OR Try to get user_token from basic auth headers
-
         if let Ok(TypedHeader(Authorization(basic))) =
             <TypedHeader<Authorization<Basic>> as FromRequestParts<S>>::from_request_parts(
                 parts, state,
             )
             .await
         {
-            if let Ok(token) = cookie_from_password(AUTH_COOKIE, &jar, basic.password()) {
+            if let Ok(token) = decrypt_user_token(AUTH_COOKIE, &jar, basic.password()) {
                 return Ok(token);
             } else {
                 let config = ConfigState::from_ref(state);
@@ -237,18 +236,19 @@ where
     }
 }
 
-fn cookie_from_password(
+fn decrypt_user_token(
     cookie_name: &str,
     jar: &PrivateCookieJar,
-    password: &str,
+    encrypted_token: &str,
 ) -> Result<UserToken, (StatusCode, &'static str)> {
-    let cookie = Cookie::parse_encoded(format!("{cookie_name}={password}")).map_err(|_| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "could not find user token",
-        )
-    })?;
-    let decrypted_cookie = jar.decrypt(cookie).ok_or(()).map_err(|_| {
+    let cookie =
+        Cookie::parse_encoded(format!("{cookie_name}={encrypted_token}")).map_err(|_| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "could not parse encrypted user token",
+            )
+        })?;
+    let decrypted_cookie = jar.decrypt(cookie).ok_or({
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             "could not decrypt user token",
@@ -292,7 +292,7 @@ where
             .await
             .expect("Cookie jar retrieval is Infallible");
 
-        // Get the serialized user_token from the cookie jar, and check the xsrf token
+        // Get the serialized user_token from the cookie jar
         if let Some(cookie) = jar.get(AUTH_COOKIE) {
             // Deserialize the user_token and return him/her
             let serialized_user_token = cookie.value();
@@ -562,6 +562,12 @@ pub async fn whoami(token: UserTokenWithoutXSRFCheck) -> Json<User> {
     Json(user)
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct ShareResponse {
+    pub token: String,
+    pub xsrf_token: String,
+}
+
 pub async fn get_share_token(
     State(config): State<ConfigState>,
     user: UserToken,
@@ -589,7 +595,7 @@ pub async fn get_share_token(
             .share_for_days
             .as_ref()
             .map_or(Duration::seconds(2), |d| Duration::days(*d));
-        let user_token = UserToken {
+        let share_token = UserToken {
             login: share_login,
             roles: user.roles,
             xsrf_token: random_string(16),
@@ -598,7 +604,7 @@ pub async fn get_share_token(
             info: None,
         };
         let encoded =
-            serde_json::to_string(&user_token).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            serde_json::to_string(&share_token).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         // Store the user into the cookie
         let cookie = Cookie::new(SHARE_TOKEN, encoded);
         Ok(jar.add(cookie))
@@ -607,23 +613,31 @@ pub async fn get_share_token(
     }
 }
 
-pub async fn cookie_to_body(req: Request, next: Next) -> Result<impl IntoResponse, StatusCode> {
+pub async fn cookie_to_body(
+    jar: PrivateCookieJar,
+    req: Request,
+    next: Next,
+) -> Result<impl IntoResponse, impl IntoResponse> {
     let res = next.run(req).await;
-    let (mut parts, _) = res.into_parts();
+    let (parts, _) = res.into_parts();
     if parts.status == StatusCode::OK {
-        let cookie = parts
+        let encrypted_token = parts
             .headers
             .get("set-cookie")
             .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?
-            .as_bytes()
-            .to_owned();
-        parts
-            .headers
-            .insert(CONTENT_LENGTH, HeaderValue::from(cookie.len()));
-        let res = Response::from_parts(parts, Body::from(cookie));
+            .to_str()
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .split_once("=")
+            .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+        let plain_token =
+            decrypt_user_token(encrypted_token.0, &jar, &encrypted_token.1).map_err(|e| e.0)?;
+        let res = Json(ShareResponse {
+            token: encrypted_token.1.to_owned(),
+            xsrf_token: plain_token.xsrf_token,
+        });
         Ok(res)
     } else {
-        Ok(Response::from_parts(parts, Body::empty()))
+        Err(parts.status)
     }
 }
 
@@ -659,10 +673,11 @@ pub fn check_user_has_role_or_forbid(
                 None => return Ok(()),
                 Some(share) => {
                     if share.hostname == hostname
-                        && let Ok(path) = urlencoding::decode(path)
-                        && share.path == path
+                        && let Ok(decoded_path) = urlencoding::decode(path)
                     {
-                        return Ok(());
+                        if share.path == decoded_path || decoded_path.starts_with(&share.path) {
+                            return Ok(());
+                        }
                     }
                 }
             }

@@ -35,8 +35,9 @@ class Explorer extends StatefulWidget {
   late final String url;
   late final DavModel dav;
   final bool readWrite;
+  final String? initialPath;
   // ignore: prefer_const_constructors_in_immutables
-  Explorer({super.key, required this.dav})
+  Explorer({super.key, required this.dav, this.initialPath})
     : url = modelUrl(dav),
       readWrite = dav.writable;
 
@@ -50,7 +51,7 @@ class ExplorerState extends State<Explorer> {
   late webdav.Client client;
   final user = 'dummy';
   final pwd = App().token;
-  var dirPath = '/';
+  late String dirPath;
   var _copyMoveStatus = CopyMoveStatus.none;
   var _copyMovePath = "";
   late bool readWrite;
@@ -67,6 +68,7 @@ class ExplorerState extends State<Explorer> {
     NotificationsPlugin(); // To ensure singleton is initialised
     super.initState();
     readWrite = widget.readWrite;
+    dirPath = widget.initialPath ?? '/';
     // init client
     client = newExplorerClient(
       widget.url,
@@ -255,7 +257,7 @@ class ExplorerState extends State<Explorer> {
 
     return Column(
       children: [
-        if (dirPath != "/")
+        if (dirPath != "/" && dirPath != widget.initialPath)
           ListTile(
             leading: const Icon(Icons.reply),
             title: const Text(".."),
@@ -489,7 +491,7 @@ class ExplorerState extends State<Explorer> {
                       );
                     } else if (type == FileType.document) {
                       // Get a share token for this document
-                      var shareToken = await ApiProvider().getShareToken(
+                      var shareResponse = await ApiProvider().getShareToken(
                         widget.url.split("://")[1].split(":")[0],
                         file.path!,
                         shareWith: "external_editor",
@@ -504,7 +506,7 @@ class ExplorerState extends State<Explorer> {
                           'file': '${widget.url}${file.path}',
                           'mtime': file.mTime!.toIso8601String(),
                           'user': App().prefs.username,
-                          'share_token': shareToken!,
+                          'share_token': shareResponse!.token,
                         }),
                       );
                       if (!context.mounted) return;
@@ -523,13 +525,13 @@ class ExplorerState extends State<Explorer> {
                     } else if (type == FileType.media) {
                       String uri = '${widget.url}${escapePath(file.path!)}';
                       if (kIsWeb) {
-                        var shareToken = await ApiProvider().getShareToken(
+                        var shareResponse = await ApiProvider().getShareToken(
                           widget.url.split("://")[1].split(":")[0],
                           file.path!,
                           shareWith: "media_player",
                           shareForDays: 1,
                         );
-                        uri = '$uri?token=$shareToken';
+                        uri = '$uri?token=${shareResponse!.token}';
                       }
                       if (!context.mounted) return;
                       Navigator.push(

@@ -83,7 +83,10 @@ impl Server {
             .route("/api/user/system_info", get(system_info))
             .route(
                 "/api/user/get_share_token",
-                post(get_share_token).layer(middleware::from_fn(cookie_to_body)),
+                post(get_share_token).layer(middleware::from_fn_with_state(
+                    state.clone(),
+                    cookie_to_body,
+                )),
             );
 
         let admin_router = Router::new()

@@ -15,6 +15,10 @@ class App extends ChangeNotifier {
 
   static final App _instance = App._privateConstructor();
 
+  bool isExploreMode = false;
+  String? exploreDav;
+  String? explorePath;
+
   factory App() {
     return _instance;
   }

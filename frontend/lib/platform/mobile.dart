@@ -107,7 +107,7 @@ webdav.Client newExplorerClient(
   String uri, {
   String user = '',
   String password = '',
-  bool debug = false,
+  bool debug = false
 }) {
   var client = webdav.newClient(
     uri,
@@ -310,4 +310,8 @@ class _OpenIdWebViewState extends State<OpenIdWebView> {
 
 bool isWebDesktop() {
   return false;
+}
+
+void setCookie(String name, String value) {
+  // Not implemented for mobile as it's not used
 }

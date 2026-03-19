@@ -1,7 +1,9 @@
 import 'package:atrium/components/davs_list.dart';
+import 'package:atrium/components/explorer.dart';
 import 'package:atrium/components/system_info.dart';
 import 'package:atrium/components/users_list.dart';
 import 'package:atrium/components/welcome_screen.dart';
+import 'package:atrium/models/dav.dart';
 import 'package:flutter/material.dart';
 import 'package:atrium/i18n.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -9,16 +11,14 @@ import 'package:provider/provider.dart';
 
 import 'components/apps_list.dart';
 import 'globals.dart';
+import 'package:atrium/platform/mobile.dart'
+    if (dart.library.html) 'package:atrium/platform/web.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await App().init();
-  runApp(
-    ChangeNotifierProvider.value(
-      value: App(),
-      child: const MyApp(),
-    ),
-  );
+  setExploreMode();
+  runApp(ChangeNotifierProvider.value(value: App(), child: const MyApp()));
 }
 
 class MyApp extends StatelessWidget {
@@ -28,11 +28,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       builder: (context, child) {
-        return SafeArea(
-          top: false,
-          bottom: true,
-          child: child!,
-        );
+        return SafeArea(top: false, bottom: true, child: child!);
       },
       title: 'atrium',
       home: const HomePage(),
@@ -41,16 +37,14 @@ class MyApp extends StatelessWidget {
         ...GlobalMaterialLocalizations.delegates,
         GlobalWidgetsLocalizations.delegate,
       ],
-      supportedLocales: const [
-        Locale('en', ''),
-        Locale('fr', ''),
-      ],
+      supportedLocales: const [Locale('en', ''), Locale('fr', '')],
       themeMode: ThemeMode.system,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.indigo,
-            surface: Colors.grey.shade50,
-            surfaceTint: Colors.white),
+          seedColor: Colors.indigo,
+          surface: Colors.grey.shade50,
+          surfaceTint: Colors.white,
+        ),
         cardTheme: const CardThemeData(elevation: 2),
         appBarTheme: AppBarTheme(
           backgroundColor: Colors.indigo,
@@ -61,7 +55,9 @@ class MyApp extends StatelessWidget {
       ),
       darkTheme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.indigo, brightness: Brightness.dark),
+          seedColor: Colors.indigo,
+          brightness: Brightness.dark,
+        ),
         cardTheme: const CardThemeData(elevation: 2),
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.indigo,
@@ -98,8 +94,11 @@ class _HomePageState extends State<HomePage> {
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
-      _pageController.animateToPage(index,
-          duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+      _pageController.animateToPage(
+        index,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
     });
   }
 
@@ -107,6 +106,20 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Consumer<App>(
       builder: (context, app, child) {
+        if (app.isExploreMode && app.exploreDav != null) {
+          return Scaffold(
+            body: Explorer(
+              dav: DavModel(
+                id: 0,
+                host: app.exploreDav!,
+                name: app.explorePath!
+                    .split("/")
+                    .lastWhere((e) => e.isNotEmpty),
+              ),
+              initialPath: app.explorePath,
+            ),
+          );
+        }
         // Reset index on logout
         if (!app.hasToken) _selectedIndex = 0;
         return Scaffold(
@@ -134,7 +147,7 @@ class _HomePageState extends State<HomePage> {
                         icon: const Icon(Icons.group),
                         label: tr(context, "users"),
                       ),
-                    ]
+                    ],
                   ],
                 )
               : null,
@@ -144,16 +157,43 @@ class _HomePageState extends State<HomePage> {
               setState(() => _selectedIndex = index);
             },
             children: <Widget>[
-              if (app.hasToken) ...[const AppsList(), const DavsList()] else
+              if (app.hasToken) ...[
+                const AppsList(),
+                const DavsList(),
+              ] else
                 const WelcomeScreen(),
               if (app.hasToken && app.isAdmin) ...[
                 const SystemInfo(),
                 const UsersList(),
-              ]
+              ],
             ],
           ),
         );
       },
     );
+  }
+}
+
+void setExploreMode() {
+  final uri = Uri.base;
+  if (uri.path.endsWith('/explore')) {
+    App().isExploreMode = true;
+    final token = uri.queryParameters['token'];
+    final xsrfToken = uri.queryParameters['xsrf_token'];
+    final dav = uri.queryParameters['dav'];
+    final path = uri.queryParameters['path'];
+    if (token != null) {
+      setCookie("SHARE_TOKEN", token);
+      App().cookie = "SHARE_TOKEN=$token";
+    }
+    if (xsrfToken != null) {
+      App().xsrfToken = xsrfToken;
+    }
+    if (dav != null) {
+      App().exploreDav = dav;
+    }
+    if (path != null) {
+      App().explorePath = path;
+    }
   }
 }

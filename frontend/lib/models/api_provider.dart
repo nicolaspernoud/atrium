@@ -1,6 +1,7 @@
 import 'package:atrium/models/app.dart';
 import 'package:atrium/models/dav.dart';
 import 'package:atrium/models/pathitem.dart';
+import 'package:atrium/models/share_response.dart';
 import 'package:atrium/models/sysinfo.dart';
 import 'package:atrium/models/user.dart';
 import 'package:atrium/platform/mobile.dart'
@@ -34,9 +35,10 @@ class ApiProvider {
   late Dio _dio;
 
   final BaseOptions options = BaseOptions(
-      baseUrl: App().prefs.hostname,
-      receiveTimeout: const Duration(seconds: 10),
-      contentType: Headers.jsonContentType);
+    baseUrl: App().prefs.hostname,
+    receiveTimeout: const Duration(seconds: 10),
+    contentType: Headers.jsonContentType,
+  );
   static final ApiProvider _instance = ApiProvider._internal();
 
   factory ApiProvider() => _instance;
@@ -66,9 +68,7 @@ class ApiProvider {
 
   Future logout() async {
     _dio.options.baseUrl = App().prefs.hostname;
-    final response = await _dio.get(
-      '/auth/logout',
-    );
+    final response = await _dio.get('/auth/logout');
     if (response.statusCode == 200) {
       App().cookie = "";
       App().isAdmin = false;
@@ -87,16 +87,22 @@ class ApiProvider {
     return true;
   }
 
-  Future<String?> getShareToken(String hostname, String path,
-      {String shareWith = "", int? shareForDays}) async {
+  Future<ShareResponseModel?> getShareToken(
+    String hostname,
+    String path, {
+    String shareWith = "",
+    int? shareForDays,
+  }) async {
     _dio.options.baseUrl = App().prefs.hostname;
     final Map<String, dynamic> request = {"hostname": hostname, "path": path};
     if (shareForDays != null) {
       request.addAll({"share_with": shareWith, "share_for_days": shareForDays});
     }
-    final response =
-        await _dio.post('/api/user/get_share_token', data: request);
-    return response.data.split("=")[1];
+    final response = await _dio.post(
+      '/api/user/get_share_token',
+      data: request,
+    );
+    return ShareResponseModel.fromJson(response.data);
   }
 
   Future<List<AppModel>> listApps() async {
@@ -190,7 +196,10 @@ class ApiProvider {
   }
 
   Future<List<PathItem>> searchDav(
-      DavModel dav, String dirPath, String query) async {
+    DavModel dav,
+    String dirPath,
+    String query,
+  ) async {
     final response = await _dio.get('${modelUrl(dav)}$dirPath?q=$query');
     var pathItemArray = response.data;
     var pathItems = <PathItem>[];
