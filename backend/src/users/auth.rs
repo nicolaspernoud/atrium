@@ -5,15 +5,14 @@ use crate::{
     extract::Host,
     headers::XSRFToken,
     logger::city_from_ip,
-    utils::{query_pairs_or_error, random_string},
+    utils::{is_path_within_base, query_pairs_or_error, random_string},
 };
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier, password_hash::SaltString};
 use axum::{
     Extension, Json, RequestPartsExt,
     body::Body,
     extract::{
-        ConnectInfo, FromRef, FromRequestParts, OptionalFromRequestParts, RawQuery, Request,
-        State,
+        ConnectInfo, FromRef, FromRequestParts, OptionalFromRequestParts, RawQuery, Request, State,
     },
     middleware::Next,
     response::{IntoResponse, Response},
@@ -30,7 +29,7 @@ use http::{
     request::Parts,
 };
 
-use std::{convert::Infallible, net::SocketAddr};
+use std::{convert::Infallible, net::SocketAddr, path::PathBuf};
 use time::{Duration, OffsetDateTime};
 use tracing::info;
 
@@ -40,7 +39,6 @@ use super::model::{
 };
 
 pub static AUTH_COOKIE: &str = "ATRIUM_AUTH";
-static SHARE_TOKEN: &str = "SHARE_TOKEN";
 static WWWAUTHENTICATE: HeaderName = HeaderName::from_static("www-authenticate");
 pub static ADMINS_ROLE: &str = "ADMINS";
 pub static REDACTED: &str = "REDACTED";
@@ -61,7 +59,7 @@ where
             .expect("Cookie jar retrieval is Infallible");
 
         // Get the serialized user_token from the cookie jar, and check the xsrf token
-        if let Some(cookie) = jar.get(AUTH_COOKIE).or(jar.get(SHARE_TOKEN))
+        if let Some(cookie) = jar.get(AUTH_COOKIE)
             && let Ok(TypedHeader(XSRFToken(xsrf_token))) =
                 <TypedHeader<XSRFToken> as FromRequestParts<S>>::from_request_parts(parts, state)
                     .await
@@ -82,12 +80,7 @@ where
             .ok()
             .map(|hm| hm.get("token").map(|v| v.to_owned()))
         {
-            let res = decrypt_user_token(AUTH_COOKIE, &jar, password);
-            if res.is_ok() {
-                return res;
-            } else {
-                return decrypt_user_token(SHARE_TOKEN, &jar, password);
-            }
+            return decrypt_user_token(AUTH_COOKIE, &jar, password);
         }
 
         // OR Try to get user_token from basic auth headers
@@ -370,11 +363,28 @@ pub async fn get_share_token(
         .iter()
         .find(|d| {
             d.host == share.hostname
-                || format!("{}.{}", crate::configuration::trim_host(&d.host), config.hostname) == share.hostname
+                || format!(
+                    "{}.{}",
+                    crate::configuration::trim_host(&d.host),
+                    config.hostname
+                ) == share.hostname
         })
         .ok_or(StatusCode::FORBIDDEN)?;
     // Check that the user is allowed to access the wanted share
     if !&to_share.secured || check_user_has_role(&user, &to_share.roles) {
+        // If it's already a share token, check that the new share is not more permissive
+        if let Some(existing_share) = &user.share {
+            if share.hostname != existing_share.hostname {
+                return Err(StatusCode::FORBIDDEN);
+            }
+            if !is_path_within_base(&share.path, &existing_share.path) {
+                return Err(StatusCode::FORBIDDEN);
+            }
+            if existing_share.writable == false && share.writable != false {
+                return Err(StatusCode::FORBIDDEN);
+            }
+        }
+
         // Create a token with the required information
         let share_login = share
             .share_with
@@ -385,18 +395,25 @@ pub async fn get_share_token(
             .share_for_days
             .as_ref()
             .map_or(Duration::seconds(2), |d| Duration::days(*d));
+        let mut expires_timestamp = (OffsetDateTime::now_utc() + expires).unix_timestamp();
+
+        // If it's already a share token, the new token cannot last longer than the original one
+        if user.share.is_some() && expires_timestamp > user.expires {
+            expires_timestamp = user.expires;
+        }
+
         let share_token = UserToken {
             login: share_login,
             roles: user.roles,
             xsrf_token: random_string(16),
             share: Some(share),
-            expires: (OffsetDateTime::now_utc() + expires).unix_timestamp(),
+            expires: expires_timestamp,
             info: None,
         };
         let encoded =
             serde_json::to_string(&share_token).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
         // Store the user into the cookie
-        let cookie = Cookie::new(SHARE_TOKEN, encoded);
+        let cookie = Cookie::new(AUTH_COOKIE, encoded);
         Ok(jar.add(cookie))
     } else {
         Err(StatusCode::FORBIDDEN)
@@ -456,6 +473,7 @@ pub fn check_user_has_role_or_forbid(
     target: &HostType,
     hostname: &str,
     path: &str,
+    method: &http::Method,
 ) -> Result<(), Box<Response<Body>>> {
     if let Some(user) = user {
         if check_user_has_role(user, target.roles()) {
@@ -465,7 +483,18 @@ pub fn check_user_has_role_or_forbid(
                     if share.hostname == hostname
                         && let Ok(decoded_path) = urlencoding::decode(path)
                     {
-                        if share.path == decoded_path || decoded_path.starts_with(&share.path) {
+                        let decoded_path = PathBuf::from(decoded_path.to_string());
+                        if share.path == decoded_path
+                            || is_path_within_base(&decoded_path, &share.path)
+                        {
+                            if share.writable == false
+                                && method != http::Method::GET
+                                && method != http::Method::HEAD
+                                && method != http::Method::OPTIONS
+                                && method.as_str() != "PROPFIND"
+                            {
+                                return Err(Box::new(forbidden()));
+                            }
                             return Ok(());
                         }
                     }
@@ -484,9 +513,9 @@ pub fn check_user_has_role_or_forbid(
 }
 
 fn forbidden() -> http::Response<Body> {
-    Response::builder()
-        .status(StatusCode::FORBIDDEN)
-        .body(Body::empty())
+        Response::builder()
+            .status(StatusCode::FORBIDDEN)
+            .body(Body::empty())
         .expect("constant method")
 }
 
@@ -495,9 +524,10 @@ pub fn check_authorization(
     user: Option<&UserToken>,
     hostname: &str,
     path: &str,
+    method: &http::Method,
 ) -> Result<(), Box<Response<Body>>> {
     if app.secured() {
-        check_user_has_role_or_forbid(user, app, hostname, path)?;
+        check_user_has_role_or_forbid(user, app, hostname, path, method)?;
     }
     Ok(())
 }
@@ -510,9 +540,13 @@ pub fn authorized_or_redirect_to_login(
     config: &std::sync::Arc<crate::configuration::Config>,
 ) -> Result<(), Box<Response<Body>>> {
     let domain = hostname.split(':').next().unwrap_or_default();
-    if let Err(mut value) =
-        check_authorization(app, user.as_ref().map(|u| &u.0), domain, req.uri().path())
-    {
+    if let Err(mut value) = check_authorization(
+        app,
+        user.as_ref().map(|u| &u.0),
+        domain,
+        req.uri().path(),
+        req.method(),
+    ) {
         // Redirect to login page if user is not logged, write where to get back after login in a cookie
         if value.status() == StatusCode::UNAUTHORIZED
             && let Ok(mut hn) = HeaderValue::from_str(&config.full_domain())
@@ -563,7 +597,7 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(user, &target, "", "").is_err());
+        assert!(check_user_has_role_or_forbid(user, &target, "", "", &http::Method::GET).is_err());
     }
 
     #[test]
@@ -579,7 +613,9 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(Some(&user), &target, "", "").is_ok());
+        assert!(
+            check_user_has_role_or_forbid(Some(&user), &target, "", "", &http::Method::GET).is_ok()
+        );
     }
 
     #[test]
@@ -595,7 +631,9 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(Some(&user), &target, "", "").is_ok());
+        assert!(
+            check_user_has_role_or_forbid(Some(&user), &target, "", "", &http::Method::GET).is_ok()
+        );
     }
 
     #[test]
@@ -611,7 +649,10 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(Some(&user), &target, "", "").is_err());
+        assert!(
+            check_user_has_role_or_forbid(Some(&user), &target, "", "", &http::Method::GET)
+                .is_err()
+        );
     }
 
     #[test]
@@ -624,7 +665,10 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(Some(&user), &target, "", "").is_err());
+        assert!(
+            check_user_has_role_or_forbid(Some(&user), &target, "", "", &http::Method::GET)
+                .is_err()
+        );
     }
 
     #[test]
@@ -639,7 +683,10 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(Some(&user), &target, "", "").is_err());
+        assert!(
+            check_user_has_role_or_forbid(Some(&user), &target, "", "", &http::Method::GET)
+                .is_err()
+        );
     }
 
     #[test]
@@ -651,6 +698,9 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(Some(&user), &target, "", "").is_err());
+        assert!(
+            check_user_has_role_or_forbid(Some(&user), &target, "", "", &http::Method::GET)
+                .is_err()
+        );
     }
 }

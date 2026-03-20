@@ -105,8 +105,39 @@ pub fn select_entries_by_value(
         .collect()
 }
 
+// Source - https://stackoverflow.com/a/78500639
+// Posted by Arri, modified by community. See post 'Timeline' for change history
+// Retrieved 2026-03-21, License - CC BY-SA 4.0
+
+use std::path::{Path, PathBuf};
+
+fn normalize_path(path: &Path) -> Option<PathBuf> {
+    let mut test_path = PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::ParentDir => {
+                if !test_path.pop() {
+                    return None;
+                }
+            }
+            std::path::Component::CurDir => {}
+            _ => test_path.push(component.as_os_str()),
+        }
+    }
+    Some(test_path)
+}
+
+pub fn is_path_within_base(path: &Path, base: &Path) -> bool {
+    if let (Some(norm_path), Some(norm_base)) = (normalize_path(path), normalize_path(base)) {
+        norm_path.starts_with(norm_base)
+    } else {
+        false
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use super::*;
     use std::collections::HashMap;
 
     use crate::utils::{
@@ -248,5 +279,37 @@ mod tests {
         let values_to_select = Vec::<&str>::new();
         let selected_keys = select_entries_by_value(&empty_hashmap, values_to_select);
         assert_eq!(selected_keys, Vec::<String>::new());
+    }
+
+    #[test]
+    fn normalize_path_test() {
+        assert_eq!(normalize_path(Path::new(".")), Some(PathBuf::from("")));
+        assert_eq!(normalize_path(Path::new("a")), Some(PathBuf::from("a")));
+        assert_eq!(
+            normalize_path(Path::new("./././a/..")),
+            Some(PathBuf::from(""))
+        );
+        assert_eq!(normalize_path(Path::new("a/..")), Some(PathBuf::from("")));
+        assert_eq!(
+            normalize_path(Path::new("a/../b")),
+            Some(PathBuf::from("b"))
+        );
+        assert_eq!(normalize_path(Path::new("..")), None);
+        assert_eq!(normalize_path(Path::new("a/../..")), None);
+    }
+
+    #[test]
+    fn is_path_within_base_test() {
+        assert!(is_path_within_base(Path::new("a/b/c"), Path::new("a")));
+        assert!(is_path_within_base(Path::new("a/b/c"), Path::new("a/b")));
+        assert!(is_path_within_base(Path::new("a/b/c"), Path::new("a/b/c")));
+        assert!(is_path_within_base(Path::new(""), Path::new("")));
+        assert!(is_path_within_base(Path::new("a/."), Path::new("a/")));
+        assert!(!is_path_within_base(
+            Path::new("a/b/c"),
+            Path::new("a/b/c/d")
+        ));
+        assert!(!is_path_within_base(Path::new(""), Path::new("a/b/c/d")));
+        assert!(!is_path_within_base(Path::new("a/.."), Path::new("a/")));
     }
 }

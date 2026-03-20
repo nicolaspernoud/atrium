@@ -317,8 +317,12 @@ class ExplorerState extends State<Explorer> {
                           } else {
                             await showDialog(
                               context: context,
-                              builder: (context) =>
-                                  ShareDialog(widget.url, file, client),
+                              builder: (context) => ShareDialog(
+                                widget.url,
+                                file,
+                                client,
+                                widget.dav.writable,
+                              ),
                             );
                           }
                         });
@@ -496,6 +500,7 @@ class ExplorerState extends State<Explorer> {
                         file.path!,
                         shareWith: "external_editor",
                         shareForDays: 1,
+                        writable: readWrite,
                       );
                       final Uri launchUri = Uri(
                         scheme: App().prefs.hostnameScheme,

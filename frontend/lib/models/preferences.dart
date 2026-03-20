@@ -111,7 +111,7 @@ class Preferences with LocalFilePersister {
       'xsrfToken': _xsrfToken,
       'isAdmin': _isAdmin,
       'logEnabled': _logEnabled,
-      'log': _log
+      'log': _log,
     };
     return jsonEncode(settingsMap);
   }

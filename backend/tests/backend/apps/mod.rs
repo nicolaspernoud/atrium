@@ -27,7 +27,7 @@ async fn secured_proxy_test() {
         .expect("failed to execute request");
 
     // Assert that is impossible (redirected to login page)
-    assert_eq!(response.status(), 302);
+    assert_eq!(response.status(), StatusCode::FOUND);
     assert_eq!(response.text().await.unwrap(), "");
 
     // Log as normal user

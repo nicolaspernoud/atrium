@@ -92,11 +92,18 @@ class ApiProvider {
     String path, {
     String shareWith = "",
     int? shareForDays,
+    bool? writable,
   }) async {
     _dio.options.baseUrl = App().prefs.hostname;
-    final Map<String, dynamic> request = {"hostname": hostname, "path": path};
+    final Map<String, dynamic> request = {
+      "hostname": hostname,
+      "path": path,
+    };
     if (shareForDays != null) {
       request.addAll({"share_with": shareWith, "share_for_days": shareForDays});
+    }
+    if (writable != null) {
+      request.addAll({"writable": writable});
     }
     final response = await _dio.post(
       '/api/user/get_share_token',

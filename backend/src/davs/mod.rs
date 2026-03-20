@@ -54,7 +54,7 @@ pub async fn webdav_handler(
     );
     if method != Method::OPTIONS
         && let Err(access_denied_resp) =
-            check_authorization(&dav, user.as_ref(), host.hostname(), req.uri().path())
+            check_authorization(&dav, user.as_ref(), host.hostname(), req.uri().path(), &method)
     {
         #[cfg(target_os = "linux")]
         if let Some(jail) = jail {

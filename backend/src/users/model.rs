@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::{
     apps::App,
     appstate::{ConfigFile, ConfigState},
@@ -61,9 +63,11 @@ pub struct User {
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Share {
     pub hostname: String,
-    pub path: String,
+    pub path: PathBuf,
     pub share_with: Option<String>,
     pub share_for_days: Option<i64>,
+    #[serde(default)]
+    pub writable: bool,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -192,8 +196,11 @@ pub async fn add_user(
 pub async fn list_services(
     State(config): State<ConfigState>,
     user: UserToken,
-) -> Json<(Vec<App>, Vec<Dav>)> {
-    Json((
+) -> Result<Json<(Vec<App>, Vec<Dav>)>, StatusCode> {
+    if user.share.is_some() {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    Ok(Json((
         config
             .apps
             .iter()
@@ -215,7 +222,7 @@ pub async fn list_services(
                 dav
             })
             .collect(),
-    ))
+    )))
 }
 
 pub async fn whoami(token: UserTokenWithoutXSRFCheck) -> Json<User> {

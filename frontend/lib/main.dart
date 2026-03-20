@@ -107,6 +107,7 @@ class _HomePageState extends State<HomePage> {
     return Consumer<App>(
       builder: (context, app, child) {
         if (app.isExploreMode && app.exploreDav != null) {
+          App().prefs.hostname = Uri.base.origin;
           return Scaffold(
             body: Explorer(
               dav: DavModel(
@@ -115,6 +116,7 @@ class _HomePageState extends State<HomePage> {
                 name: app.explorePath!
                     .split("/")
                     .lastWhere((e) => e.isNotEmpty),
+                writable: app.exploreWritable ?? false,
               ),
               initialPath: app.explorePath,
             ),
@@ -182,9 +184,10 @@ void setExploreMode() {
     final xsrfToken = uri.queryParameters['xsrf_token'];
     final dav = uri.queryParameters['dav'];
     final path = uri.queryParameters['path'];
+    final writable = uri.queryParameters['writable'] == "true";
     if (token != null) {
-      setCookie("SHARE_TOKEN", token);
-      App().cookie = "SHARE_TOKEN=$token";
+      setCookie("ATRIUM_AUTH", token);
+      App().cookie = "ATRIUM_AUTH=$token";
     }
     if (xsrfToken != null) {
       App().xsrfToken = xsrfToken;
@@ -195,5 +198,6 @@ void setExploreMode() {
     if (path != null) {
       App().explorePath = path;
     }
+    App().exploreWritable = writable;
   }
 }

@@ -312,6 +312,182 @@ async fn use_share_token_test() {
 }
 
 #[tokio::test]
+async fn share_token_security_test() {
+    // Arrange
+    let app = TestApp::spawn(None).await;
+    // Log as admin
+    let response = app
+        .client
+        .post(format!("http://atrium.io:{}/auth/local", app.port))
+        .body(r#"{"login":"admin","password":"password"}"#)
+        .header("Content-Type", "application/json")
+        .send()
+        .await
+        .expect("failed to execute request");
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let xsrf_token: String = response
+        .json::<atrium::users::AuthResponse>()
+        .await
+        .unwrap()
+        .xsrf_token;
+
+    // 1. Create a read-only share token for /dira
+    let response = app
+        .client
+        .post(format!(
+            "http://atrium.io:{}/api/user/get_share_token",
+            app.port
+        ))
+        .header("Content-Type", "application/json")
+        .header("xsrf-token", &xsrf_token)
+        .body(r#"{"hostname":"secured-files.atrium.io","path":"/dira","writable":false,"share_for_days":1}"#)
+        .send()
+        .await
+        .expect("failed to execute request");
+    assert_eq!(response.status(), StatusCode::OK);
+    let share_response = response
+        .json::<atrium::users::ShareResponse>()
+        .await
+        .unwrap();
+    let share_token = share_response.token;
+    let share_xsrf_token = share_response.xsrf_token;
+
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .resolve(
+            "secured-files.atrium.io",
+            format!("127.0.0.1:{}", app.port).parse().unwrap(),
+        )
+        .resolve(
+            "atrium.io",
+            format!("127.0.0.1:{}", app.port).parse().unwrap(),
+        )
+        .cookie_store(false)
+        .build()
+        .unwrap();
+
+    // 2. Verify read-only: GET should work, PUT should fail
+    let url_get = format!(
+        "http://secured-files.atrium.io:{}/dira/file1?token={share_token}",
+        app.port
+    );
+    let resp = client.get(url_get).send().await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let url_put = format!(
+        "http://secured-files.atrium.io:{}/dira/file1?token={share_token}",
+        app.port
+    );
+    let resp = client.put(url_put).body("data").send().await.unwrap();
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+
+    // 3. Try to generate a NEW share token from the existing share token
+    // a) Try to make it read-write (should fail)
+    let resp = client
+        .post(format!(
+            "http://atrium.io:{}/api/user/get_share_token",
+            app.port
+        ))
+        .header("Content-Type", "application/json")
+        .header("xsrf-token", &share_xsrf_token)
+        .header("Cookie", format!("ATRIUM_AUTH={share_token}"))
+        .body(r#"{"hostname":"secured-files.atrium.io","path":"/dira","writable":true,"share_for_days":1}"#)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+
+    // b) Try to change hostname (should fail)
+    let resp = client
+        .post(format!(
+            "http://atrium.io:{}/api/user/get_share_token",
+            app.port
+        ))
+        .header("Content-Type", "application/json")
+        .header("xsrf-token", &share_xsrf_token)
+        .header("Cookie", format!("ATRIUM_AUTH={share_token}"))
+        .body(
+            r#"{"hostname":"files2.atrium.io","path":"/dira","writable":false,"share_for_days":1}"#,
+        )
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+
+    // c) Try to share a subpath (should work)
+    let resp = client
+        .post(format!(
+            "http://atrium.io:{}/api/user/get_share_token",
+            app.port
+        ))
+        .header("Content-Type", "application/json")
+        .header("xsrf-token", &share_xsrf_token)
+        .header("Cookie", format!("ATRIUM_AUTH={share_token}"))
+        .body(r#"{"hostname":"secured-files.atrium.io","path":"/dira/subdira","writable":false,"share_for_days":1}"#)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    // d) Try to share a parent path (should fail)
+    let resp = client
+        .post(format!(
+            "http://atrium.io:{}/api/user/get_share_token",
+            app.port
+        ))
+        .header("Content-Type", "application/json")
+        .header("xsrf-token", &share_xsrf_token)
+        .header("Cookie", format!("ATRIUM_AUTH={share_token}"))
+        .body(r#"{"hostname":"secured-files.atrium.io","path":"/","writable":false,"share_for_days":1}"#)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+
+    // e) Try to share a parent path with .. (should fail)
+    let resp = client
+        .post(format!(
+            "http://atrium.io:{}/api/user/get_share_token",
+            app.port
+        ))
+        .header("Content-Type", "application/json")
+        .header("xsrf-token", &share_xsrf_token)
+        .header("Cookie", format!("ATRIUM_AUTH={share_token}"))
+        .body(r#"{"hostname":"secured-files.atrium.io","path":"/dira/..","writable":false,"share_for_days":1}"#)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+
+    // 4. Try to access the services list (should fail)
+    let response = app
+        .client
+        .get(format!(
+            "http://atrium.io:{}/api/user/list_services",
+            app.port
+        ))
+        .header("xsrf-token", &share_xsrf_token)
+        .header("Cookie", format!("ATRIUM_AUTH={share_token}"))
+        .send()
+        .await
+        .expect("failed to execute request");
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+
+    // 5. Try to access a secured app (should fail)
+    let resp = app
+        .client
+        .get(format!("http://secured-app.atrium.io:{}", app.port))
+        .header("xsrf-token", &share_xsrf_token)
+        .header("Cookie", format!("ATRIUM_AUTH={share_token}"))
+        .send()
+        .await
+        .expect("failed to execute request");
+    // Assert that is impossible
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
 async fn get_system_info_test() {
     // Arrange
     let app = TestApp::spawn(None).await;

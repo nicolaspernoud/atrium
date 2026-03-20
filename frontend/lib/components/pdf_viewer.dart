@@ -9,12 +9,13 @@ import 'package:pdfx/pdfx.dart';
 import 'package:webdav_client/webdav_client.dart';
 
 class PdfViewer extends StatefulWidget {
-  const PdfViewer(
-      {super.key,
-      required this.client,
-      required this.url,
-      required this.file,
-      required this.color});
+  const PdfViewer({
+    super.key,
+    required this.client,
+    required this.url,
+    required this.file,
+    required this.color,
+  });
 
   final Client client;
   final String url;
@@ -33,9 +34,12 @@ class _PdfViewerState extends State<PdfViewer> {
     super.initState();
     if (!isWebDesktop()) {
       _pdfController = PdfController(
-          document: PdfDocument.openData(widget.client
+        document: PdfDocument.openData(
+          widget.client
               .read(widget.file.path!)
-              .then((value) => Uint8List.fromList(value))));
+              .then((value) => Uint8List.fromList(value)),
+        ),
+      );
     }
   }
 
@@ -52,70 +56,67 @@ class _PdfViewerState extends State<PdfViewer> {
         backgroundColor: widget.color,
         title: Row(
           children: [
-            const Icon(
-              Icons.picture_as_pdf,
-              size: 30,
-            ),
+            const Icon(Icons.picture_as_pdf, size: 30),
             const SizedBox(width: 15),
             Flexible(
-                child: Text(
-              widget.file.name!,
-              overflow: TextOverflow.ellipsis,
-            )),
+              child: Text(widget.file.name!, overflow: TextOverflow.ellipsis),
+            ),
           ],
         ),
         actions: isWebDesktop()
             ? null
             : <Widget>[
                 PdfPageNumber(
-                    controller: _pdfController,
-                    builder: (_, loadingState, page, pagesCount) =>
-                        (pagesCount != null && pagesCount > 0)
-                            ? Row(
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.navigate_before),
-                                    onPressed: () {
-                                      _pdfController.previousPage(
-                                        curve: Curves.ease,
-                                        duration:
-                                            const Duration(milliseconds: 100),
-                                      );
-                                    },
-                                  ),
-                                  Text(
-                                    '$page/$pagesCount',
-                                    style: const TextStyle(fontSize: 22),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.navigate_next),
-                                    onPressed: () {
-                                      _pdfController.nextPage(
-                                        curve: Curves.ease,
-                                        duration:
-                                            const Duration(milliseconds: 100),
-                                      );
-                                    },
-                                  ),
-                                ],
-                              )
-                            : Container()),
+                  controller: _pdfController,
+                  builder: (_, loadingState, page, pagesCount) =>
+                      (pagesCount != null && pagesCount > 0)
+                      ? Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.navigate_before),
+                              onPressed: () {
+                                _pdfController.previousPage(
+                                  curve: Curves.ease,
+                                  duration: const Duration(milliseconds: 100),
+                                );
+                              },
+                            ),
+                            Text(
+                              '$page/$pagesCount',
+                              style: const TextStyle(fontSize: 22),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.navigate_next),
+                              onPressed: () {
+                                _pdfController.nextPage(
+                                  curve: Curves.ease,
+                                  duration: const Duration(milliseconds: 100),
+                                );
+                              },
+                            ),
+                          ],
+                        )
+                      : Container(),
+                ),
               ],
       ),
       body: isWebDesktop()
           ? FutureBuilder<String>(
               future: ApiProvider()
-                  .getShareToken(widget.url.split("://")[1].split(":")[0],
-                      widget.file.path!,
-                      shareWith: "pdf_viewer", shareForDays: 1)
-                  .then((value) =>
-                      '${widget.url}${widget.file.path}?token=$value&inline'),
+                  .getShareToken(
+                    widget.url.split("://")[1].split(":")[0],
+                    widget.file.path!,
+                    shareWith: "pdf_viewer",
+                    shareForDays: 1,
+                  )
+                  .then(
+                    (value) =>
+                        '${widget.url}${widget.file.path}?token=${value!.token}&inline',
+                  ),
               builder: (BuildContext context, AsyncSnapshot<String> snapshot) {
                 Widget child;
                 if (snapshot.hasData) {
-                  child = AppWebView(
-                    initialUrl: snapshot.data!,
-                  );
+                  child = AppWebView(initialUrl: snapshot.data!);
                 } else if (snapshot.hasError) {
                   child = Padding(
                     padding: const EdgeInsets.only(top: 16),
@@ -128,10 +129,9 @@ class _PdfViewerState extends State<PdfViewer> {
                     child: CircularProgressIndicator(),
                   );
                 }
-                return Center(
-                  child: child,
-                );
-              })
+                return Center(child: child);
+              },
+            )
           : PdfView(
               builders: PdfViewBuilders<DefaultBuilderOptions>(
                 options: const DefaultBuilderOptions(),
@@ -153,11 +153,7 @@ class _PdfViewerState extends State<PdfViewer> {
     PdfDocument document,
   ) {
     return PhotoViewGalleryPageOptions(
-      imageProvider: PdfPageImageProvider(
-        pageImage,
-        index,
-        document.id,
-      ),
+      imageProvider: PdfPageImageProvider(pageImage, index, document.id),
       minScale: PhotoViewComputedScale.contained * 1,
       maxScale: PhotoViewComputedScale.contained * 2,
       initialScale: PhotoViewComputedScale.contained * 1.0,

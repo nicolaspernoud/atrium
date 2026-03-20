@@ -12,7 +12,14 @@ class ShareDialog extends StatefulWidget {
   final String url;
   final File file;
   final Client client;
-  const ShareDialog(this.url, this.file, this.client, {super.key});
+  final bool writable;
+  const ShareDialog(
+    this.url,
+    this.file,
+    this.client,
+    this.writable, {
+    super.key,
+  });
 
   @override
   State<ShareDialog> createState() => _ShareDialogState();
@@ -23,6 +30,7 @@ class _ShareDialogState extends State<ShareDialog> {
   double _shareForDays = 10;
   late bool _isDir;
   ShareFolderMode shareFolderMode = ShareFolderMode.zip;
+  bool _writable = false;
 
   @override
   void initState() {
@@ -85,6 +93,27 @@ class _ShareDialogState extends State<ShareDialog> {
                       value: ShareFolderMode.explorer,
                     ),
                   ),
+                  if (shareFolderMode == ShareFolderMode.explorer)
+                    if (widget.writable)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Checkbox(
+                            value: _writable,
+                            onChanged: (bool? newValue) {
+                              setState(() {
+                                _writable = newValue!;
+                              });
+                            },
+                          ),
+                          Flexible(
+                            child: Text(
+                              tr(context, "write_access"),
+                              style: const TextStyle(fontSize: 12.0),
+                            ),
+                          ),
+                        ],
+                      ),
                   ListTile(
                     title: Text(tr(context, "download_folder_as_html")),
                     leading: const Radio<ShareFolderMode>(
@@ -107,14 +136,13 @@ class _ShareDialogState extends State<ShareDialog> {
                           text = await downloadSingleFile(widget.file.path!);
                           break;
                         case ShareFolderMode.explorer:
-                          text = await exploreFolder(widget.file);
+                          text = await exploreFolder(widget.file, _writable);
                           break;
                         case ShareFolderMode.html:
                           text = await downloadFolderAsHTMLList(widget.file);
                           break;
                       }
                       await Clipboard.setData(ClipboardData(text: text));
-
                       if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
@@ -150,16 +178,17 @@ class _ShareDialogState extends State<ShareDialog> {
     return shareUrl;
   }
 
-  Future<String> exploreFolder(File file) async {
+  Future<String> exploreFolder(File file, bool writable) async {
+    var dav = widget.url.split("://")[1].split(":")[0];
     var shareResponse = await ApiProvider().getShareToken(
-      widget.url.split("://")[1].split(":")[0],
+      dav,
       file.path!,
       shareWith: _shareWith,
       shareForDays: _shareForDays.round(),
+      writable: writable,
     );
-    var dav = widget.url.split("://")[1];
     var explorerUrl =
-        '${ApiProvider().options.baseUrl}/explore?token=${Uri.encodeQueryComponent(shareResponse!.token)}&xsrf_token=${shareResponse.xsrfToken}&dav=$dav&path=${Uri.encodeComponent(file.path!)}';
+        '${ApiProvider().options.baseUrl}/explore?token=${Uri.encodeQueryComponent(shareResponse!.token)}&xsrf_token=${shareResponse.xsrfToken}&dav=$dav&path=${Uri.encodeComponent(file.path!)}&writable=$writable';
     return explorerUrl;
   }
 

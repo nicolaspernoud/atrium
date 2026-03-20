@@ -100,6 +100,7 @@ class MyLocalizations {
       "user_created": "User created or altered with success",
       "user": "User",
       "users": "Users",
+      "write_access": "Write access",
     },
     'fr': {
       "allow_symlinks": "Autoriser le suivi des liens symboliques",
@@ -184,6 +185,7 @@ class MyLocalizations {
       "user_created": "Utilisateur créé ou modifié avec succès",
       "user": "Utilisateur",
       "users": "Utilisateurs",
+      "write_access": "Accès en écriture",
     },
   };
 

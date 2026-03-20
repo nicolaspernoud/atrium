@@ -18,6 +18,7 @@ class App extends ChangeNotifier {
   bool isExploreMode = false;
   String? exploreDav;
   String? explorePath;
+  bool? exploreWritable;
 
   factory App() {
     return _instance;
@@ -74,8 +75,8 @@ class App extends ChangeNotifier {
     _uploads.uploads.removeWhere((element) => element == upload);
   }
 
-  Stream<Upload?> uploadAll()  {
-    return  _uploads.uploadAll();
+  Stream<Upload?> uploadAll() {
+    return _uploads.uploadAll();
   }
 
   void reportProgress() {

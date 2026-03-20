@@ -9,7 +9,7 @@ class DavModel implements Model {
     this.writable = true,
     this.name = "",
     this.icon = "folder",
-    this.color = const Color(0xffd32f2f),
+    this.color = const Color(0xFF4a5bbc),
     this.secured = false,
     this.allowSymlinks = false,
     this.roles = const ["ADMINS", "USERS"],
