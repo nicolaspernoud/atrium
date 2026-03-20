@@ -1,22 +1,18 @@
 use crate::{
-    apps::App,
-    appstate::{ConfigFile, ConfigState, MAXMIND_READER, OptionalMaxMindReader},
-    configuration::{Config, HostType, config_or_error, trim_host},
-    davs::model::Dav,
+    appstate::{ConfigState, MAXMIND_READER, OptionalMaxMindReader},
+    configuration::{Config, HostType},
     errors::ErrResponse,
     extract::Host,
     headers::XSRFToken,
     logger::city_from_ip,
-    utils::{
-        is_default, query_pairs_or_error, random_string, string_trim, vec_trim_remove_empties,
-    },
+    utils::{query_pairs_or_error, random_string},
 };
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier, password_hash::SaltString};
 use axum::{
     Extension, Json, RequestPartsExt,
     body::Body,
     extract::{
-        ConnectInfo, FromRef, FromRequestParts, OptionalFromRequestParts, Path, RawQuery, Request,
+        ConnectInfo, FromRef, FromRequestParts, OptionalFromRequestParts, RawQuery, Request,
         State,
     },
     middleware::Next,
@@ -34,97 +30,20 @@ use http::{
     request::Parts,
 };
 
-use serde::{Deserialize, Serialize};
 use std::{convert::Infallible, net::SocketAddr};
 use time::{Duration, OffsetDateTime};
 use tracing::info;
+
+use super::model::{
+    AdminToken, AuthResponse, LocalAuth, Share, ShareResponse, User, UserToken,
+    UserTokenWithoutXSRFCheck,
+};
 
 pub static AUTH_COOKIE: &str = "ATRIUM_AUTH";
 static SHARE_TOKEN: &str = "SHARE_TOKEN";
 static WWWAUTHENTICATE: HeaderName = HeaderName::from_static("www-authenticate");
 pub static ADMINS_ROLE: &str = "ADMINS";
 pub static REDACTED: &str = "REDACTED";
-
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UserInfo {
-    #[serde(
-        skip_serializing_if = "is_default",
-        default,
-        deserialize_with = "string_trim"
-    )]
-    pub given_name: String,
-    #[serde(
-        skip_serializing_if = "is_default",
-        default,
-        deserialize_with = "string_trim"
-    )]
-    pub family_name: String,
-    #[serde(
-        skip_serializing_if = "is_default",
-        default,
-        deserialize_with = "string_trim"
-    )]
-    pub email: String,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct User {
-    #[serde(deserialize_with = "string_trim")]
-    pub login: String,
-    #[serde(
-        skip_serializing_if = "is_default",
-        default,
-        deserialize_with = "string_trim"
-    )]
-    pub password: String,
-    #[serde(
-        default,
-        skip_serializing_if = "is_default",
-        deserialize_with = "vec_trim_remove_empties"
-    )]
-    pub roles: Vec<String>,
-    #[serde(default, skip_serializing_if = "is_default")]
-    pub info: Option<UserInfo>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Share {
-    pub hostname: String,
-    pub path: String,
-    pub share_with: Option<String>,
-    pub share_for_days: Option<i64>,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UserToken {
-    pub login: String,
-    pub roles: Vec<String>,
-    pub xsrf_token: String,
-    pub share: Option<Share>,
-    pub expires: i64,
-    pub info: Option<UserInfo>,
-}
-
-impl UserToken {
-    fn from_json(serialized_user_token: &str) -> Result<Self, (StatusCode, &'static str)> {
-        let user_token = serde_json::from_str::<Self>(serialized_user_token).map_err(|_| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "could not deserialize user token",
-            )
-        })?;
-        user_token.check_expires()
-    }
-
-    fn check_expires(self) -> Result<Self, (StatusCode, &'static str)> {
-        let now = OffsetDateTime::now_utc().unix_timestamp();
-        if now > self.expires {
-            Err((StatusCode::FORBIDDEN, "user token is expired"))
-        } else {
-            Ok(self)
-        }
-    }
-}
 
 impl<S> FromRequestParts<S> for UserToken
 where
@@ -236,7 +155,7 @@ where
     }
 }
 
-fn decrypt_user_token(
+pub(crate) fn decrypt_user_token(
     cookie_name: &str,
     jar: &PrivateCookieJar,
     encrypted_token: &str,
@@ -258,9 +177,6 @@ fn decrypt_user_token(
     UserToken::from_json(serialized_user_token)
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct AdminToken(UserToken);
-
 impl<S> FromRequestParts<S> for AdminToken
 where
     S: Send + Sync,
@@ -277,9 +193,6 @@ where
         Ok(AdminToken(user))
     }
 }
-
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UserTokenWithoutXSRFCheck(pub UserToken);
 
 impl<S> FromRequestParts<S> for UserTokenWithoutXSRFCheck
 where
@@ -320,18 +233,6 @@ where
                 .ok(),
         )
     }
-}
-
-#[derive(Deserialize)]
-pub struct LocalAuth {
-    login: String,
-    password: String,
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct AuthResponse {
-    pub is_admin: bool,
-    pub xsrf_token: String,
 }
 
 pub async fn local_auth(
@@ -457,117 +358,6 @@ pub(crate) fn user_to_token(user: &User, config: &Config) -> UserToken {
     }
 }
 
-pub async fn get_users(
-    State(config_file): State<ConfigFile>,
-    _admin: AdminToken,
-) -> Result<Json<Vec<User>>, (StatusCode, &'static str)> {
-    let config = config_or_error(&config_file).await?;
-    // Return all the users as Json
-    Ok(Json(config.users))
-}
-
-pub async fn delete_user(
-    State(config_file): State<ConfigFile>,
-    _admin: AdminToken,
-    Path(user_login): Path<String>,
-) -> Result<impl IntoResponse, impl IntoResponse> {
-    let mut config = config_or_error(&config_file).await?;
-    // Find the user
-    if let Some(pos) = config.users.iter().position(|u| u.login == user_login) {
-        // It is an existing user, delete it
-        config.users.remove(pos);
-    } else {
-        // If the user does not exist, respond with an error
-        return Err((StatusCode::BAD_REQUEST, "user does not exist"));
-    }
-
-    config
-        .to_file_or_internal_server_error(&config_file)
-        .await?;
-
-    Ok((StatusCode::OK, "user deleted successfully"))
-}
-
-pub async fn add_user(
-    State(config_file): State<ConfigFile>,
-    State(config): State<ConfigState>,
-    _admin: AdminToken,
-    Json(mut payload): Json<User>,
-) -> Result<impl IntoResponse, impl IntoResponse> {
-    // Clone the config
-    let mut config = (*config).clone();
-    // Find the user
-    if let Some(user) = config.users.iter_mut().find(|u| u.login == payload.login) {
-        // It is an existing user, we only hash the password if it is not empty
-        if !payload.password.is_empty() {
-            hash_password(&mut payload)
-                .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "password hash failed"))?;
-        } else {
-            payload.password = user.password.clone();
-        }
-        *user = payload;
-    } else {
-        // It is a new user, we need to hash the password
-        if payload.password.is_empty() {
-            return Err((StatusCode::NOT_ACCEPTABLE, "password is required"));
-        }
-        hash_password(&mut payload)
-            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "password hash failed"))?;
-        config.users.push(payload);
-    }
-
-    config
-        .to_file_or_internal_server_error(&config_file)
-        .await?;
-
-    Ok((StatusCode::CREATED, "user created or updated successfully"))
-}
-
-pub async fn list_services(
-    State(config): State<ConfigState>,
-    user: UserToken,
-) -> Json<(Vec<App>, Vec<Dav>)> {
-    Json((
-        config
-            .apps
-            .iter()
-            .filter(|app| !app.secured || check_user_has_role(&user, &app.roles))
-            .cloned()
-            .map(|mut app| {
-                app.login = REDACTED.to_owned();
-                app.password = REDACTED.to_owned();
-                app
-            })
-            .collect(),
-        config
-            .davs
-            .iter()
-            .filter(|dav| !dav.secured || check_user_has_role(&user, &dav.roles))
-            .cloned()
-            .map(|mut dav| {
-                dav.passphrase = None;
-                dav
-            })
-            .collect(),
-    ))
-}
-
-pub async fn whoami(token: UserTokenWithoutXSRFCheck) -> Json<User> {
-    let user = User {
-        login: token.0.login,
-        password: REDACTED.to_owned(),
-        roles: token.0.roles,
-        info: token.0.info,
-    };
-    Json(user)
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct ShareResponse {
-    pub token: String,
-    pub xsrf_token: String,
-}
-
 pub async fn get_share_token(
     State(config): State<ConfigState>,
     user: UserToken,
@@ -580,7 +370,7 @@ pub async fn get_share_token(
         .iter()
         .find(|d| {
             d.host == share.hostname
-                || format!("{}.{}", trim_host(&d.host), config.hostname) == share.hostname
+                || format!("{}.{}", crate::configuration::trim_host(&d.host), config.hostname) == share.hostname
         })
         .ok_or(StatusCode::FORBIDDEN)?;
     // Check that the user is allowed to access the wanted share
@@ -641,7 +431,7 @@ pub async fn cookie_to_body(
     }
 }
 
-fn hash_password(payload: &mut User) -> Result<(), argon2::password_hash::Error> {
+pub(crate) fn hash_password(payload: &mut User) -> Result<(), argon2::password_hash::Error> {
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
     payload.password = argon2
@@ -753,30 +543,6 @@ pub fn authorized_or_redirect_to_login(
         return Err(value);
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod check_expires_test {
-    use super::UserToken;
-    use time::{Duration, OffsetDateTime};
-
-    #[test]
-    fn test_expires_ok() {
-        let user = UserToken {
-            expires: (OffsetDateTime::now_utc() + Duration::seconds(1)).unix_timestamp(),
-            ..Default::default()
-        };
-        assert!(user.check_expires().is_ok());
-    }
-
-    #[test]
-    fn test_expires_error() {
-        let user = UserToken {
-            expires: (OffsetDateTime::now_utc() - Duration::seconds(1)).unix_timestamp(),
-            ..Default::default()
-        };
-        assert!(user.check_expires().is_err());
-    }
 }
 
 #[cfg(test)]
