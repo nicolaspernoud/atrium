@@ -10,7 +10,7 @@ use axum::{
 use hyper::Request;
 use tokio::sync::broadcast::Sender;
 
-use tower::ServiceExt;
+use tower::{ServiceBuilder, ServiceExt};
 
 #[cfg(target_os = "linux")]
 use crate::jail::Jail;
@@ -25,15 +25,16 @@ use crate::{
     dir_server::dir_handler,
     errors::Error,
     middlewares::{cors_middleware, debug_cors_middleware, inject_security_headers},
+    users::{
+        share::{cookie_to_body, get_share_token},
+        xsrf::xsrf_middleware,
+    },
 };
 use crate::{
     oauth2::{oauth2_available, oauth2_callback, oauth2_login},
     onlyoffice::{onlyoffice_callback, onlyoffice_page},
     sysinfo::system_info,
-    users::{
-        add_user, cookie_to_body, delete_user, get_share_token, get_users, list_services,
-        local_auth, logout, whoami,
-    },
+    users::{add_user, delete_user, get_users, list_services, local_auth, logout, whoami},
 };
 
 pub struct Server {
@@ -77,8 +78,8 @@ impl Server {
             jail,
         );
 
+        // TODO : optimize middleware usage
         let user_router = Router::new()
-            .route("/api/user/whoami", get(whoami))
             .route("/api/user/list_services", get(list_services))
             .route("/api/user/system_info", get(system_info))
             .route(
@@ -87,7 +88,12 @@ impl Server {
                     state.clone(),
                     cookie_to_body,
                 )),
-            );
+            )
+            .route_layer(middleware::from_fn_with_state(
+                state.clone(),
+                xsrf_middleware,
+            ))
+            .route("/api/user/whoami", get(whoami));
 
         let admin_router = Router::new()
             .route("/api/admin/users", get(get_users).post(add_user))
@@ -95,7 +101,11 @@ impl Server {
             .route("/api/admin/apps", get(get_apps).post(add_app))
             .route("/api/admin/apps/{app_id}", delete(delete_app))
             .route("/api/admin/davs", get(get_davs).post(add_dav))
-            .route("/api/admin/davs/{dav_id}", delete(delete_dav));
+            .route("/api/admin/davs/{dav_id}", delete(delete_dav))
+            .route_layer(middleware::from_fn_with_state(
+                state.clone(),
+                xsrf_middleware,
+            ));
 
         let main_router = Router::new()
             .route(
@@ -140,10 +150,17 @@ impl Server {
             let unsecure_proxy_router =
                 proxy_handler::<InsecureSkipVerifyClient>.with_state(state.clone());
             let webdav_router = webdav_handler
-                .layer(middleware::from_fn_with_state(
-                    state.clone(),
-                    cors_middleware,
-                ))
+                .layer(
+                    ServiceBuilder::new()
+                        .layer(middleware::from_fn_with_state(
+                            state.clone(),
+                            cors_middleware,
+                        ))
+                        .layer(middleware::from_fn_with_state(
+                            state.clone(),
+                            xsrf_middleware,
+                        )),
+                )
                 .with_state(state.clone());
             let dir_router = dir_handler.with_state(state.clone());
             any(

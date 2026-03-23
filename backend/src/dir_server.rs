@@ -2,7 +2,7 @@ use super::extract::Host;
 use crate::{
     appstate::ConfigState,
     configuration::HostType,
-    users::{UserTokenWithoutXSRFCheck, authorized_or_redirect_to_login},
+    users::{UserToken, authorized_or_redirect_to_login},
 };
 use axum::{
     body::Body,
@@ -14,7 +14,7 @@ use tower::util::ServiceExt;
 use tower_http::services::ServeDir;
 
 pub async fn dir_handler(
-    user: Option<UserTokenWithoutXSRFCheck>,
+    user: Option<UserToken>,
     app: HostType,
     host: Host,
     State(config): State<ConfigState>,

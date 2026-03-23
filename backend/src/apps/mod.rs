@@ -24,7 +24,7 @@ use crate::{
     apps::proxy::ProxyError,
     appstate::{ConfigFile, ConfigState},
     configuration::{HostType, config_or_error},
-    users::{AUTH_COOKIE, AdminToken, UserTokenWithoutXSRFCheck, authorized_or_redirect_to_login},
+    users::{AUTH_COOKIE, AdminToken, UserToken, authorized_or_redirect_to_login},
     utils::{is_default, option_vec_trim_remove_empties, string_trim, vec_trim_remove_empties},
 };
 
@@ -125,7 +125,7 @@ impl AppWithUri {
 }
 
 pub async fn proxy_handler<S>(
-    user: Option<UserTokenWithoutXSRFCheck>,
+    user: Option<UserToken>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     app: HostType,
     host: Host,
@@ -237,11 +237,11 @@ where
 
 fn insert_authenticated_user_mail_header(
     app: &AppWithUri,
-    user: Option<UserTokenWithoutXSRFCheck>,
+    user: Option<UserToken>,
     req: &mut Request<Body>,
 ) -> Result<(), ProxyError> {
     let email = match (app.inner.forward_user_mail, user) {
-        (true, Some(user)) => user.0.info.map(|info| info.email),
+        (true, Some(user)) => user.info.map(|info| info.email),
         _ => None,
     };
     if let Some(email) = email {

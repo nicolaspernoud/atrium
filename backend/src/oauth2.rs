@@ -292,7 +292,7 @@ pub async fn oauth2_callback(
             Redirect::to(&format!(
                 "/oauth2/oauth2.html?is_admin={}&xsrf_token={}&user={}",
                 user.roles.contains(&ADMINS_ROLE.to_owned()),
-                user_token.xsrf_token,
+                user_token.xsrf_token.unwrap_or("no_token".to_owned()),
                 user.login
             ))
         },

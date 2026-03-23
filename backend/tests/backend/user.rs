@@ -1,4 +1,7 @@
-use atrium::{sysinfo::SystemInfo, users::User};
+use atrium::{
+    sysinfo::SystemInfo,
+    users::{User, share::ShareResponse},
+};
 use hyper::StatusCode;
 
 use crate::helpers::TestApp;
@@ -22,7 +25,7 @@ async fn list_services_api_for_unlogged_user_test() {
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     assert_eq!(
         response.text().await.unwrap(),
-        "no user found or xsrf token not provided"
+        "xsrf token not provided or not matching"
     );
 }
 
@@ -46,7 +49,8 @@ async fn list_services_api_for_normal_user_test() {
         .json::<atrium::users::AuthResponse>()
         .await
         .unwrap()
-        .xsrf_token;
+        .xsrf_token
+        .unwrap();
 
     // Get the services without XSRF token
     let response = app
@@ -58,10 +62,10 @@ async fn list_services_api_for_normal_user_test() {
         .send()
         .await
         .expect("failed to execute request");
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
     assert_eq!(
         response.text().await.unwrap(),
-        "no user found or xsrf token not provided"
+        "xsrf token not provided or not matching"
     );
 
     // Get the services with a wrong XSRF token
@@ -76,7 +80,10 @@ async fn list_services_api_for_normal_user_test() {
         .await
         .expect("failed to execute request");
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    assert_eq!(response.text().await.unwrap(), "xsrf token doesn't match");
+    assert_eq!(
+        response.text().await.unwrap(),
+        "xsrf token not provided or not matching"
+    );
 
     // Act and Assert : Get the services with XSRF token
     let response = app
@@ -125,7 +132,8 @@ async fn get_share_token_test() {
         .json::<atrium::users::AuthResponse>()
         .await
         .unwrap()
-        .xsrf_token;
+        .xsrf_token
+        .unwrap();
 
     // Act and Assert : Get the a share token for an unexisting host
     let response = app
@@ -205,7 +213,8 @@ async fn use_share_token_test() {
         .json::<atrium::users::AuthResponse>()
         .await
         .unwrap()
-        .xsrf_token;
+        .xsrf_token
+        .unwrap();
 
     let dir = "A' directory with special chars like é or è";
     let resource = format!("{dir}/A' file with special chars like é or è.txt");
@@ -247,11 +256,7 @@ async fn use_share_token_test() {
         .await
         .expect("failed to execute request");
     assert_eq!(response.status(), StatusCode::OK);
-    let share_token = response
-        .json::<atrium::users::ShareResponse>()
-        .await
-        .unwrap()
-        .token;
+    let share_token = response.json::<ShareResponse>().await.unwrap().token;
 
     // Create a client without cookie store
     let client = reqwest::Client::builder()
@@ -330,7 +335,8 @@ async fn share_token_security_test() {
         .json::<atrium::users::AuthResponse>()
         .await
         .unwrap()
-        .xsrf_token;
+        .xsrf_token
+        .unwrap();
 
     // 1. Create a read-only share token for /dira
     let response = app
@@ -346,12 +352,9 @@ async fn share_token_security_test() {
         .await
         .expect("failed to execute request");
     assert_eq!(response.status(), StatusCode::OK);
-    let share_response = response
-        .json::<atrium::users::ShareResponse>()
-        .await
-        .unwrap();
+    let share_response = response.json::<ShareResponse>().await.unwrap();
     let share_token = share_response.token;
-    let share_xsrf_token = share_response.xsrf_token;
+    let share_xsrf_token = share_response.xsrf_token.unwrap();
 
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
@@ -507,7 +510,8 @@ async fn get_system_info_test() {
         .json::<atrium::users::AuthResponse>()
         .await
         .unwrap()
-        .xsrf_token;
+        .xsrf_token
+        .unwrap();
 
     // Test the system info route
     let response = app

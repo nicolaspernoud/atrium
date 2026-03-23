@@ -3,25 +3,22 @@ use crate::{
     configuration::{Config, HostType},
     errors::ErrResponse,
     extract::Host,
-    headers::XSRFToken,
     logger::city_from_ip,
     utils::{is_path_within_base, query_pairs_or_error, random_string},
 };
-use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier, password_hash::SaltString};
+use argon2::{Argon2, PasswordHash, PasswordVerifier};
 use axum::{
     Extension, Json, RequestPartsExt,
     body::Body,
     extract::{
         ConnectInfo, FromRef, FromRequestParts, OptionalFromRequestParts, RawQuery, Request, State,
     },
-    middleware::Next,
-    response::{IntoResponse, Response},
+    response::Response,
 };
 use axum_extra::{
     TypedHeader,
     extract::cookie::{Cookie, Key, PrivateCookieJar, SameSite},
 };
-use chacha20poly1305::aead::OsRng;
 use headers::{Authorization, HeaderName, authorization::Basic};
 use http::{
     HeaderValue, StatusCode,
@@ -33,10 +30,7 @@ use std::{convert::Infallible, net::SocketAddr, path::PathBuf};
 use time::{Duration, OffsetDateTime};
 use tracing::info;
 
-use super::model::{
-    AdminToken, AuthResponse, LocalAuth, Share, ShareResponse, User, UserToken,
-    UserTokenWithoutXSRFCheck,
-};
+use super::model::{AdminToken, AuthResponse, LocalAuth, User, UserToken};
 
 pub static AUTH_COOKIE: &str = "ATRIUM_AUTH";
 static WWWAUTHENTICATE: HeaderName = HeaderName::from_static("www-authenticate");
@@ -59,18 +53,10 @@ where
             .expect("Cookie jar retrieval is Infallible");
 
         // Get the serialized user_token from the cookie jar, and check the xsrf token
-        if let Some(cookie) = jar.get(AUTH_COOKIE)
-            && let Ok(TypedHeader(XSRFToken(xsrf_token))) =
-                <TypedHeader<XSRFToken> as FromRequestParts<S>>::from_request_parts(parts, state)
-                    .await
-        {
+        if let Some(cookie) = jar.get(AUTH_COOKIE) {
             // Deserialize the user_token and return him/her
             let serialized_user_token = cookie.value();
             let user_token = UserToken::from_json(serialized_user_token)?;
-
-            if user_token.xsrf_token != xsrf_token {
-                return Err((StatusCode::FORBIDDEN, "xsrf token doesn't match"));
-            }
             return Ok(user_token);
         }
 
@@ -80,7 +66,10 @@ where
             .ok()
             .map(|hm| hm.get("token").map(|v| v.to_owned()))
         {
-            return decrypt_user_token(AUTH_COOKIE, &jar, password);
+            return decrypt_user_token(AUTH_COOKIE, &jar, password).map(|mut t| {
+                t.xsrf_token = None;
+                t
+            });
         }
 
         // OR Try to get user_token from basic auth headers
@@ -90,7 +79,12 @@ where
             )
             .await
         {
-            if let Ok(token) = decrypt_user_token(AUTH_COOKIE, &jar, basic.password()) {
+            if let Ok(token) =
+                decrypt_user_token(AUTH_COOKIE, &jar, basic.password()).map(|mut t| {
+                    t.xsrf_token = None;
+                    t
+                })
+            {
                 return Ok(token);
             } else {
                 let config = ConfigState::from_ref(state);
@@ -108,7 +102,10 @@ where
                     MAXMIND_READER.get(),
                     addr.0,
                 ) {
-                    Ok(user) => Ok(user.1),
+                    Ok(user) => Ok(user.1).map(|mut t| {
+                        t.xsrf_token = None;
+                        t
+                    }),
                     Err(e) => {
                         #[cfg(target_os = "linux")]
                         if let Some(jail) = jail {
@@ -122,7 +119,7 @@ where
 
         Err((
             StatusCode::UNAUTHORIZED,
-            "no user found or xsrf token not provided",
+            "xsrf token not provided or not matching",
         ))
     }
 }
@@ -184,47 +181,6 @@ where
             return Err((StatusCode::UNAUTHORIZED, "user is not in admin group"));
         }
         Ok(AdminToken(user))
-    }
-}
-
-impl<S> FromRequestParts<S> for UserTokenWithoutXSRFCheck
-where
-    S: Send + Sync,
-    Key: FromRef<S>,
-{
-    type Rejection = (StatusCode, &'static str);
-    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let jar: PrivateCookieJar = PrivateCookieJar::from_request_parts(parts, state)
-            .await
-            .expect("Cookie jar retrieval is Infallible");
-
-        // Get the serialized user_token from the cookie jar
-        if let Some(cookie) = jar.get(AUTH_COOKIE) {
-            // Deserialize the user_token and return him/her
-            let serialized_user_token = cookie.value();
-            let user_token = UserToken::from_json(serialized_user_token)?;
-            return Ok(UserTokenWithoutXSRFCheck(user_token));
-        }
-        Err((StatusCode::UNAUTHORIZED, "no user found"))
-    }
-}
-
-impl<S> OptionalFromRequestParts<S> for UserTokenWithoutXSRFCheck
-where
-    S: Send + Sync,
-    Key: FromRef<S>,
-{
-    type Rejection = Infallible;
-
-    async fn from_request_parts(
-        parts: &mut Parts,
-        state: &S,
-    ) -> Result<Option<Self>, Self::Rejection> {
-        Ok(
-            <UserTokenWithoutXSRFCheck as FromRequestParts<S>>::from_request_parts(parts, state)
-                .await
-                .ok(),
-        )
     }
 }
 
@@ -342,119 +298,13 @@ pub(crate) fn user_to_token(user: &User, config: &Config) -> UserToken {
     UserToken {
         login: user.login.clone(),
         roles: user.roles.clone(),
-        xsrf_token: random_string(16),
+        xsrf_token: Some(random_string(16)),
         share: None,
         expires: (OffsetDateTime::now_utc()
             + Duration::days(config.session_duration_days.unwrap_or(1)))
         .unix_timestamp(),
         info: user.info.clone(),
     }
-}
-
-pub async fn get_share_token(
-    State(config): State<ConfigState>,
-    user: UserToken,
-    jar: PrivateCookieJar,
-    Json(share): Json<Share>,
-) -> Result<PrivateCookieJar, StatusCode> {
-    // Get the dav from the config map
-    let to_share = config
-        .davs
-        .iter()
-        .find(|d| {
-            d.host == share.hostname
-                || format!(
-                    "{}.{}",
-                    crate::configuration::trim_host(&d.host),
-                    config.hostname
-                ) == share.hostname
-        })
-        .ok_or(StatusCode::FORBIDDEN)?;
-    // Check that the user is allowed to access the wanted share
-    if !&to_share.secured || check_user_has_role(&user, &to_share.roles) {
-        // If it's already a share token, check that the new share is not more permissive
-        if let Some(existing_share) = &user.share {
-            if share.hostname != existing_share.hostname {
-                return Err(StatusCode::FORBIDDEN);
-            }
-            if !is_path_within_base(&share.path, &existing_share.path) {
-                return Err(StatusCode::FORBIDDEN);
-            }
-            if existing_share.writable == false && share.writable != false {
-                return Err(StatusCode::FORBIDDEN);
-            }
-        }
-
-        // Create a token with the required information
-        let share_login = share
-            .share_with
-            .as_ref()
-            .map(|share_with| format!("{} (shared by {})", share_with, user.login))
-            .unwrap_or(format!("{} (downloading)", user.login));
-        let expires = share
-            .share_for_days
-            .as_ref()
-            .map_or(Duration::seconds(2), |d| Duration::days(*d));
-        let mut expires_timestamp = (OffsetDateTime::now_utc() + expires).unix_timestamp();
-
-        // If it's already a share token, the new token cannot last longer than the original one
-        if user.share.is_some() && expires_timestamp > user.expires {
-            expires_timestamp = user.expires;
-        }
-
-        let share_token = UserToken {
-            login: share_login,
-            roles: user.roles,
-            xsrf_token: random_string(16),
-            share: Some(share),
-            expires: expires_timestamp,
-            info: None,
-        };
-        let encoded =
-            serde_json::to_string(&share_token).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-        // Store the user into the cookie
-        let cookie = Cookie::new(AUTH_COOKIE, encoded);
-        Ok(jar.add(cookie))
-    } else {
-        Err(StatusCode::FORBIDDEN)
-    }
-}
-
-pub async fn cookie_to_body(
-    jar: PrivateCookieJar,
-    req: Request,
-    next: Next,
-) -> Result<impl IntoResponse, impl IntoResponse> {
-    let res = next.run(req).await;
-    let (parts, _) = res.into_parts();
-    if parts.status == StatusCode::OK {
-        let encrypted_token = parts
-            .headers
-            .get("set-cookie")
-            .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?
-            .to_str()
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-            .split_once("=")
-            .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-        let plain_token =
-            decrypt_user_token(encrypted_token.0, &jar, &encrypted_token.1).map_err(|e| e.0)?;
-        let res = Json(ShareResponse {
-            token: encrypted_token.1.to_owned(),
-            xsrf_token: plain_token.xsrf_token,
-        });
-        Ok(res)
-    } else {
-        Err(parts.status)
-    }
-}
-
-pub(crate) fn hash_password(payload: &mut User) -> Result<(), argon2::password_hash::Error> {
-    let salt = SaltString::generate(&mut OsRng);
-    let argon2 = Argon2::default();
-    payload.password = argon2
-        .hash_password(payload.password.trim().as_bytes(), &salt)?
-        .to_string();
-    Ok(())
 }
 
 pub fn check_user_has_role(user: &UserToken, roles: &[String]) -> bool {
@@ -487,7 +337,7 @@ pub fn check_user_has_role_or_forbid(
                         if share.path == decoded_path
                             || is_path_within_base(&decoded_path, &share.path)
                         {
-                            if share.writable == false
+                            if !share.writable
                                 && method != http::Method::GET
                                 && method != http::Method::HEAD
                                 && method != http::Method::OPTIONS
@@ -513,9 +363,9 @@ pub fn check_user_has_role_or_forbid(
 }
 
 fn forbidden() -> http::Response<Body> {
-        Response::builder()
-            .status(StatusCode::FORBIDDEN)
-            .body(Body::empty())
+    Response::builder()
+        .status(StatusCode::FORBIDDEN)
+        .body(Body::empty())
         .expect("constant method")
 }
 
@@ -534,19 +384,15 @@ pub fn check_authorization(
 
 pub fn authorized_or_redirect_to_login(
     app: &HostType,
-    user: &Option<UserTokenWithoutXSRFCheck>,
+    user: &Option<UserToken>,
     hostname: &str,
     req: &Request<Body>,
     config: &std::sync::Arc<crate::configuration::Config>,
 ) -> Result<(), Box<Response<Body>>> {
     let domain = hostname.split(':').next().unwrap_or_default();
-    if let Err(mut value) = check_authorization(
-        app,
-        user.as_ref().map(|u| &u.0),
-        domain,
-        req.uri().path(),
-        req.method(),
-    ) {
+    if let Err(mut value) =
+        check_authorization(app, user.as_ref(), domain, req.uri().path(), req.method())
+    {
         // Redirect to login page if user is not logged, write where to get back after login in a cookie
         if value.status() == StatusCode::UNAUTHORIZED
             && let Ok(mut hn) = HeaderValue::from_str(&config.full_domain())

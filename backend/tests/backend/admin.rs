@@ -58,7 +58,12 @@ async fn users_api_for_normal_user_test() {
     assert_eq!(response.status(), StatusCode::OK);
 
     // Get XSRF token from response
-    let xsrf_token: String = response.json::<AuthResponse>().await.unwrap().xsrf_token;
+    let xsrf_token: String = response
+        .json::<AuthResponse>()
+        .await
+        .unwrap()
+        .xsrf_token
+        .unwrap();
 
     // Get the existing users (must fail)
     let response = app
@@ -112,7 +117,12 @@ async fn users_api_for_admin_user_test() {
     assert_eq!(response.status(), StatusCode::OK);
 
     // Get XSRF token from response
-    let xsrf_token: String = response.json::<AuthResponse>().await.unwrap().xsrf_token;
+    let xsrf_token: String = response
+        .json::<AuthResponse>()
+        .await
+        .unwrap()
+        .xsrf_token
+        .unwrap();
 
     // Get the existing users without XSRF token
     let response = app
@@ -121,10 +131,10 @@ async fn users_api_for_admin_user_test() {
         .send()
         .await
         .expect("failed to execute request");
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
     assert_eq!(
         response.text().await.unwrap(),
-        "no user found or xsrf token not provided"
+        "xsrf token not provided or not matching"
     );
 
     // Get the existing users with a wrong XSRF token
@@ -136,7 +146,10 @@ async fn users_api_for_admin_user_test() {
         .await
         .expect("failed to execute request");
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    assert_eq!(response.text().await.unwrap(), "xsrf token doesn't match");
+    assert_eq!(
+        response.text().await.unwrap(),
+        "xsrf token not provided or not matching"
+    );
 
     // Get the existing users
     let response = app
@@ -263,7 +276,12 @@ async fn apps_api_for_normal_user_test() {
     assert_eq!(response.status(), StatusCode::OK);
 
     // Get XSRF token from response
-    let xsrf_token: String = response.json::<AuthResponse>().await.unwrap().xsrf_token;
+    let xsrf_token: String = response
+        .json::<AuthResponse>()
+        .await
+        .unwrap()
+        .xsrf_token
+        .unwrap();
 
     // Get the existing apps (must fail)
     let response = app
@@ -314,7 +332,12 @@ async fn apps_api_for_admin_user_test() {
     assert_eq!(response.status(), StatusCode::OK);
 
     // Get XSRF token from response
-    let xsrf_token: String = response.json::<AuthResponse>().await.unwrap().xsrf_token;
+    let xsrf_token: String = response
+        .json::<AuthResponse>()
+        .await
+        .unwrap()
+        .xsrf_token
+        .unwrap();
 
     // Get the existing apps without XSRF token
     let response = app
@@ -323,10 +346,10 @@ async fn apps_api_for_admin_user_test() {
         .send()
         .await
         .expect("failed to execute request");
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
     assert_eq!(
         response.text().await.unwrap(),
-        "no user found or xsrf token not provided"
+        "xsrf token not provided or not matching"
     );
 
     // Get the existing apps with a wrong XSRF token
@@ -338,7 +361,10 @@ async fn apps_api_for_admin_user_test() {
         .await
         .expect("failed to execute request");
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    assert_eq!(response.text().await.unwrap(), "xsrf token doesn't match");
+    assert_eq!(
+        response.text().await.unwrap(),
+        "xsrf token not provided or not matching"
+    );
 
     // Get the existing apps
     let response = app
@@ -460,7 +486,12 @@ async fn davs_api_for_normal_user_test() {
     assert_eq!(response.status(), StatusCode::OK);
 
     // Get XSRF token from response
-    let xsrf_token: String = response.json::<AuthResponse>().await.unwrap().xsrf_token;
+    let xsrf_token: String = response
+        .json::<AuthResponse>()
+        .await
+        .unwrap()
+        .xsrf_token
+        .unwrap();
 
     // Get the existing davs (must fail)
     let response = app
@@ -511,7 +542,12 @@ async fn davs_api_for_admin_user_test() {
     assert_eq!(response.status(), StatusCode::OK);
 
     // Get XSRF token from response
-    let xsrf_token: String = response.json::<AuthResponse>().await.unwrap().xsrf_token;
+    let xsrf_token: String = response
+        .json::<AuthResponse>()
+        .await
+        .unwrap()
+        .xsrf_token
+        .unwrap();
 
     // Get the existing davs without XSRF token
     let response = app
@@ -520,10 +556,10 @@ async fn davs_api_for_admin_user_test() {
         .send()
         .await
         .expect("failed to execute request");
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
     assert_eq!(
         response.text().await.unwrap(),
-        "no user found or xsrf token not provided"
+        "xsrf token not provided or not matching"
     );
 
     // Get the existing davs with a wrong XSRF token
@@ -535,7 +571,10 @@ async fn davs_api_for_admin_user_test() {
         .await
         .expect("failed to execute request");
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    assert_eq!(response.text().await.unwrap(), "xsrf token doesn't match");
+    assert_eq!(
+        response.text().await.unwrap(),
+        "xsrf token not provided or not matching"
+    );
 
     // Get the existing davs
     let response = app

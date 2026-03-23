@@ -1199,7 +1199,8 @@ async fn secured_dav_test() {
         .json::<atrium::users::AuthResponse>()
         .await
         .unwrap()
-        .xsrf_token;
+        .xsrf_token
+        .unwrap();
     // Act : try to access app as logged user
     let response = app
         .client
@@ -1226,7 +1227,8 @@ async fn secured_dav_test() {
         .json::<atrium::users::AuthResponse>()
         .await
         .unwrap()
-        .xsrf_token;
+        .xsrf_token
+        .unwrap();
     // Act : try to access app as admin without XSRF token
     let response = app
         .client
@@ -1234,7 +1236,7 @@ async fn secured_dav_test() {
         .send()
         .await
         .expect("failed to execute request");
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
     // Act : try to access app as admin with a wrong XSRF token
     let response = app
         .client
@@ -1243,7 +1245,7 @@ async fn secured_dav_test() {
         .send()
         .await
         .expect("failed to execute request");
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
     // Act : try to access app as admin
     let response = app
         .client

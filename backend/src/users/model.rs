@@ -1,17 +1,18 @@
-use std::path::PathBuf;
-
 use crate::{
     apps::App,
     appstate::{ConfigFile, ConfigState},
     configuration::config_or_error,
     davs::model::Dav,
+    users::share::Share,
     utils::{is_default, string_trim, vec_trim_remove_empties},
 };
+use argon2::{Argon2, PasswordHasher, password_hash::SaltString};
 use axum::{
     Json,
     extract::{Path, State},
     response::IntoResponse,
 };
+use chacha20poly1305::aead::OsRng;
 use http::StatusCode;
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
@@ -61,20 +62,10 @@ pub struct User {
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Share {
-    pub hostname: String,
-    pub path: PathBuf,
-    pub share_with: Option<String>,
-    pub share_for_days: Option<i64>,
-    #[serde(default)]
-    pub writable: bool,
-}
-
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UserToken {
     pub login: String,
     pub roles: Vec<String>,
-    pub xsrf_token: String,
+    pub xsrf_token: Option<String>,
     pub share: Option<Share>,
     pub expires: i64,
     pub info: Option<UserInfo>,
@@ -106,9 +97,6 @@ impl UserToken {
 #[derive(Serialize, Deserialize)]
 pub struct AdminToken(pub(crate) UserToken);
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct UserTokenWithoutXSRFCheck(pub UserToken);
-
 #[derive(Deserialize)]
 pub struct LocalAuth {
     pub(crate) login: String,
@@ -118,13 +106,7 @@ pub struct LocalAuth {
 #[derive(Deserialize, Serialize)]
 pub struct AuthResponse {
     pub is_admin: bool,
-    pub xsrf_token: String,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct ShareResponse {
-    pub token: String,
-    pub xsrf_token: String,
+    pub xsrf_token: Option<String>,
 }
 
 pub async fn get_users(
@@ -170,7 +152,7 @@ pub async fn add_user(
     if let Some(user) = config.users.iter_mut().find(|u| u.login == payload.login) {
         // It is an existing user, we only hash the password if it is not empty
         if !payload.password.is_empty() {
-            super::auth::hash_password(&mut payload)
+            hash_password(&mut payload)
                 .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "password hash failed"))?;
         } else {
             payload.password = user.password.clone();
@@ -181,7 +163,7 @@ pub async fn add_user(
         if payload.password.is_empty() {
             return Err((StatusCode::NOT_ACCEPTABLE, "password is required"));
         }
-        super::auth::hash_password(&mut payload)
+        hash_password(&mut payload)
             .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "password hash failed"))?;
         config.users.push(payload);
     }
@@ -191,6 +173,15 @@ pub async fn add_user(
         .await?;
 
     Ok((StatusCode::CREATED, "user created or updated successfully"))
+}
+
+pub(crate) fn hash_password(payload: &mut User) -> Result<(), argon2::password_hash::Error> {
+    let salt = SaltString::generate(&mut OsRng);
+    let argon2 = Argon2::default();
+    payload.password = argon2
+        .hash_password(payload.password.trim().as_bytes(), &salt)?
+        .to_string();
+    Ok(())
 }
 
 pub async fn list_services(
@@ -225,12 +216,12 @@ pub async fn list_services(
     )))
 }
 
-pub async fn whoami(token: UserTokenWithoutXSRFCheck) -> Json<User> {
+pub async fn whoami(token: UserToken) -> Json<User> {
     let user = User {
-        login: token.0.login,
+        login: token.login,
         password: REDACTED.to_owned(),
-        roles: token.0.roles,
-        info: token.0.info,
+        roles: token.roles,
+        info: token.info,
     };
     Json(user)
 }

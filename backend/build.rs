@@ -88,13 +88,13 @@ fn main() {
     // ---------------------------------------------------------------------------
     // Do nothing if the OUT_DIR environment variable contains "release_optimized"
     // ---------------------------------------------------------------------------
-    if let Ok(out_dir) = env::var("OUT_DIR") {
-        if out_dir.contains("release_optimized") {
-            println!(
-                "cargo:warning=Building in release-optimized mode: skipping build script to avoid running Flutter build and asset copying steps since they are done with Dockerfile"
-            );
-            return;
-        }
+    if let Ok(out_dir) = env::var("OUT_DIR")
+        && out_dir.contains("release_optimized")
+    {
+        println!(
+            "cargo:warning=Building in release-optimized mode: skipping build script to avoid running Flutter build and asset copying steps since they are done with Dockerfile"
+        );
+        return;
     }
 
     // -----------------------------------------------------------------
@@ -113,7 +113,7 @@ fn main() {
     // -----------------------------------------------------------------
     // Common path helpers (all relative to the backend crate directory)
     // -----------------------------------------------------------------
-    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("cargo manifest dir"));
     let web_dir = manifest_dir.join("web"); // ./backend/web
     let dist_dir = manifest_dir.join("dist"); // ./backend/dist
 
