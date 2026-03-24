@@ -136,9 +136,6 @@ where
 {
     type Rejection = Response;
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        if let Some(user) = parts.extensions.get::<UserToken>() {
-            return Ok(user.clone());
-        }
 
         #[cfg(target_os = "linux")]
         let jail = crate::OptionalJail::from_ref(state);
@@ -152,7 +149,6 @@ where
             let serialized_user_token = cookie.value();
             let user_token = UserToken::from_json(serialized_user_token)
                 .map_err(|e| (e.0, e.1).into_response())?;
-            parts.extensions.insert(user_token.clone());
             return Ok(user_token);
         }
 
@@ -168,7 +164,6 @@ where
                     t
                 })
                 .map_err(|e| (e.0, e.1).into_response())?;
-            parts.extensions.insert(user_token.clone());
             return Ok(user_token);
         }
 
@@ -215,7 +210,6 @@ where
                     }
                 }
             };
-            parts.extensions.insert(user_token.clone());
             return Ok(user_token);
         }
 
@@ -280,15 +274,11 @@ where
 {
     type Rejection = Response;
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        if let Some(admin) = parts.extensions.get::<AdminToken>() {
-            return Ok(AdminToken(admin.0.clone()));
-        }
         let user = <UserToken as FromRequestParts<S>>::from_request_parts(parts, state).await?;
         if !user.roles.contains(&ADMINS_ROLE.to_owned()) {
             return Err((StatusCode::UNAUTHORIZED, "user is not in admin group").into_response());
         }
         let admin = AdminToken(user);
-        parts.extensions.insert(admin.clone());
         Ok(admin)
     }
 }

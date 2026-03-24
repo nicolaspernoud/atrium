@@ -1,3 +1,4 @@
+use super::user::UserToken;
 use crate::{
     appstate::{ConfigState, MAXMIND_READER},
     configuration::HostType,
@@ -10,7 +11,7 @@ use axum::{
     body::Body,
     extract::{ConnectInfo, Request, State},
     middleware::Next,
-    response::Response,
+    response::{IntoResponse, Response},
 };
 use axum_extra::{
     TypedHeader,
@@ -22,8 +23,6 @@ use http::{
 };
 use std::{net::SocketAddr, path::PathBuf};
 use tracing::info;
-
-use super::user::{AdminToken, UserToken};
 
 pub async fn auth_middleware(
     State(config): State<ConfigState>,
@@ -37,10 +36,6 @@ pub async fn auth_middleware(
     if let Err(res) = authorized_or_redirect_to_login(&host_type, &user, &hostname, &req, &config) {
         return *res;
     }
-    next.run(req).await
-}
-
-pub async fn admin_auth_middleware(_admin: AdminToken, req: Request, next: Next) -> Response {
     next.run(req).await
 }
 
@@ -109,17 +104,18 @@ pub async fn xsrf_middleware(
     user: Option<UserToken>,
     req: Request,
     next: Next,
-) -> Result<Response, (StatusCode, &'static str)> {
+) -> Response {
     if let Some(user) = user
         && let Some(user_xsrf) = user.xsrf_token
         && xsrf_token.as_ref().map(|v| &v.0.0) != Some(&user_xsrf)
     {
-        Err((
+        (
             StatusCode::FORBIDDEN,
             "xsrf token not provided or not matching",
-        ))
+        )
+            .into_response()
     } else {
-        Ok(next.run(req).await)
+        next.run(req).await
     }
 }
 
