@@ -94,7 +94,7 @@ impl UserToken {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct AdminToken(pub(crate) UserToken);
 
 #[derive(Deserialize)]

@@ -13,6 +13,7 @@ use axum::{
     extract::{
         ConnectInfo, FromRef, FromRequestParts, OptionalFromRequestParts, RawQuery, Request, State,
     },
+    middleware::Next,
     response::Response,
 };
 use axum_extra::{
@@ -21,7 +22,7 @@ use axum_extra::{
 };
 use headers::{Authorization, HeaderName, authorization::Basic};
 use http::{
-    HeaderValue, StatusCode,
+    HeaderValue, Method, StatusCode,
     header::{LOCATION, SET_COOKIE},
     request::Parts,
 };
@@ -46,6 +47,10 @@ where
 {
     type Rejection = (StatusCode, &'static str);
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        if let Some(user) = parts.extensions.get::<UserToken>() {
+            return Ok(user.clone());
+        }
+
         #[cfg(target_os = "linux")]
         let jail = crate::OptionalJail::from_ref(state);
         let jar = PrivateCookieJar::from_request_parts(parts, state)
@@ -57,6 +62,7 @@ where
             // Deserialize the user_token and return him/her
             let serialized_user_token = cookie.value();
             let user_token = UserToken::from_json(serialized_user_token)?;
+            parts.extensions.insert(user_token.clone());
             return Ok(user_token);
         }
 
@@ -66,10 +72,12 @@ where
             .ok()
             .map(|hm| hm.get("token").map(|v| v.to_owned()))
         {
-            return decrypt_user_token(AUTH_COOKIE, &jar, password).map(|mut t| {
+            let user_token = decrypt_user_token(AUTH_COOKIE, &jar, password).map(|mut t| {
                 t.xsrf_token = None;
                 t
-            });
+            })?;
+            parts.extensions.insert(user_token.clone());
+            return Ok(user_token);
         }
 
         // OR Try to get user_token from basic auth headers
@@ -79,13 +87,12 @@ where
             )
             .await
         {
-            if let Ok(token) =
+            let user_token = if let Ok(token) =
                 decrypt_user_token(AUTH_COOKIE, &jar, basic.password()).map(|mut t| {
                     t.xsrf_token = None;
                     t
-                })
-            {
-                return Ok(token);
+                }) {
+                token
             } else {
                 let config = ConfigState::from_ref(state);
 
@@ -93,7 +100,7 @@ where
                     .extract::<Extension<ConnectInfo<SocketAddr>>>()
                     .await
                     .expect("Could not find socket address");
-                return match authenticate_local_user(
+                match authenticate_local_user(
                     &config,
                     LocalAuth {
                         login: basic.username().to_string(),
@@ -102,19 +109,22 @@ where
                     MAXMIND_READER.get(),
                     addr.0,
                 ) {
-                    Ok(user) => Ok(user.1).map(|mut t| {
+                    Ok(user) => {
+                        let mut t = user.1;
                         t.xsrf_token = None;
                         t
-                    }),
+                    }
                     Err(e) => {
                         #[cfg(target_os = "linux")]
                         if let Some(jail) = jail {
                             jail.report_failure(addr.0.ip());
                         }
-                        Err((e.0, "no user found in basic auth"))
+                        return Err((e.0, "no user found in basic auth"));
                     }
-                };
-            }
+                }
+            };
+            parts.extensions.insert(user_token.clone());
+            return Ok(user_token);
         }
 
         Err((
@@ -176,11 +186,16 @@ where
 {
     type Rejection = (StatusCode, &'static str);
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        if let Some(admin) = parts.extensions.get::<AdminToken>() {
+            return Ok(AdminToken(admin.0.clone()));
+        }
         let user = <UserToken as FromRequestParts<S>>::from_request_parts(parts, state).await?;
         if !user.roles.contains(&ADMINS_ROLE.to_owned()) {
             return Err((StatusCode::UNAUTHORIZED, "user is not in admin group"));
         }
-        Ok(AdminToken(user))
+        let admin = AdminToken(user);
+        parts.extensions.insert(admin.clone());
+        Ok(admin)
     }
 }
 
@@ -323,7 +338,6 @@ pub fn check_user_has_role_or_forbid(
     target: &HostType,
     hostname: &str,
     path: &str,
-    method: &http::Method,
 ) -> Result<(), Box<Response<Body>>> {
     if let Some(user) = user {
         if check_user_has_role(user, target.roles()) {
@@ -337,14 +351,6 @@ pub fn check_user_has_role_or_forbid(
                         if share.path == decoded_path
                             || is_path_within_base(&decoded_path, &share.path)
                         {
-                            if !share.writable
-                                && method != http::Method::GET
-                                && method != http::Method::HEAD
-                                && method != http::Method::OPTIONS
-                                && method.as_str() != "PROPFIND"
-                            {
-                                return Err(Box::new(forbidden()));
-                            }
                             return Ok(());
                         }
                     }
@@ -374,12 +380,81 @@ pub fn check_authorization(
     user: Option<&UserToken>,
     hostname: &str,
     path: &str,
-    method: &http::Method,
 ) -> Result<(), Box<Response<Body>>> {
     if app.secured() {
-        check_user_has_role_or_forbid(user, app, hostname, path, method)?;
+        check_user_has_role_or_forbid(user, app, hostname, path)?;
     }
     Ok(())
+}
+
+pub async fn auth_middleware(
+    State(config): State<ConfigState>,
+    host_type: HostType,
+    host: Host,
+    user: Option<UserToken>,
+    req: Request,
+    next: Next,
+) -> Response {
+    let hostname = host.as_str().to_owned();
+    if let Err(res) = authorized_or_redirect_to_login(&host_type, &user, &hostname, &req, &config) {
+        return *res;
+    }
+    next.run(req).await
+}
+
+pub async fn admin_auth_middleware(_admin: AdminToken, req: Request, next: Next) -> Response {
+    next.run(req).await
+}
+
+pub async fn dav_auth_middleware(
+    #[cfg(target_os = "linux")] State(jail): State<crate::OptionalJail>,
+    host_type: HostType,
+    host: Host,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    user: Option<UserToken>,
+    req: Request,
+    next: Next,
+) -> Response {
+    let method = req.method().clone();
+    let path = req.uri().path().to_owned();
+    let hostname = host.hostname().to_owned();
+    let query = req.uri().query().map(|q| q.to_owned());
+
+    let log_str = format!(
+        "{} \"{}{}\" by {} from {}",
+        method,
+        host_type.host(),
+        path,
+        user.as_ref().map_or_else(|| "unknown user", |u| &u.login),
+        city_from_ip(addr, MAXMIND_READER.get())
+    );
+
+    if method != Method::OPTIONS {
+        if let Err(access_denied_resp) =
+            check_authorization(&host_type, user.as_ref(), &hostname, &path)
+        {
+            #[cfg(target_os = "linux")]
+            if let Some(jail) = jail {
+                jail.report_failure(addr.ip());
+            }
+            info!("FILE ACCESS DENIED: {log_str}");
+            return *access_denied_resp;
+        }
+    }
+
+    let unlogged_methods = [
+        Method::OPTIONS,
+        Method::HEAD,
+        Method::from_bytes(b"LOCK").expect("infallible"),
+        Method::from_bytes(b"UNLOCK").expect("infallible"),
+        Method::from_bytes(b"PROPFIND").expect("infallible"),
+    ];
+
+    if !unlogged_methods.contains(&method) && query.as_deref().is_none_or(|q| q != "diskusage") {
+        info!("FILE ACCESS: {log_str}");
+    }
+
+    next.run(req).await
 }
 
 pub fn authorized_or_redirect_to_login(
@@ -391,7 +466,7 @@ pub fn authorized_or_redirect_to_login(
 ) -> Result<(), Box<Response<Body>>> {
     let domain = hostname.split(':').next().unwrap_or_default();
     if let Err(mut value) =
-        check_authorization(app, user.as_ref(), domain, req.uri().path(), req.method())
+        check_authorization(app, user.as_ref(), domain, req.uri().path())
     {
         // Redirect to login page if user is not logged, write where to get back after login in a cookie
         if value.status() == StatusCode::UNAUTHORIZED
@@ -443,7 +518,7 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(user, &target, "", "", &http::Method::GET).is_err());
+        assert!(check_user_has_role_or_forbid(user, &target, "", "").is_err());
     }
 
     #[test]
@@ -459,9 +534,7 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(
-            check_user_has_role_or_forbid(Some(&user), &target, "", "", &http::Method::GET).is_ok()
-        );
+        assert!(check_user_has_role_or_forbid(Some(&user), &target, "", "").is_ok());
     }
 
     #[test]
@@ -477,9 +550,7 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(
-            check_user_has_role_or_forbid(Some(&user), &target, "", "", &http::Method::GET).is_ok()
-        );
+        assert!(check_user_has_role_or_forbid(Some(&user), &target, "", "").is_ok());
     }
 
     #[test]
@@ -495,10 +566,7 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(
-            check_user_has_role_or_forbid(Some(&user), &target, "", "", &http::Method::GET)
-                .is_err()
-        );
+        assert!(check_user_has_role_or_forbid(Some(&user), &target, "", "").is_err());
     }
 
     #[test]
@@ -511,10 +579,7 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(
-            check_user_has_role_or_forbid(Some(&user), &target, "", "", &http::Method::GET)
-                .is_err()
-        );
+        assert!(check_user_has_role_or_forbid(Some(&user), &target, "", "").is_err());
     }
 
     #[test]
@@ -529,10 +594,7 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(
-            check_user_has_role_or_forbid(Some(&user), &target, "", "", &http::Method::GET)
-                .is_err()
-        );
+        assert!(check_user_has_role_or_forbid(Some(&user), &target, "", "").is_err());
     }
 
     #[test]
@@ -544,9 +606,6 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(
-            check_user_has_role_or_forbid(Some(&user), &target, "", "", &http::Method::GET)
-                .is_err()
-        );
+        assert!(check_user_has_role_or_forbid(Some(&user), &target, "", "").is_err());
     }
 }

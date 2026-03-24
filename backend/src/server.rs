@@ -26,6 +26,7 @@ use crate::{
     errors::Error,
     middlewares::{cors_middleware, debug_cors_middleware, inject_security_headers},
     users::{
+        admin_auth_middleware, auth_middleware, dav_auth_middleware,
         share::{cookie_to_body, get_share_token},
         xsrf::xsrf_middleware,
     },
@@ -78,7 +79,6 @@ impl Server {
             jail,
         );
 
-        // TODO : optimize middleware usage
         let user_router = Router::new()
             .route("/api/user/list_services", get(list_services))
             .route("/api/user/system_info", get(system_info))
@@ -102,10 +102,17 @@ impl Server {
             .route("/api/admin/apps/{app_id}", delete(delete_app))
             .route("/api/admin/davs", get(get_davs).post(add_dav))
             .route("/api/admin/davs/{dav_id}", delete(delete_dav))
-            .route_layer(middleware::from_fn_with_state(
-                state.clone(),
-                xsrf_middleware,
-            ));
+            .route_layer(
+                ServiceBuilder::new()
+                    .layer(middleware::from_fn_with_state(
+                        state.clone(),
+                        admin_auth_middleware,
+                    ))
+                    .layer(middleware::from_fn_with_state(
+                        state.clone(),
+                        xsrf_middleware,
+                    )),
+            );
 
         let main_router = Router::new()
             .route(
@@ -137,7 +144,12 @@ impl Server {
 
         let router = if single_proxy {
             let main_router = main_router
-                .fallback(proxy_handler::<Client>)
+                .fallback(
+                    proxy_handler::<Client>.layer(middleware::from_fn_with_state(
+                        state.clone(),
+                        auth_middleware,
+                    )),
+                )
                 .with_state(state.clone());
             any(|_: Option<HostType>, request: Request<Body>| async move {
                 main_router.oneshot(request).await
@@ -146,12 +158,25 @@ impl Server {
             let main_router = main_router
                 .fallback(crate::web::static_handler)
                 .with_state(state.clone());
-            let proxy_router = proxy_handler::<Client>.with_state(state.clone());
-            let unsecure_proxy_router =
-                proxy_handler::<InsecureSkipVerifyClient>.with_state(state.clone());
+            let proxy_router = proxy_handler::<Client>
+                .layer(middleware::from_fn_with_state(
+                    state.clone(),
+                    auth_middleware,
+                ))
+                .with_state(state.clone());
+            let unsecure_proxy_router = proxy_handler::<InsecureSkipVerifyClient>
+                .layer(middleware::from_fn_with_state(
+                    state.clone(),
+                    auth_middleware,
+                ))
+                .with_state(state.clone());
             let webdav_router = webdav_handler
                 .layer(
                     ServiceBuilder::new()
+                        .layer(middleware::from_fn_with_state(
+                            state.clone(),
+                            dav_auth_middleware,
+                        ))
                         .layer(middleware::from_fn_with_state(
                             state.clone(),
                             cors_middleware,
@@ -162,7 +187,12 @@ impl Server {
                         )),
                 )
                 .with_state(state.clone());
-            let dir_router = dir_handler.with_state(state.clone());
+            let dir_router = dir_handler
+                .layer(middleware::from_fn_with_state(
+                    state.clone(),
+                    auth_middleware,
+                ))
+                .with_state(state.clone());
             any(
                 |hostype: Option<HostType>, request: Request<Body>| async move {
                     match hostype {

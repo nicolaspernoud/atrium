@@ -24,7 +24,7 @@ use crate::{
     apps::proxy::ProxyError,
     appstate::{ConfigFile, ConfigState},
     configuration::{HostType, config_or_error},
-    users::{AUTH_COOKIE, AdminToken, UserToken, authorized_or_redirect_to_login},
+    users::{AUTH_COOKIE, AdminToken, UserToken},
     utils::{is_default, option_vec_trim_remove_empties, string_trim, vec_trim_remove_empties},
 };
 
@@ -137,8 +137,6 @@ where
     S: tower_service::Service<Request<Body>, Response = http::Response<hyper::body::Incoming>>,
     <S as tower_service::Service<Request<Body>>>::Error: std::fmt::Debug,
 {
-    authorized_or_redirect_to_login(&app, &user, host.as_str(), &req, &config).map_err(|b| *b)?;
-
     let app = match app {
         HostType::SkipVerifyReverseApp(app) | HostType::ReverseApp(app) => app,
         _ => panic!("Service is not an app !"),
