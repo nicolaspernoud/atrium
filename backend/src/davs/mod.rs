@@ -4,7 +4,7 @@ pub(crate) mod headers;
 pub mod model;
 pub(crate) mod webdav_server;
 
-use crate::{configuration::HostType, users::UserToken};
+use crate::configuration::HostType;
 use axum::{
     body::Body,
     extract::ConnectInfo,
@@ -17,22 +17,18 @@ static WEBDAV_SERVER: LazyLock<webdav_server::WebdavServer> =
 
 pub async fn webdav_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    dav: HostType,
-    user: Option<UserToken>,
-    req: Request<Body>,
+    host_type: HostType,
+    mut req: Request<Body>,
 ) -> Response<Body> {
-    let mut dav = match dav {
-        HostType::Dav(app) => app,
-        _ => panic!("Service is not a dav !"),
+    // If the middleware modified the HostType, it's in the extensions
+    let dav = if let Some(HostType::Dav(dav)) = req.extensions_mut().remove::<HostType>() {
+        dav
+    } else {
+        match host_type {
+            HostType::Dav(app) => app,
+            _ => panic!("Service is not a dav !"),
+        }
     };
-
-    // If we have a non writable share, alter the host so that is not writable
-    if let Some(user) = user
-        && let Some(share) = user.share
-        && !share.writable
-    {
-        dav.writable = false;
-    }
 
     WEBDAV_SERVER.call(req, addr, &dav).await
 }

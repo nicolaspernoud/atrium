@@ -1,4 +1,4 @@
-use atrium::users::AuthResponse;
+use atrium::auth::AuthResponse;
 use hyper::StatusCode;
 
 use crate::helpers::TestApp;

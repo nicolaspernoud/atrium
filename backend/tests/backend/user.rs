@@ -1,6 +1,6 @@
 use atrium::{
     sysinfo::SystemInfo,
-    users::{User, share::ShareResponse},
+    auth::{User, share::ShareResponse},
 };
 use hyper::StatusCode;
 
@@ -46,7 +46,7 @@ async fn list_services_api_for_normal_user_test() {
 
     // Get XSRF token from response
     let xsrf_token: String = response
-        .json::<atrium::users::AuthResponse>()
+        .json::<atrium::auth::AuthResponse>()
         .await
         .unwrap()
         .xsrf_token
@@ -129,7 +129,7 @@ async fn get_share_token_test() {
 
     // Get XSRF token from response
     let xsrf_token: String = response
-        .json::<atrium::users::AuthResponse>()
+        .json::<atrium::auth::AuthResponse>()
         .await
         .unwrap()
         .xsrf_token
@@ -210,7 +210,7 @@ async fn use_share_token_test() {
 
     // Get XSRF token from response
     let xsrf_token: String = response
-        .json::<atrium::users::AuthResponse>()
+        .json::<atrium::auth::AuthResponse>()
         .await
         .unwrap()
         .xsrf_token
@@ -332,7 +332,7 @@ async fn share_token_security_test() {
     assert_eq!(response.status(), StatusCode::OK);
 
     let xsrf_token: String = response
-        .json::<atrium::users::AuthResponse>()
+        .json::<atrium::auth::AuthResponse>()
         .await
         .unwrap()
         .xsrf_token
@@ -507,7 +507,7 @@ async fn get_system_info_test() {
 
     // Get XSRF token from response
     let xsrf_token: String = response
-        .json::<atrium::users::AuthResponse>()
+        .json::<atrium::auth::AuthResponse>()
         .await
         .unwrap()
         .xsrf_token

@@ -10,7 +10,7 @@ use atrium::{
     davs::model::Dav,
     mocks::{mock_oauth2_server, mock_proxied_server},
     server::Server,
-    users::User,
+    auth::User,
     utils::random_string,
 };
 
@@ -330,7 +330,7 @@ pub fn create_default_config(
             login: "admin".to_owned(),
             password: "$argon2id$v=19$m=4096,t=3,p=1$QWsdpHrjCaPwy3IODegzNA$dqyioLh9ndJ3V7OoKpkCaczJmGNKjuG99F5hisd3bPs".to_owned(),
             roles: vec!["ADMINS".to_owned()],
-            info: Some(atrium::users::UserInfo{
+            info: Some(atrium::auth::UserInfo{
                 email:"admin@atrium.io".to_owned(),
                 ..Default::default()
             }),

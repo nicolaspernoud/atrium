@@ -1196,7 +1196,7 @@ async fn secured_dav_test() {
     assert!(response.status().is_success());
     // Get XSRF token from response
     let xsrf_token: String = response
-        .json::<atrium::users::AuthResponse>()
+        .json::<atrium::auth::AuthResponse>()
         .await
         .unwrap()
         .xsrf_token
@@ -1224,7 +1224,7 @@ async fn secured_dav_test() {
     assert!(response.status().is_success());
     // Get XSRF token from response
     let xsrf_token: String = response
-        .json::<atrium::users::AuthResponse>()
+        .json::<atrium::auth::AuthResponse>()
         .await
         .unwrap()
         .xsrf_token

@@ -1,4 +1,4 @@
-use crate::{errors::ErrResponse, users::UserToken};
+use crate::{errors::ErrResponse, auth::UserToken};
 use axum::Json;
 use serde::{Deserialize, Serialize};
 use std::{

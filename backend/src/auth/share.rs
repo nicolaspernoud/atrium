@@ -13,7 +13,7 @@ use time::{Duration, OffsetDateTime};
 
 use crate::{
     appstate::ConfigState,
-    users::{AUTH_COOKIE, UserToken, check_user_has_role, decrypt_user_token},
+    auth::{AUTH_COOKIE, UserToken, check_user_has_role, decrypt_user_token},
     utils::{is_path_within_base, random_string},
 };
 

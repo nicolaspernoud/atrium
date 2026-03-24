@@ -3,7 +3,7 @@ use crate::{
     configuration::OpenIdConfig,
     errors::ErrResponse,
     extract::Host,
-    users::{ADMINS_ROLE, User, UserInfo, create_user_cookie, user_to_token},
+    auth::{ADMINS_ROLE, User, UserInfo, create_user_cookie, user_to_token},
     utils::select_entries_by_value,
 };
 use axum::{

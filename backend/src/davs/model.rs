@@ -1,7 +1,7 @@
 use crate::{
     appstate::{ConfigFile, ConfigState},
     configuration::config_or_error,
-    users::AdminToken,
+    auth::AdminToken,
     utils::{is_default, option_string_trim, string_trim, vec_trim_remove_empties},
 };
 use axum::{

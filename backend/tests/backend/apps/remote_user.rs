@@ -1,4 +1,4 @@
-use atrium::{apps::AUTHENTICATED_USER_MAIL_HEADER, users::AUTH_COOKIE};
+use atrium::{apps::AUTHENTICATED_USER_MAIL_HEADER, auth::AUTH_COOKIE};
 
 use crate::helpers::TestApp;
 

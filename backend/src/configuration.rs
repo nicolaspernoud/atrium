@@ -5,7 +5,7 @@ use crate::{
     errors::Error,
     extract,
     oauth2::{RolesMap, openid_configuration},
-    users::User,
+    auth::User,
     utils::{is_default, option_string_trim, string_trim},
 };
 use axum::extract::{FromRef, FromRequestParts, OptionalFromRequestParts};
@@ -448,7 +448,7 @@ mod tests {
         apps::App,
         configuration::{Config, TlsMode},
         davs::model::Dav,
-        users::User,
+        auth::User,
     };
 
     #[tokio::test]

@@ -25,17 +25,16 @@ use crate::{
     dir_server::dir_handler,
     errors::Error,
     middlewares::{cors_middleware, debug_cors_middleware, inject_security_headers},
-    users::{
-        admin_auth_middleware, auth_middleware, dav_auth_middleware,
-        share::{cookie_to_body, get_share_token},
-        xsrf::xsrf_middleware,
+    auth::{
+        admin_auth_middleware, auth_middleware, cookie_to_body, dav_auth_middleware,
+        get_share_token, xsrf_middleware,
     },
 };
 use crate::{
     oauth2::{oauth2_available, oauth2_callback, oauth2_login},
     onlyoffice::{onlyoffice_callback, onlyoffice_page},
     sysinfo::system_info,
-    users::{add_user, delete_user, get_users, list_services, local_auth, logout, whoami},
+    auth::{add_user, delete_user, get_users, list_services, local_auth, logout, whoami},
 };
 
 pub struct Server {

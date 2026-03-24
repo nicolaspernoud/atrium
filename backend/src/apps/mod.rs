@@ -24,7 +24,7 @@ use crate::{
     apps::proxy::ProxyError,
     appstate::{ConfigFile, ConfigState},
     configuration::{HostType, config_or_error},
-    users::{AUTH_COOKIE, AdminToken, UserToken},
+    auth::{AUTH_COOKIE, AdminToken, UserToken},
     utils::{is_default, option_vec_trim_remove_empties, string_trim, vec_trim_remove_empties},
 };
 
