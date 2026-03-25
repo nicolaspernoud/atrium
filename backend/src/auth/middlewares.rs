@@ -24,6 +24,12 @@ use http::{
 use std::{net::SocketAddr, path::PathBuf};
 use tracing::info;
 
+#[derive(Debug, Clone, Copy)]
+pub enum AuthError {
+    Unauthorized,
+    Forbidden,
+}
+
 pub async fn auth_middleware(
     State(config): State<ConfigState>,
     host_type: HostType,
@@ -32,48 +38,82 @@ pub async fn auth_middleware(
     req: Request,
     next: Next,
 ) -> Response {
-    if host_type.secured()
-        && let Err(res) =
-            authorized_or_redirect_to_login(&host_type, &user, host.as_str(), &req, &config)
-    {
-        return *res;
+    if host_type.secured() {
+        let hostname = host.as_str();
+        let domain = hostname.split(':').next().unwrap_or_default();
+        match check_user_role_and_share(user.as_ref(), &host_type, domain, req.uri().path())
+        {
+            Ok(_) => {}
+            Err(AuthError::Forbidden) => return StatusCode::FORBIDDEN.into_response(),
+            Err(AuthError::Unauthorized) => {
+                let mut res = StatusCode::FOUND.into_response();
+
+                let mut login_url = config.full_domain();
+                if config.single_proxy {
+                    login_url = format!("{}/auth/oauth2login", config.full_domain());
+                }
+
+                if let Ok(hn) = HeaderValue::from_str(&login_url) {
+                    res.headers_mut().append(LOCATION, hn);
+                }
+
+                let cookie = Cookie::build((
+                    "ATRIUM_REDIRECT",
+                    format!("{}://{hostname}", config.scheme()),
+                ))
+                .domain(config.domain.clone())
+                .path("/")
+                .same_site(SameSite::Lax)
+                .secure(false)
+                .max_age(time::Duration::seconds(60))
+                .http_only(false);
+                if let Ok(header_value) = HeaderValue::from_str(&format!("{cookie}")) {
+                    res.headers_mut().append(SET_COOKIE, header_value);
+                }
+                return res;
+            }
+        }
     }
     next.run(req).await
 }
 
 pub async fn dav_auth_middleware(
     #[cfg(target_os = "linux")] State(jail): State<crate::OptionalJail>,
-    mut host_type: HostType,
+    mut app: HostType,
     host: Host,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     user: Option<UserToken>,
     mut req: Request,
     next: Next,
 ) -> Response {
-    let method = req.method().clone();
-    let path = req.uri().path().to_owned();
-    let hostname = host.hostname().to_owned();
-    let query = req.uri().query().map(|q| q.to_owned());
+    let method = req.method();
+    let path = req.uri().path();
+    let query = req.uri().query();
 
     let log_str = format!(
         "{} \"{}{}\" by {} from {}",
         method,
-        host_type.host(),
+        app.host(),
         path,
         user.as_ref().map_or_else(|| "unknown user", |u| &u.login),
         city_from_ip(addr, MAXMIND_READER.get())
     );
 
-    if method != Method::OPTIONS && host_type.secured()
-        && let Err(access_denied_resp) =
-            check_user_has_role_or_forbid(user.as_ref(), &host_type, &hostname, &path)
-    {
+    if method != Method::OPTIONS && app.secured() && let Err(err) = check_user_role_and_share(user.as_ref(), &app, host.hostname(), path) {
         #[cfg(target_os = "linux")]
         if let Some(jail) = jail {
             jail.report_failure(addr.ip());
         }
         info!("FILE ACCESS DENIED: {log_str}");
-        return *access_denied_resp;
+        return match err {
+            AuthError::Forbidden => StatusCode::FORBIDDEN.into_response(),
+            AuthError::Unauthorized => Response::builder()
+                .status(StatusCode::UNAUTHORIZED)
+                .header("www-authenticate", r#"Basic realm="server""#)
+                .body(Body::empty())
+                .expect("cannot fail")
+                .into_response(),
+        };
     }
 
     let unlogged_methods = [
@@ -84,7 +124,7 @@ pub async fn dav_auth_middleware(
         Method::from_bytes(b"PROPFIND").expect("infallible"),
     ];
 
-    if !unlogged_methods.contains(&method) && query.as_deref().is_none_or(|q| q != "diskusage") {
+    if !unlogged_methods.contains(method) && query.is_none_or(|q| q != "diskusage") {
         info!("FILE ACCESS: {log_str}");
     }
 
@@ -92,10 +132,10 @@ pub async fn dav_auth_middleware(
     if let Some(user) = &user
         && let Some(share) = &user.share
         && !share.writable
-        && let HostType::Dav(dav) = &mut host_type
+        && let HostType::Dav(dav) = &mut app
     {
         dav.writable = false;
-        req.extensions_mut().insert(host_type);
+        req.extensions_mut().insert(app);
     }
 
     next.run(req).await
@@ -132,12 +172,12 @@ pub fn check_user_has_role(user: &UserToken, roles: &[String]) -> bool {
     false
 }
 
-pub fn check_user_has_role_or_forbid(
+pub fn check_user_role_and_share(
     user: Option<&UserToken>,
     target: &HostType,
     hostname: &str,
     path: &str,
-) -> Result<(), Box<Response<Body>>> {
+) -> Result<(), AuthError> {
     if let Some(user) = user {
         if check_user_has_role(user, target.roles()) {
             match &user.share {
@@ -156,72 +196,16 @@ pub fn check_user_has_role_or_forbid(
                 }
             }
         }
-        return Err(Box::new(forbidden()));
+        return Err(AuthError::Forbidden);
     }
-    Err(Box::new(
-        Response::builder()
-            .status(StatusCode::UNAUTHORIZED)
-            .header("www-authenticate", r#"Basic realm="server""#)
-            .body(Body::empty())
-            .expect("cannot vary"),
-    ))
-}
-
-fn forbidden() -> http::Response<Body> {
-    Response::builder()
-        .status(StatusCode::FORBIDDEN)
-        .body(Body::empty())
-        .expect("constant method")
-}
-
-pub fn authorized_or_redirect_to_login(
-    app: &HostType,
-    user: &Option<UserToken>,
-    hostname: &str,
-    req: &Request<Body>,
-    config: &std::sync::Arc<crate::configuration::Config>,
-) -> Result<(), Box<Response<Body>>> {
-    let domain = hostname.split(':').next().unwrap_or_default();
-    if let Err(mut value) =
-        check_user_has_role_or_forbid(user.as_ref(), app, domain, req.uri().path())
-    {
-        // Redirect to login page if user is not logged, write where to get back after login in a cookie
-        if value.status() == StatusCode::UNAUTHORIZED
-            && let Ok(mut hn) = HeaderValue::from_str(&config.full_domain())
-        {
-            *value.status_mut() = StatusCode::FOUND;
-            // If single proxy mode, redirect directly to IdP without passing through atrium main app
-            if config.single_proxy
-                && let Ok(value) =
-                    HeaderValue::from_str(&format!("{}/auth/oauth2login", config.full_domain()))
-            {
-                hn = value;
-            }
-            value.headers_mut().append(LOCATION, hn);
-            let cookie = Cookie::build((
-                "ATRIUM_REDIRECT",
-                format!("{}://{hostname}", config.scheme()),
-            ))
-            .domain(config.domain.clone())
-            .path("/")
-            .same_site(SameSite::Lax)
-            .secure(false)
-            .max_age(time::Duration::seconds(60))
-            .http_only(false);
-            if let Ok(header_value) = HeaderValue::from_str(&format!("{cookie}")) {
-                value.headers_mut().append(SET_COOKIE, header_value);
-            }
-        }
-        return Err(value);
-    }
-    Ok(())
+    Err(AuthError::Unauthorized)
 }
 
 #[cfg(test)]
 mod check_user_has_role_or_forbid_tests {
     use crate::{
         apps::{App, AppWithUri},
-        auth::middlewares::check_user_has_role_or_forbid,
+        auth::middlewares::check_user_role_and_share,
         auth::user::UserToken,
         configuration::HostType,
     };
@@ -236,7 +220,8 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(user, &target, "", "").is_err());
+        let res = check_user_role_and_share(user, &target, "", "");
+        assert!(matches!(res, Err(super::AuthError::Unauthorized)));
     }
 
     #[test]
@@ -252,7 +237,7 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(Some(&user), &target, "", "").is_ok());
+        assert!(check_user_role_and_share(Some(&user), &target, "", "").is_ok());
     }
 
     #[test]
@@ -268,7 +253,7 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(Some(&user), &target, "", "").is_ok());
+        assert!(check_user_role_and_share(Some(&user), &target, "", "").is_ok());
     }
 
     #[test]
@@ -284,7 +269,8 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(Some(&user), &target, "", "").is_err());
+        let res = check_user_role_and_share(Some(&user), &target, "", "");
+        assert!(matches!(res, Err(super::AuthError::Forbidden)));
     }
 
     #[test]
@@ -297,7 +283,8 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(Some(&user), &target, "", "").is_err());
+        let res = check_user_role_and_share(Some(&user), &target, "", "");
+        assert!(matches!(res, Err(super::AuthError::Forbidden)));
     }
 
     #[test]
@@ -312,7 +299,8 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(Some(&user), &target, "", "").is_err());
+        let res = check_user_role_and_share(Some(&user), &target, "", "");
+        assert!(matches!(res, Err(super::AuthError::Forbidden)));
     }
 
     #[test]
@@ -324,6 +312,7 @@ mod check_user_has_role_or_forbid_tests {
         };
         let app = AppWithUri::from_app(app, None);
         let target = HostType::ReverseApp(Box::new(app));
-        assert!(check_user_has_role_or_forbid(Some(&user), &target, "", "").is_err());
+        let res = check_user_role_and_share(Some(&user), &target, "", "");
+        assert!(matches!(res, Err(super::AuthError::Forbidden)));
     }
 }
