@@ -2,7 +2,7 @@
 
 # Default versions (can be overridden with --build-arg)
 ARG RUST_VERSION=1.94
-ARG FLUTTER_VERSION=3.41.4
+ARG FLUTTER_VERSION=3.41.5
 
 # --- Frontend Builder ---
 # Use the Flutter image to build the web assets

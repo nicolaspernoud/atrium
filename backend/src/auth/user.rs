@@ -136,7 +136,6 @@ where
 {
     type Rejection = Response;
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-
         #[cfg(target_os = "linux")]
         let jail = crate::OptionalJail::from_ref(state);
         let jar = PrivateCookieJar::from_request_parts(parts, state)
@@ -277,6 +276,13 @@ where
         let user = <UserToken as FromRequestParts<S>>::from_request_parts(parts, state).await?;
         if !user.roles.contains(&ADMINS_ROLE.to_owned()) {
             return Err((StatusCode::UNAUTHORIZED, "user is not in admin group").into_response());
+        }
+        if user.share.is_some() {
+            return Err((
+                StatusCode::FORBIDDEN,
+                "share token cannot be used to access admin API",
+            )
+                .into_response());
         }
         let admin = AdminToken(user);
         Ok(admin)

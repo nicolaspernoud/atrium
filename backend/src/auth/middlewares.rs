@@ -1,6 +1,7 @@
 use super::user::UserToken;
 use crate::{
     appstate::{ConfigState, MAXMIND_READER},
+    auth::AUTH_COOKIE,
     configuration::HostType,
     extract::Host,
     headers::XSRFToken,
@@ -15,7 +16,10 @@ use axum::{
 };
 use axum_extra::{
     TypedHeader,
-    extract::cookie::{Cookie, SameSite},
+    extract::{
+        PrivateCookieJar,
+        cookie::{Cookie, SameSite},
+    },
 };
 use http::{
     HeaderValue, Method, StatusCode,
@@ -41,8 +45,7 @@ pub async fn auth_middleware(
     if host_type.secured() {
         let hostname = host.as_str();
         let domain = hostname.split(':').next().unwrap_or_default();
-        match check_user_role_and_share(user.as_ref(), &host_type, domain, req.uri().path())
-        {
+        match check_user_role_and_share(user.as_ref(), &host_type, domain, req.uri().path()) {
             Ok(_) => {}
             Err(AuthError::Forbidden) => return StatusCode::FORBIDDEN.into_response(),
             Err(AuthError::Unauthorized) => {
@@ -99,7 +102,10 @@ pub async fn dav_auth_middleware(
         city_from_ip(addr, MAXMIND_READER.get())
     );
 
-    if method != Method::OPTIONS && app.secured() && let Err(err) = check_user_role_and_share(user.as_ref(), &app, host.hostname(), path) {
+    if method != Method::OPTIONS
+        && app.secured()
+        && let Err(err) = check_user_role_and_share(user.as_ref(), &app, host.hostname(), path)
+    {
         #[cfg(target_os = "linux")]
         if let Some(jail) = jail {
             jail.report_failure(addr.ip());
@@ -144,6 +150,8 @@ pub async fn dav_auth_middleware(
 pub async fn xsrf_middleware(
     xsrf_token: Option<TypedHeader<XSRFToken>>,
     user: Option<UserToken>,
+    State(config): State<ConfigState>,
+    jar: PrivateCookieJar,
     req: Request,
     next: Next,
 ) -> Response {
@@ -152,8 +160,19 @@ pub async fn xsrf_middleware(
         && xsrf_token.as_ref().map(|v| &v.0.0) != Some(&user_xsrf)
     {
         (
-            StatusCode::FORBIDDEN,
-            "xsrf token not provided or not matching",
+            jar.remove(
+                Cookie::build(AUTH_COOKIE)
+                    .domain(config.domain.clone())
+                    .path("/")
+                    .same_site(axum_extra::extract::cookie::SameSite::Lax)
+                    .secure(config.tls_mode.is_secure())
+                    .http_only(true)
+                    .build(),
+            ),
+            (
+                StatusCode::FORBIDDEN,
+                "xsrf token not provided or not matching",
+            ),
         )
             .into_response()
     } else {

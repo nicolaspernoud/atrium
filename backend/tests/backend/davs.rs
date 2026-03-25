@@ -1,4 +1,4 @@
-use crate::helpers::{TestApp, encode_uri};
+use crate::helpers::{TestApp, encode_uri, login_and_get_xsrf_token};
 use base64ct::{Base64, Encoding};
 use futures::StreamExt;
 use http::StatusCode;
@@ -1185,22 +1185,7 @@ async fn secured_dav_test() {
     assert_eq!(response.text().await.unwrap(), "");
 
     // Log as normal user
-    let response = app
-        .client
-        .post(format!("http://atrium.io:{}/auth/local", app.port))
-        .body(r#"{"login":"user","password":"password"}"#)
-        .header("Content-Type", "application/json")
-        .send()
-        .await
-        .expect("failed to execute request");
-    assert!(response.status().is_success());
-    // Get XSRF token from response
-    let xsrf_token: String = response
-        .json::<atrium::auth::AuthResponse>()
-        .await
-        .unwrap()
-        .xsrf_token
-        .unwrap();
+    let xsrf_token = login_and_get_xsrf_token(&app, "user").await;
     // Act : try to access app as logged user
     let response = app
         .client
@@ -1213,22 +1198,7 @@ async fn secured_dav_test() {
     assert!(response.status() == 403);
 
     // Log as admin
-    let response = app
-        .client
-        .post(format!("http://atrium.io:{}/auth/local", app.port))
-        .body(r#"{"login":"admin","password":"password"}"#)
-        .header("Content-Type", "application/json")
-        .send()
-        .await
-        .expect("failed to execute request");
-    assert!(response.status().is_success());
-    // Get XSRF token from response
-    let xsrf_token: String = response
-        .json::<atrium::auth::AuthResponse>()
-        .await
-        .unwrap()
-        .xsrf_token
-        .unwrap();
+    login_and_get_xsrf_token(&app, "admin").await;
     // Act : try to access app as admin without XSRF token
     let response = app
         .client
@@ -1237,6 +1207,8 @@ async fn secured_dav_test() {
         .await
         .expect("failed to execute request");
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    // Log as admin
+    login_and_get_xsrf_token(&app, "admin").await;
     // Act : try to access app as admin with a wrong XSRF token
     let response = app
         .client
@@ -1246,6 +1218,8 @@ async fn secured_dav_test() {
         .await
         .expect("failed to execute request");
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    // Log as admin
+    let xsrf_token = login_and_get_xsrf_token(&app, "admin").await;
     // Act : try to access app as admin
     let response = app
         .client

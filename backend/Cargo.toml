@@ -1,6 +1,6 @@
 [package]
 name = "atrium"
-version = "1.6.7"
+version = "1.7.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 
@@ -16,7 +16,7 @@ argon2 = { features = ["alloc", "password-hash"], default-features = false, vers
 async_zip = { features = ["deflate", "tokio"], default-features = false, version = "0.0.18" }
 async-stream = "0.3.6"
 async-walkdir = "2.1.0"
-aws-lc-rs = { version = "1.16.1", default-features = false, features = ["bindgen"] }
+aws-lc-rs = { version = "1.16.2", default-features = false, features = ["bindgen"] }
 axum = { version = "0.8.8", features = ["http2", "json", "query", "tokio"], default-features = false }
 axum-extra = { version = "0.12.5", features = ["cookie-private", "typed-header"], default-features = false }
 axum-server = { version = "0.8.0", default-features = false, features = ["tls-rustls"] }
@@ -72,11 +72,11 @@ default = ["self_signed"]
 self_signed = ["dep:rcgen"]
 
 [dev-dependencies]
-async-tungstenite = { version = "0.33.0", features = ["tokio-runtime"] }
+async-tungstenite = { version = "0.34.0", features = ["tokio-runtime"] }
 axum = { version = "0.8.8", features = ["__private"], default-features = false }
 reqwest = { version = "0.13.2", default-features = false, features = ["cookies", "gzip", "json", "native-tls", "stream"] }
 tempfile = "3.27.0"
-tungstenite = "0.28.0"
+tungstenite = "0.29.0"
 
 [build-dependencies]
 flate2 = "1.1.9"

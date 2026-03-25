@@ -1,7 +1,6 @@
-use atrium::auth::AuthResponse;
 use hyper::StatusCode;
 
-use crate::helpers::TestApp;
+use crate::helpers::{TestApp, login_and_get_xsrf_token};
 
 #[tokio::test]
 async fn users_api_for_unlogged_user_test() {
@@ -47,23 +46,7 @@ async fn users_api_for_normal_user_test() {
     // Arrange
     let app = TestApp::spawn(None).await;
     // Log as user
-    let response = app
-        .client
-        .post(format!("http://atrium.io:{}/auth/local", app.port))
-        .body(r#"{"login":"user","password":"password"}"#)
-        .header("Content-Type", "application/json")
-        .send()
-        .await
-        .expect("failed to execute request");
-    assert_eq!(response.status(), StatusCode::OK);
-
-    // Get XSRF token from response
-    let xsrf_token: String = response
-        .json::<AuthResponse>()
-        .await
-        .unwrap()
-        .xsrf_token
-        .unwrap();
+    let xsrf_token = login_and_get_xsrf_token(&app, "user").await;
 
     // Get the existing users (must fail)
     let response = app
@@ -106,23 +89,7 @@ async fn users_api_for_admin_user_test() {
     // Arrange
     let app = TestApp::spawn(None).await;
     // Log as admin
-    let response = app
-        .client
-        .post(format!("http://atrium.io:{}/auth/local", app.port))
-        .body(r#"{"login":"admin","password":"password"}"#)
-        .header("Content-Type", "application/json")
-        .send()
-        .await
-        .expect("failed to execute request");
-    assert_eq!(response.status(), StatusCode::OK);
-
-    // Get XSRF token from response
-    let xsrf_token: String = response
-        .json::<AuthResponse>()
-        .await
-        .unwrap()
-        .xsrf_token
-        .unwrap();
+    login_and_get_xsrf_token(&app, "admin").await;
 
     // Get the existing users without XSRF token
     let response = app
@@ -137,6 +104,8 @@ async fn users_api_for_admin_user_test() {
         "xsrf token not provided or not matching"
     );
 
+    login_and_get_xsrf_token(&app, "admin").await;
+
     // Get the existing users with a wrong XSRF token
     let response = app
         .client
@@ -150,6 +119,8 @@ async fn users_api_for_admin_user_test() {
         response.text().await.unwrap(),
         "xsrf token not provided or not matching"
     );
+
+    let xsrf_token = login_and_get_xsrf_token(&app, "admin").await;
 
     // Get the existing users
     let response = app
@@ -265,23 +236,7 @@ async fn apps_api_for_normal_user_test() {
     // Arrange
     let app = TestApp::spawn(None).await;
     // Log as user
-    let response = app
-        .client
-        .post(format!("http://atrium.io:{}/auth/local", app.port))
-        .body(r#"{"login":"user","password":"password"}"#)
-        .header("Content-Type", "application/json")
-        .send()
-        .await
-        .expect("failed to execute request");
-    assert_eq!(response.status(), StatusCode::OK);
-
-    // Get XSRF token from response
-    let xsrf_token: String = response
-        .json::<AuthResponse>()
-        .await
-        .unwrap()
-        .xsrf_token
-        .unwrap();
+    let xsrf_token = login_and_get_xsrf_token(&app, "user").await;
 
     // Get the existing apps (must fail)
     let response = app
@@ -320,24 +275,9 @@ async fn apps_api_for_normal_user_test() {
 async fn apps_api_for_admin_user_test() {
     // Arrange
     let app = TestApp::spawn(None).await;
-    // Log as admin
-    let response = app
-        .client
-        .post(format!("http://atrium.io:{}/auth/local", app.port))
-        .body(r#"{"login":"admin","password":"password"}"#)
-        .header("Content-Type", "application/json")
-        .send()
-        .await
-        .expect("failed to execute request");
-    assert_eq!(response.status(), StatusCode::OK);
 
-    // Get XSRF token from response
-    let xsrf_token: String = response
-        .json::<AuthResponse>()
-        .await
-        .unwrap()
-        .xsrf_token
-        .unwrap();
+    // Log as admin
+    login_and_get_xsrf_token(&app, "admin").await;
 
     // Get the existing apps without XSRF token
     let response = app
@@ -352,6 +292,9 @@ async fn apps_api_for_admin_user_test() {
         "xsrf token not provided or not matching"
     );
 
+    // Log as admin
+    login_and_get_xsrf_token(&app, "admin").await;
+
     // Get the existing apps with a wrong XSRF token
     let response = app
         .client
@@ -365,6 +308,9 @@ async fn apps_api_for_admin_user_test() {
         response.text().await.unwrap(),
         "xsrf token not provided or not matching"
     );
+
+    // Log as admin
+    let xsrf_token = login_and_get_xsrf_token(&app, "admin").await;
 
     // Get the existing apps
     let response = app
@@ -475,23 +421,7 @@ async fn davs_api_for_normal_user_test() {
     // Arrange
     let app = TestApp::spawn(None).await;
     // Log as user
-    let response = app
-        .client
-        .post(format!("http://atrium.io:{}/auth/local", app.port))
-        .body(r#"{"login":"user","password":"password"}"#)
-        .header("Content-Type", "application/json")
-        .send()
-        .await
-        .expect("failed to execute request");
-    assert_eq!(response.status(), StatusCode::OK);
-
-    // Get XSRF token from response
-    let xsrf_token: String = response
-        .json::<AuthResponse>()
-        .await
-        .unwrap()
-        .xsrf_token
-        .unwrap();
+    let xsrf_token = login_and_get_xsrf_token(&app, "user").await;
 
     // Get the existing davs (must fail)
     let response = app
@@ -531,23 +461,7 @@ async fn davs_api_for_admin_user_test() {
     // Arrange
     let app = TestApp::spawn(None).await;
     // Log as admin
-    let response = app
-        .client
-        .post(format!("http://atrium.io:{}/auth/local", app.port))
-        .body(r#"{"login":"admin","password":"password"}"#)
-        .header("Content-Type", "application/json")
-        .send()
-        .await
-        .expect("failed to execute request");
-    assert_eq!(response.status(), StatusCode::OK);
-
-    // Get XSRF token from response
-    let xsrf_token: String = response
-        .json::<AuthResponse>()
-        .await
-        .unwrap()
-        .xsrf_token
-        .unwrap();
+    login_and_get_xsrf_token(&app, "admin").await;
 
     // Get the existing davs without XSRF token
     let response = app
@@ -562,6 +476,9 @@ async fn davs_api_for_admin_user_test() {
         "xsrf token not provided or not matching"
     );
 
+    // Log as admin
+    login_and_get_xsrf_token(&app, "admin").await;
+
     // Get the existing davs with a wrong XSRF token
     let response = app
         .client
@@ -575,6 +492,9 @@ async fn davs_api_for_admin_user_test() {
         response.text().await.unwrap(),
         "xsrf token not provided or not matching"
     );
+
+    // Log as admin
+    let xsrf_token = login_and_get_xsrf_token(&app, "admin").await;
 
     // Get the existing davs
     let response = app
