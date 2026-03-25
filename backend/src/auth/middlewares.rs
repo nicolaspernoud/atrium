@@ -32,8 +32,10 @@ pub async fn auth_middleware(
     req: Request,
     next: Next,
 ) -> Response {
-    let hostname = host.as_str().to_owned();
-    if let Err(res) = authorized_or_redirect_to_login(&host_type, &user, &hostname, &req, &config) {
+    if host_type.secured()
+        && let Err(res) =
+            authorized_or_redirect_to_login(&host_type, &user, host.as_str(), &req, &config)
+    {
         return *res;
     }
     next.run(req).await
@@ -62,9 +64,9 @@ pub async fn dav_auth_middleware(
         city_from_ip(addr, MAXMIND_READER.get())
     );
 
-    if method != Method::OPTIONS
+    if method != Method::OPTIONS && host_type.secured()
         && let Err(access_denied_resp) =
-            check_authorization(&host_type, user.as_ref(), &hostname, &path)
+            check_user_has_role_or_forbid(user.as_ref(), &host_type, &hostname, &path)
     {
         #[cfg(target_os = "linux")]
         if let Some(jail) = jail {
@@ -172,18 +174,6 @@ fn forbidden() -> http::Response<Body> {
         .expect("constant method")
 }
 
-pub fn check_authorization(
-    app: &HostType,
-    user: Option<&UserToken>,
-    hostname: &str,
-    path: &str,
-) -> Result<(), Box<Response<Body>>> {
-    if app.secured() {
-        check_user_has_role_or_forbid(user, app, hostname, path)?;
-    }
-    Ok(())
-}
-
 pub fn authorized_or_redirect_to_login(
     app: &HostType,
     user: &Option<UserToken>,
@@ -192,7 +182,9 @@ pub fn authorized_or_redirect_to_login(
     config: &std::sync::Arc<crate::configuration::Config>,
 ) -> Result<(), Box<Response<Body>>> {
     let domain = hostname.split(':').next().unwrap_or_default();
-    if let Err(mut value) = check_authorization(app, user.as_ref(), domain, req.uri().path()) {
+    if let Err(mut value) =
+        check_user_has_role_or_forbid(user.as_ref(), app, domain, req.uri().path())
+    {
         // Redirect to login page if user is not logged, write where to get back after login in a cookie
         if value.status() == StatusCode::UNAUTHORIZED
             && let Ok(mut hn) = HeaderValue::from_str(&config.full_domain())

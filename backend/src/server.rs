@@ -159,7 +159,7 @@ impl Server {
                 .fallback(crate::web::static_handler)
                 .with_state(state.clone());
             let proxy_router = proxy_handler::<Client>
-                 .layer(middleware::from_fn_with_state(
+                .layer(middleware::from_fn_with_state(
                     state.clone(),
                     auth_middleware,
                 ))
@@ -193,8 +193,8 @@ impl Server {
             any(
                 |hostype: Option<HostType>, request: Request<Body>| async move {
                     match hostype {
-                        Some(HostType::StaticApp(_)) => dir_router.oneshot(request).await,
                         Some(HostType::ReverseApp(_)) => proxy_router.oneshot(request).await,
+                        Some(HostType::StaticApp(_)) => dir_router.oneshot(request).await,
                         Some(HostType::SkipVerifyReverseApp(_)) => {
                             unsecure_proxy_router.oneshot(request).await
                         }
