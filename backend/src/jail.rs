@@ -85,7 +85,10 @@ impl Jail {
     pub fn report_failure(&self, ip: IpAddr) {
         let ip = Self::normalize_ip(ip);
 
-        if ip.is_loopback() || self.config.whitelist.contains(&ip) {
+        if ip.is_loopback()
+            || self.config.whitelist.contains(&ip)
+            || matches!(ip, IpAddr::V4(v4) if v4.is_private())
+        {
             return;
         }
 
