@@ -107,7 +107,18 @@ class ExplorerState extends State<Explorer> {
                   return const Center(child: CircularProgressIndicator());
                 case ConnectionState.done:
                   if (snapshot.hasError) {
-                    return Center(child: Text('Error: ${snapshot.error}'));
+                    final error = snapshot.error;
+                    if (error is DioException) {
+                      if (error.response?.statusCode == 403) {
+                        setCookie("ATRIUM_AUTH", App().token);
+                        client.readDir(dirPath).then((value) {
+                          files = Future.value(value);
+                          setState(() {});
+                        });
+                      }
+                    } else {
+                      return Center(child: Text('Error: ${snapshot.error}'));
+                    }
                   }
                   return _buildListView(context, snapshot.data ?? []);
               }

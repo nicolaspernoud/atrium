@@ -4,6 +4,7 @@ import 'package:atrium/components/system_info.dart';
 import 'package:atrium/components/users_list.dart';
 import 'package:atrium/components/welcome_screen.dart';
 import 'package:atrium/models/dav.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:atrium/i18n.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -107,7 +108,7 @@ class _HomePageState extends State<HomePage> {
     return Consumer<App>(
       builder: (context, app, child) {
         if (app.isExploreMode && app.exploreDav != null) {
-          App().prefs.hostname = Uri.base.origin;
+          if (!kDebugMode) App().prefs.hostname = Uri.base.origin;
           return Scaffold(
             body: Explorer(
               dav: DavModel(
@@ -199,5 +200,6 @@ void setExploreMode() {
       App().explorePath = path;
     }
     App().exploreWritable = writable;
+    removeQueryWithoutReload();
   }
 }

@@ -132,3 +132,9 @@ void setCookie(String name, String value) {
   web.document.cookie =
       "$name=$value; domain=.${Uri.base.host}; path=/; SameSite=Lax";
 }
+
+void removeQueryWithoutReload() {
+  final uri = Uri.base;
+  final cleanUri = uri.replace(queryParameters: {});
+  web.window.history.replaceState(null, '', cleanUri.toString());
+}

@@ -107,7 +107,7 @@ webdav.Client newExplorerClient(
   String uri, {
   String user = '',
   String password = '',
-  bool debug = false
+  bool debug = false,
 }) {
   var client = webdav.newClient(
     uri,
@@ -313,5 +313,9 @@ bool isWebDesktop() {
 }
 
 void setCookie(String name, String value) {
+  // Not implemented for mobile as it's not used
+}
+
+void removeQueryWithoutReload() {
   // Not implemented for mobile as it's not used
 }
