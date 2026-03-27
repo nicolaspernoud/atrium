@@ -1,7 +1,9 @@
-pub mod user;
-pub mod share;
+pub mod cookie_user;
 pub mod middlewares;
+pub mod share;
+pub mod user;
 
-pub use user::*;
-pub use share::*;
+pub use cookie_user::*;
 pub use middlewares::*;
+pub use share::*;
+pub use user::*;

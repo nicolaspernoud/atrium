@@ -23,8 +23,8 @@ use tracing::error;
 use crate::{
     apps::proxy::ProxyError,
     appstate::{ConfigFile, ConfigState},
+    auth::{AUTH_COOKIE, AdminToken, UserToken, cookie_user::CookieUserToken},
     configuration::{HostType, config_or_error},
-    auth::{AUTH_COOKIE, AdminToken, UserToken},
     utils::{is_default, option_vec_trim_remove_empties, string_trim, vec_trim_remove_empties},
 };
 
@@ -125,7 +125,7 @@ impl AppWithUri {
 }
 
 pub async fn proxy_handler<S>(
-    user: Option<UserToken>,
+    user: Option<CookieUserToken>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     app: HostType,
     host: Host,
@@ -145,7 +145,7 @@ where
     if !config.single_proxy {
         remove_auth_cookie(&mut req)?;
     }
-    insert_authenticated_user_mail_header(&app, user, &mut req)?;
+    insert_authenticated_user_mail_header(&app, user.map(|u| u.into()), &mut req)?;
 
     // If the target service contains a port, it is an internal service, inform the app that we are proxying to it
     if app.forward_authority.port().is_some() {

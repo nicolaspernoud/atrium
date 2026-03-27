@@ -1,7 +1,7 @@
 use super::user::UserToken;
 use crate::{
     appstate::{ConfigState, MAXMIND_READER},
-    auth::AUTH_COOKIE,
+    auth::{AUTH_COOKIE, cookie_user::CookieUserToken},
     configuration::HostType,
     extract::Host,
     headers::XSRFToken,
@@ -38,14 +38,19 @@ pub async fn auth_middleware(
     State(config): State<ConfigState>,
     host_type: HostType,
     host: Host,
-    user: Option<UserToken>,
+    user: Option<CookieUserToken>,
     req: Request,
     next: Next,
 ) -> Response {
     if host_type.secured() {
         let hostname = host.as_str();
         let domain = hostname.split(':').next().unwrap_or_default();
-        match check_user_role_and_share(user.as_ref(), &host_type, domain, req.uri().path()) {
+        match check_user_role_and_share(
+            user.map(|u| u.into()).as_ref(),
+            &host_type,
+            domain,
+            req.uri().path(),
+        ) {
             Ok(_) => {}
             Err(AuthError::Forbidden) => return StatusCode::FORBIDDEN.into_response(),
             Err(AuthError::Unauthorized) => {

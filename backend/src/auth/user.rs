@@ -142,16 +142,7 @@ where
             .await
             .expect("Cookie jar retrieval is Infallible");
 
-        // Get the serialized user_token from the cookie jar, and check the xsrf token
-        if let Some(cookie) = jar.get(AUTH_COOKIE) {
-            // Deserialize the user_token and return him/her
-            let serialized_user_token = cookie.value();
-            let user_token = UserToken::from_json(serialized_user_token)
-                .map_err(|e| (e.0, e.1).into_response())?;
-            return Ok(user_token);
-        }
-
-        // OR Try to get user_token from the query
+        // Try to get user_token from the query
         let Ok(query) = RawQuery::from_request_parts(parts, state).await;
         if let Some(Some(password)) = query_pairs_or_error(query.0.as_deref())
             .ok()
@@ -162,6 +153,15 @@ where
                     t.xsrf_token = None;
                     t
                 })
+                .map_err(|e| (e.0, e.1).into_response())?;
+            return Ok(user_token);
+        }
+
+        // OR Try to get the serialized user_token from the cookie jar, and check the xsrf token
+        if let Some(cookie) = jar.get(AUTH_COOKIE) {
+            // Deserialize the user_token and return him/her
+            let serialized_user_token = cookie.value();
+            let user_token = UserToken::from_json(serialized_user_token)
                 .map_err(|e| (e.0, e.1).into_response())?;
             return Ok(user_token);
         }
