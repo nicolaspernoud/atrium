@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:atrium/models/explore_config.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:atrium/models/preferences.dart';
@@ -16,9 +17,13 @@ class App extends ChangeNotifier {
   static final App _instance = App._privateConstructor();
 
   bool isExploreMode = false;
-  String? exploreDav;
-  String? explorePath;
-  bool? exploreWritable;
+
+  ExploreConfig? get exploreConfig => prefs.exploreConfig;
+
+  set exploreConfig(ExploreConfig? v) {
+    prefs.exploreConfig = v;
+    notifyListeners();
+  }
 
   factory App() {
     return _instance;

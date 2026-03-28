@@ -4,6 +4,7 @@ import 'package:atrium/components/system_info.dart';
 import 'package:atrium/components/users_list.dart';
 import 'package:atrium/components/welcome_screen.dart';
 import 'package:atrium/models/dav.dart';
+import 'package:atrium/models/explore_config.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:atrium/i18n.dart';
@@ -107,19 +108,19 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Consumer<App>(
       builder: (context, app, child) {
-        if (app.isExploreMode && app.exploreDav != null) {
+        if (app.isExploreMode && app.exploreConfig != null) {
           if (!kDebugMode) App().prefs.hostname = Uri.base.origin;
           return Scaffold(
             body: Explorer(
               dav: DavModel(
                 id: 0,
-                host: app.exploreDav!,
-                name: app.explorePath!
+                host: app.exploreConfig!.dav,
+                name: app.exploreConfig!.path
                     .split("/")
                     .lastWhere((e) => e.isNotEmpty),
-                writable: app.exploreWritable ?? false,
+                writable: app.exploreConfig!.writable,
               ),
-              initialPath: app.explorePath,
+              initialPath: app.exploreConfig!.path,
             ),
           );
         }
@@ -193,13 +194,13 @@ void setExploreMode() {
     if (xsrfToken != null) {
       App().xsrfToken = xsrfToken;
     }
-    if (dav != null) {
-      App().exploreDav = dav;
+    if (dav != null && path != null) {
+      App().exploreConfig = ExploreConfig(
+        dav: dav,
+        path: path,
+        writable: writable,
+      );
     }
-    if (path != null) {
-      App().explorePath = path;
-    }
-    App().exploreWritable = writable;
     removeQueryWithoutReload();
   }
 }

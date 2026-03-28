@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
+import 'package:atrium/models/explore_config.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -76,6 +77,15 @@ class Preferences with LocalFilePersister {
 
   List<String> _log = [""];
 
+  ExploreConfig? _exploreConfig;
+
+  set exploreConfig(ExploreConfig? v) {
+    _exploreConfig = v;
+    write();
+  }
+
+  ExploreConfig? get exploreConfig => _exploreConfig;
+
   Future<void> addToLog(String v) async {
     if (_logEnabled) {
       _log.add("${formatTime(DateTime.now())} - $v");
@@ -100,6 +110,9 @@ class Preferences with LocalFilePersister {
     _isAdmin = settingsMap['isAdmin'];
     _logEnabled = settingsMap['logEnabled'];
     _log = List<String>.from(settingsMap['log']);
+    _exploreConfig = settingsMap['exploreConfig'] != null
+        ? ExploreConfig.fromJson(settingsMap['exploreConfig'])
+        : null;
   }
 
   @override
@@ -112,6 +125,7 @@ class Preferences with LocalFilePersister {
       'isAdmin': _isAdmin,
       'logEnabled': _logEnabled,
       'log': _log,
+      'exploreConfig': _exploreConfig?.toJson(),
     };
     return jsonEncode(settingsMap);
   }
