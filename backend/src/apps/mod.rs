@@ -13,7 +13,7 @@ use base64ct::Encoding;
 use headers::HeaderValue;
 use http::{
     Request,
-    header::{AUTHORIZATION, COOKIE, HOST},
+    header::{AUTHORIZATION, HOST},
 };
 use hyper::{StatusCode, Uri, body::Incoming, header::LOCATION};
 use serde::{Deserialize, Serialize};
@@ -23,14 +23,12 @@ use tracing::error;
 use crate::{
     apps::proxy::ProxyError,
     appstate::{ConfigFile, ConfigState},
-    auth::{AUTH_COOKIE, AdminToken, UserToken, cookie_user::CookieUserToken},
+    auth::AdminToken,
     configuration::{HostType, config_or_error},
     utils::{is_default, option_vec_trim_remove_empties, string_trim, vec_trim_remove_empties},
 };
 
 mod proxy;
-
-pub static AUTHENTICATED_USER_MAIL_HEADER: &str = "Remote-User";
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct App {
@@ -125,11 +123,9 @@ impl AppWithUri {
 }
 
 pub async fn proxy_handler<S>(
-    user: Option<CookieUserToken>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     app: HostType,
     host: Host,
-    State(config): State<ConfigState>,
     State(client): State<S>,
     mut req: Request<Body>,
 ) -> Result<Response<Incoming>, impl IntoResponse>
@@ -141,11 +137,6 @@ where
         HostType::SkipVerifyReverseApp(app) | HostType::ReverseApp(app) => app,
         _ => panic!("Service is not an app !"),
     };
-
-    if !config.single_proxy {
-        remove_auth_cookie(&mut req)?;
-    }
-    insert_authenticated_user_mail_header(&app, user.map(|u| u.into()), &mut req)?;
 
     // If the target service contains a port, it is an internal service, inform the app that we are proxying to it
     if app.forward_authority.port().is_some() {
@@ -231,43 +222,6 @@ where
         }
     }
     Ok(response)
-}
-
-fn insert_authenticated_user_mail_header(
-    app: &AppWithUri,
-    user: Option<UserToken>,
-    req: &mut Request<Body>,
-) -> Result<(), ProxyError> {
-    let email = match (app.inner.forward_user_mail, user) {
-        (true, Some(user)) => user.info.map(|info| info.email),
-        _ => None,
-    };
-    if let Some(email) = email {
-        req.headers_mut()
-            .insert(AUTHENTICATED_USER_MAIL_HEADER, email.parse()?);
-    } else {
-        req.headers_mut().remove(AUTHENTICATED_USER_MAIL_HEADER);
-    };
-    Ok(())
-}
-
-fn remove_auth_cookie(req: &mut Request<Body>) -> Result<(), ProxyError> {
-    let mut new_cookie = String::new();
-    for c in req.headers_mut().get_all(COOKIE) {
-        if let Ok(s) = c.to_str() {
-            new_cookie.push_str(
-                &s.split(';')
-                    .skip_while(|&c| c.contains(AUTH_COOKIE))
-                    .collect::<Vec<&str>>()
-                    .join(";"),
-            );
-            if !new_cookie.is_empty() {
-                new_cookie.push(';');
-            }
-        }
-    }
-    req.headers_mut().insert(COOKIE, new_cookie.parse()?);
-    Ok(())
 }
 
 pub async fn get_apps(

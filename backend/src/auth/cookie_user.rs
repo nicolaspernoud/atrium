@@ -58,9 +58,3 @@ where
         )
     }
 }
-
-impl From<CookieUserToken> for UserToken {
-    fn from(cookie_token: CookieUserToken) -> Self {
-        cookie_token.0
-    }
-}

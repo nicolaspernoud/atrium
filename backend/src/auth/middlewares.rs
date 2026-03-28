@@ -1,5 +1,6 @@
 use super::user::UserToken;
 use crate::{
+    apps::AppWithUri,
     appstate::{ConfigState, MAXMIND_READER},
     auth::{AUTH_COOKIE, cookie_user::CookieUserToken},
     configuration::HostType,
@@ -23,10 +24,12 @@ use axum_extra::{
 };
 use http::{
     HeaderValue, Method, StatusCode,
-    header::{LOCATION, SET_COOKIE},
+    header::{COOKIE, InvalidHeaderValue, LOCATION, SET_COOKIE},
 };
 use std::{net::SocketAddr, path::PathBuf};
 use tracing::info;
+
+pub static AUTHENTICATED_USER_MAIL_HEADER: &str = "Remote-User";
 
 #[derive(Debug, Clone, Copy)]
 pub enum AuthError {
@@ -39,14 +42,14 @@ pub async fn auth_middleware(
     host_type: HostType,
     host: Host,
     user: Option<CookieUserToken>,
-    req: Request,
+    mut req: Request,
     next: Next,
 ) -> Response {
     if host_type.secured() {
         let hostname = host.as_str();
         let domain = hostname.split(':').next().unwrap_or_default();
         match check_user_role_and_share(
-            user.map(|u| u.into()).as_ref(),
+            user.as_ref().map(|u| &u.0),
             &host_type,
             domain,
             req.uri().path(),
@@ -81,6 +84,14 @@ pub async fn auth_middleware(
                 return res;
             }
         }
+    }
+    if !config.single_proxy && remove_auth_cookie(&mut req).is_err() {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+    if let HostType::SkipVerifyReverseApp(app) | HostType::ReverseApp(app) = host_type
+        && insert_authenticated_user_mail_header(&app, user.map(|u| u.0), &mut req).is_err()
+    {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
     next.run(req).await
 }
@@ -223,6 +234,43 @@ pub fn check_user_role_and_share(
         return Err(AuthError::Forbidden);
     }
     Err(AuthError::Unauthorized)
+}
+
+fn remove_auth_cookie(req: &mut Request<Body>) -> Result<(), InvalidHeaderValue> {
+    let mut new_cookie = String::new();
+    for c in req.headers_mut().get_all(COOKIE) {
+        if let Ok(s) = c.to_str() {
+            new_cookie.push_str(
+                &s.split(';')
+                    .skip_while(|&c| c.contains(AUTH_COOKIE))
+                    .collect::<Vec<&str>>()
+                    .join(";"),
+            );
+            if !new_cookie.is_empty() {
+                new_cookie.push(';');
+            }
+        }
+    }
+    req.headers_mut().insert(COOKIE, new_cookie.parse()?);
+    Ok(())
+}
+
+fn insert_authenticated_user_mail_header(
+    app: &AppWithUri,
+    user: Option<UserToken>,
+    req: &mut Request<Body>,
+) -> Result<(), InvalidHeaderValue> {
+    let email = match (app.inner.forward_user_mail, user) {
+        (true, Some(user)) => user.info.map(|info| info.email),
+        _ => None,
+    };
+    if let Some(email) = email {
+        req.headers_mut()
+            .insert(AUTHENTICATED_USER_MAIL_HEADER, email.parse()?);
+    } else {
+        req.headers_mut().remove(AUTHENTICATED_USER_MAIL_HEADER);
+    };
+    Ok(())
 }
 
 #[cfg(test)]

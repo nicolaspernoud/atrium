@@ -1,4 +1,4 @@
-use atrium::{apps::AUTHENTICATED_USER_MAIL_HEADER, auth::AUTH_COOKIE};
+use atrium::auth::{AUTH_COOKIE, AUTHENTICATED_USER_MAIL_HEADER};
 
 use crate::helpers::{TestApp, login_and_get_xsrf_token};
 
