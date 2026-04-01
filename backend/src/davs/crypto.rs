@@ -43,7 +43,7 @@ impl CipherType {
     }
 
     pub fn header_size(&self) -> usize {
-        4 + 1 + self.nonce_size()
+        1 + self.nonce_size()
     }
 
     pub fn encrypted_chunk_start(&self, dec_offset: u64) -> u64 {

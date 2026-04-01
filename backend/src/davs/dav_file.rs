@@ -51,11 +51,7 @@ impl DavFile {
                 TryRng::try_fill_bytes(&mut SysRng, &mut nonce)
                     .map_err(|e| io::Error::other(e.to_string()))?;
 
-                let plain_chunk_size = cipher_type.plain_chunk_size();
-
-                // Header: plain_chunk_size (u32), cipher_type (u8), nonce
-                file.write_all(&(plain_chunk_size as u32).to_be_bytes())
-                    .await?;
+                // Header: cipher_type (u8), nonce
                 file.write_all(&[cipher_type as u8]).await?;
                 file.write_all(&nonce).await?;
                 file.flush().await?;
@@ -115,26 +111,10 @@ impl DavFile {
                     });
                 }
 
-                let mut plain_chunk_size_bytes = [0u8; 4];
-                file.read_exact(&mut plain_chunk_size_bytes).await?;
-                let plain_chunk_size = u32::from_be_bytes(plain_chunk_size_bytes) as usize;
-
                 let mut cipher_type_byte = [0u8; 1];
                 file.read_exact(&mut cipher_type_byte).await?;
                 let cipher_type = CipherType::from_u8(cipher_type_byte[0])
                     .map_err(|e| io::Error::other(e))?;
-
-                if plain_chunk_size != cipher_type.plain_chunk_size() {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!(
-                            "Plain chunk size mismatch: header has {}, cipher type {:?} expects {}",
-                            plain_chunk_size,
-                            cipher_type,
-                            cipher_type.plain_chunk_size()
-                        ),
-                    ));
-                }
 
                 let nonce_size = cipher_type.nonce_size();
                 let mut nonce = vec![0u8; nonce_size];

@@ -65,10 +65,8 @@ fn convert_file(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
 
     {
         let mut new_file = File::create(&new_path)?;
-        let plain_chunk_size: u32 = 1_000_000;
         let cipher_type: u8 = 0; // XChaCha20Poly1305_1M
 
-        new_file.write_all(&plain_chunk_size.to_be_bytes())?;
         new_file.write_all(&[cipher_type])?;
         new_file.write_all(&content)?;
     }
