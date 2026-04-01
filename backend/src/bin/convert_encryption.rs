@@ -41,7 +41,7 @@ fn convert_file(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let len = metadata.len();
 
     // Old format: 19 bytes nonce + chunks
-    // New format: 4 bytes chunk size + 1 byte cipher type + 19 bytes nonce + chunks
+    // New format: 1 byte cipher type + 19 bytes nonce + chunks
     // If length is less than 19, it might not be encrypted in the old format,
     // but the instructions say to convert it.
 

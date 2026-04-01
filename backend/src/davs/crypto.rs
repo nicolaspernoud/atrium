@@ -121,3 +121,43 @@ pub fn create_cipher(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_decrypted_size() {
+        let cipher_type = CipherType::XChaCha20Poly1305_1M;
+        let overhead = cipher_type.overhead() as u64;
+        let plain_chunk_size = cipher_type.plain_chunk_size() as u64;
+        let encrypted_chunk_size = plain_chunk_size + overhead;
+        let header_size = cipher_type.header_size() as u64;
+
+        assert_eq!(cipher_type.decrypted_size(0), 0);
+        assert_eq!(cipher_type.decrypted_size(header_size + overhead), 0);
+        assert_eq!(
+            cipher_type.decrypted_size(header_size + 3 * encrypted_chunk_size),
+            3 * plain_chunk_size
+        );
+        assert_eq!(
+            cipher_type.decrypted_size(
+                header_size + 3 * encrypted_chunk_size + overhead + 150
+            ),
+            3 * plain_chunk_size + 150
+        );
+    }
+
+    #[test]
+    fn test_encrypted_chunk_start() {
+        let cipher_type = CipherType::XChaCha20Poly1305_1M;
+        let plain_chunk_size = cipher_type.plain_chunk_size() as u64;
+        let encrypted_chunk_size = cipher_type.encrypted_chunk_size() as u64;
+        let header_size = cipher_type.header_size() as u64;
+
+        assert_eq!(cipher_type.encrypted_chunk_start(0), header_size);
+        assert_eq!(cipher_type.encrypted_chunk_start(plain_chunk_size - 1), header_size);
+        assert_eq!(cipher_type.encrypted_chunk_start(plain_chunk_size), header_size + encrypted_chunk_size);
+        assert_eq!(cipher_type.encrypted_chunk_start(2 * plain_chunk_size + 500), header_size + 2 * encrypted_chunk_size);
+    }
+}
