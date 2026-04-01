@@ -198,7 +198,7 @@ impl Server {
                         Some(HostType::SkipVerifyReverseApp(_)) => {
                             unsecure_proxy_router.oneshot(request).await
                         }
-                        Some(HostType::Dav(_)) => webdav_router.oneshot(request).await,
+                        Some(HostType::Dav(_)) => webdav_router.clone().oneshot(request).await,
                         None => main_router.oneshot(request).await,
                     }
                 },
