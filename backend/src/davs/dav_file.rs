@@ -1,4 +1,4 @@
-use super::crypto::{Cipher, CipherType, create_cipher, DEFAULT_PLAIN_CHUNK_SIZE};
+use super::crypto::{Cipher, CipherType, create_cipher};
 use futures::ready;
 use headers::{ETag, LastModified};
 use rand::{TryRng, rngs::SysRng};
@@ -34,23 +34,24 @@ pub enum DavFile {
 
 impl DavFile {
     pub async fn create(path: &Path, key: Option<[u8; 32]>) -> io::Result<DavFile> {
-        Self::create_with_chunk_size(path, key, DEFAULT_PLAIN_CHUNK_SIZE).await
+        Self::create_with_cipher_type(path, key, CipherType::XChaCha20Poly1305_1M).await
     }
 
-    pub async fn create_with_chunk_size(
+    pub async fn create_with_cipher_type(
         path: &Path,
         key: Option<[u8; 32]>,
-        plain_chunk_size: usize,
+        cipher_type: CipherType,
     ) -> io::Result<DavFile> {
         let mut file = fs::File::create(&path).await?;
 
         match key {
             Some(key) => {
-                let cipher_type = CipherType::XChaCha20Poly1305;
                 let nonce_size = cipher_type.nonce_size();
                 let mut nonce = vec![0u8; nonce_size];
                 TryRng::try_fill_bytes(&mut SysRng, &mut nonce)
                     .map_err(|e| io::Error::other(e.to_string()))?;
+
+                let plain_chunk_size = cipher_type.plain_chunk_size();
 
                 // Header: plain_chunk_size (u32), cipher_type (u8), nonce
                 file.write_all(&(plain_chunk_size as u32).to_be_bytes())
@@ -59,7 +60,7 @@ impl DavFile {
                 file.write_all(&nonce).await?;
                 file.flush().await?;
 
-                let cipher = create_cipher(cipher_type, &key, &nonce, plain_chunk_size);
+                let cipher = create_cipher(cipher_type, &key, &nonce);
 
                 Ok(DavFile::Encrypted {
                     file: Box::new(file),
@@ -92,11 +93,10 @@ impl DavFile {
         match key {
             Some(key) => {
                 if metadata.len() == 0 {
-                    let cipher_type = CipherType::XChaCha20Poly1305;
-                    let plain_chunk_size = DEFAULT_PLAIN_CHUNK_SIZE;
+                    let cipher_type = CipherType::XChaCha20Poly1305_1M;
                     let nonce_size = cipher_type.nonce_size();
                     let nonce = vec![0u8; nonce_size];
-                    let cipher = create_cipher(cipher_type, &key, &nonce, plain_chunk_size);
+                    let cipher = create_cipher(cipher_type, &key, &nonce);
                     return Ok(DavFile::Encrypted {
                         file: Box::new(file),
                         key,
@@ -124,19 +124,30 @@ impl DavFile {
                 let cipher_type = CipherType::from_u8(cipher_type_byte[0])
                     .map_err(|e| io::Error::other(e))?;
 
+                if plain_chunk_size != cipher_type.plain_chunk_size() {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!(
+                            "Plain chunk size mismatch: header has {}, cipher type {:?} expects {}",
+                            plain_chunk_size,
+                            cipher_type,
+                            cipher_type.plain_chunk_size()
+                        ),
+                    ));
+                }
+
                 let nonce_size = cipher_type.nonce_size();
                 let mut nonce = vec![0u8; nonce_size];
                 file.read_exact(&mut nonce).await?;
 
-                let overhead = cipher_type.overhead();
-                let encrypted_chunk_size = plain_chunk_size + overhead;
-                let header_size = 4 + 1 + nonce_size;
+                let encrypted_chunk_size = cipher_type.encrypted_chunk_size();
+                let header_size = cipher_type.header_size();
 
                 let enc_size_without_header = metadata.len().saturating_sub(header_size as u64);
                 let write_chunk_idx_initial =
                     (enc_size_without_header / encrypted_chunk_size as u64) as u32;
 
-                let cipher = create_cipher(cipher_type, &key, &nonce, plain_chunk_size);
+                let cipher = create_cipher(cipher_type, &key, &nonce);
 
                 Ok(DavFile::Encrypted {
                     file: Box::new(file),
@@ -145,11 +156,7 @@ impl DavFile {
                     encrypted_read_buffer: Vec::new(),
                     write_buffer: Vec::new(),
                     pos: 0,
-                    decrypted_len: decrypted_size_ext(
-                        metadata.len(),
-                        plain_chunk_size,
-                        cipher_type,
-                    ),
+                    decrypted_len: cipher_type.decrypted_size(metadata.len()),
                     nonce,
                     offset_in_chunk: 0,
                     read_chunk_idx: 0,
@@ -445,7 +452,7 @@ impl AsyncSeek for DavFile {
 
                 let plain_chunk_size = cipher.plain_chunk_size();
                 let cipher_type = cipher.cipher_type();
-                let encrypted_pos = encrypted_chunk_start_ext(*pos, plain_chunk_size, cipher_type);
+                let encrypted_pos = cipher_type.encrypted_chunk_start(*pos);
                 *offset_in_chunk = (*pos % plain_chunk_size as u64) as u32;
                 *read_chunk_idx = (*pos / plain_chunk_size as u64) as u32;
                 Pin::new(&mut **file).start_seek(SeekFrom::Start(encrypted_pos))
@@ -464,37 +471,8 @@ impl AsyncSeek for DavFile {
     }
 }
 
-fn encrypted_chunk_start_ext(dec_offset: u64, plain_chunk_size: usize, cipher_type: CipherType) -> u64 {
-    let encrypted_chunk_size = plain_chunk_size + cipher_type.overhead();
-    let header_size = 4 + 1 + cipher_type.nonce_size();
-    let chunk_idx = dec_offset / plain_chunk_size as u64;
-    header_size as u64 + chunk_idx * encrypted_chunk_size as u64
-}
-
-pub fn decrypted_size_ext(enc_size: u64, plain_chunk_size: usize, cipher_type: CipherType) -> u64 {
-    let header_size = 4 + 1 + cipher_type.nonce_size();
-    let overhead = cipher_type.overhead();
-    let encrypted_chunk_size = plain_chunk_size + overhead;
-
-    if enc_size <= header_size as u64 {
-        return 0;
-    }
-    let enc_size_without_header = enc_size - header_size as u64;
-    let num_chunks = enc_size_without_header.div_ceil(encrypted_chunk_size as u64);
-    if num_chunks == 0 {
-        return 0;
-    }
-    let last_chunk_size = enc_size_without_header - (num_chunks - 1) * encrypted_chunk_size as u64;
-    (num_chunks - 1) * plain_chunk_size as u64
-        + (last_chunk_size.saturating_sub(overhead as u64))
-}
-
 pub fn decrypted_size(enc_size: u64) -> u64 {
-    decrypted_size_ext(
-        enc_size,
-        DEFAULT_PLAIN_CHUNK_SIZE,
-        CipherType::XChaCha20Poly1305,
-    )
+    CipherType::XChaCha20Poly1305_1M.decrypted_size(enc_size)
 }
 
 fn poll_write_chunks(
@@ -549,24 +527,21 @@ mod tests {
 
     #[test]
     fn test_decrypted_size() {
-        let cipher_type = CipherType::XChaCha20Poly1305;
-        let nonce_size = cipher_type.nonce_size() as u64;
+        let cipher_type = CipherType::XChaCha20Poly1305_1M;
         let overhead = cipher_type.overhead() as u64;
-        let plain_chunk_size = DEFAULT_PLAIN_CHUNK_SIZE as u64;
+        let plain_chunk_size = cipher_type.plain_chunk_size() as u64;
         let encrypted_chunk_size = plain_chunk_size + overhead;
-        let header_size = 4 + 1 + nonce_size;
+        let header_size = cipher_type.header_size() as u64;
 
-        assert_eq!(decrypted_size_ext(0, plain_chunk_size as usize, cipher_type), 0);
-        assert_eq!(decrypted_size_ext(header_size + overhead, plain_chunk_size as usize, cipher_type), 0);
+        assert_eq!(cipher_type.decrypted_size(0), 0);
+        assert_eq!(cipher_type.decrypted_size(header_size + overhead), 0);
         assert_eq!(
-            decrypted_size_ext(header_size + 3 * encrypted_chunk_size, plain_chunk_size as usize, cipher_type),
+            cipher_type.decrypted_size(header_size + 3 * encrypted_chunk_size),
             3 * plain_chunk_size
         );
         assert_eq!(
-            decrypted_size_ext(
-                header_size + 3 * encrypted_chunk_size + overhead + 150,
-                plain_chunk_size as usize,
-                cipher_type
+            cipher_type.decrypted_size(
+                header_size + 3 * encrypted_chunk_size + overhead + 150
             ),
             3 * plain_chunk_size + 150
         );
@@ -649,11 +624,40 @@ mod tests {
         let dir = tempfile::tempdir()?;
         let path = dir.path().join("large.txt.enc");
         let key = [42u8; 32];
-        let content = vec![0xAB; DEFAULT_PLAIN_CHUNK_SIZE * 3 + 123];
+        let content = vec![0xAB; 1_000_000 * 3 + 123];
 
         let mut file = DavFile::create(&path, Some(key)).await?;
         file.write_all(&content).await?;
         file.shutdown().await?;
+
+        let mut file = DavFile::open(&path, Some(key)).await?;
+        let mut read_content = Vec::new();
+        file.read_to_end(&mut read_content).await?;
+
+        assert_eq!(content.len(), read_content.len());
+        assert_eq!(content, read_content);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_encrypted_file_different_cipher_type() -> io::Result<()> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("small_chunks.txt.enc");
+        let key = [99u8; 32];
+        let cipher_type = CipherType::XChaCha20Poly1305_4K;
+        let content = vec![0xCD; 5000];
+
+        let mut file = DavFile::create_with_cipher_type(&path, Some(key), cipher_type).await?;
+        file.write_all(&content).await?;
+        file.shutdown().await?;
+
+        // Verify file size on disk
+        let meta = fs::metadata(&path).await?;
+        let expected_size = cipher_type.header_size() as u64
+            + (content.len() as u64 / cipher_type.plain_chunk_size() as u64) * cipher_type.encrypted_chunk_size() as u64
+            + (content.len() as u64 % cipher_type.plain_chunk_size() as u64) + cipher_type.overhead() as u64;
+        assert_eq!(meta.len(), expected_size);
 
         let mut file = DavFile::open(&path, Some(key)).await?;
         let mut read_content = Vec::new();
@@ -703,7 +707,7 @@ mod tests {
         let dir = tempfile::tempdir()?;
         let path = dir.path().join("large.txt.enc");
         let key = [42u8; 32];
-        let plain_chunk_size = DEFAULT_PLAIN_CHUNK_SIZE;
+        let plain_chunk_size = 1_000_000;
         let mut content = vec![0u8; plain_chunk_size * 2];
         for i in 0..plain_chunk_size {
             content[i] = 0xAA;
@@ -732,7 +736,7 @@ mod tests {
         let dir = tempfile::tempdir()?;
         let path = dir.path().join("large_byte_by_byte.txt.enc");
         let key = [88u8; 32];
-        let content = vec![0xAB; DEFAULT_PLAIN_CHUNK_SIZE * 2 + 555];
+        let content = vec![0xAB; 1_000_000 * 2 + 555];
 
         let mut file = DavFile::create(&path, Some(key)).await?;
         file.write_all(&content).await?;
@@ -744,36 +748,6 @@ mod tests {
         while file.read(&mut byte).await? > 0 {
             read_content.push(byte[0]);
         }
-
-        assert_eq!(content.len(), read_content.len());
-        assert_eq!(content, read_content);
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_encrypted_file_different_chunk_size() -> io::Result<()> {
-        let dir = tempfile::tempdir()?;
-        let path = dir.path().join("small_chunks.txt.enc");
-        let key = [99u8; 32];
-        let plain_chunk_size = 1024; // 1 KB chunks
-        let content = vec![0xCD; 5000]; // ~5 chunks
-
-        let mut file = DavFile::create_with_chunk_size(&path, Some(key), plain_chunk_size).await?;
-        file.write_all(&content).await?;
-        file.shutdown().await?;
-
-        // Verify file size on disk to ensure it's using small chunks
-        let meta = fs::metadata(&path).await?;
-        let cipher_type = CipherType::XChaCha20Poly1305;
-        let expected_size = (4 + 1 + cipher_type.nonce_size()) as u64
-            + (content.len() as u64 / plain_chunk_size as u64) * (plain_chunk_size + cipher_type.overhead()) as u64
-            + (content.len() as u64 % plain_chunk_size as u64) + cipher_type.overhead() as u64;
-        assert_eq!(meta.len(), expected_size);
-
-        let mut file = DavFile::open(&path, Some(key)).await?;
-        let mut read_content = Vec::new();
-        file.read_to_end(&mut read_content).await?;
 
         assert_eq!(content.len(), read_content.len());
         assert_eq!(content, read_content);

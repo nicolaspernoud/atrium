@@ -11,27 +11,70 @@ pub const DEFAULT_PLAIN_CHUNK_SIZE: usize = 1_000_000; // 1 MByte
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum CipherType {
-    XChaCha20Poly1305 = 0,
+    XChaCha20Poly1305_1M = 0,
+    XChaCha20Poly1305_4K = 1,
 }
 
 impl CipherType {
     pub fn from_u8(v: u8) -> Result<Self, String> {
         match v {
-            0 => Ok(CipherType::XChaCha20Poly1305),
+            0 => Ok(CipherType::XChaCha20Poly1305_1M),
+            1 => Ok(CipherType::XChaCha20Poly1305_4K),
             _ => Err(format!("Unknown cipher type: {}", v)),
         }
     }
 
     pub fn nonce_size(&self) -> usize {
         match self {
-            CipherType::XChaCha20Poly1305 => 19,
+            CipherType::XChaCha20Poly1305_1M => 19,
+            CipherType::XChaCha20Poly1305_4K => 19,
         }
     }
 
     pub fn overhead(&self) -> usize {
         match self {
-            CipherType::XChaCha20Poly1305 => 16,
+            CipherType::XChaCha20Poly1305_1M => 16,
+            CipherType::XChaCha20Poly1305_4K => 16,
         }
+    }
+
+    pub fn plain_chunk_size(&self) -> usize {
+        match self {
+            CipherType::XChaCha20Poly1305_1M => 1_000_000,
+            CipherType::XChaCha20Poly1305_4K => 4096,
+        }
+    }
+
+    pub fn encrypted_chunk_size(&self) -> usize {
+        self.plain_chunk_size() + self.overhead()
+    }
+
+    pub fn header_size(&self) -> usize {
+        4 + 1 + self.nonce_size()
+    }
+
+    pub fn encrypted_chunk_start(&self, dec_offset: u64) -> u64 {
+        let chunk_idx = dec_offset / self.plain_chunk_size() as u64;
+        self.header_size() as u64 + chunk_idx * self.encrypted_chunk_size() as u64
+    }
+
+    pub fn decrypted_size(&self, enc_size: u64) -> u64 {
+        let header_size = self.header_size() as u64;
+        let encrypted_chunk_size = self.encrypted_chunk_size() as u64;
+        let plain_chunk_size = self.plain_chunk_size() as u64;
+        let overhead = self.overhead() as u64;
+
+        if enc_size <= header_size {
+            return 0;
+        }
+        let enc_size_without_header = enc_size - header_size;
+        let num_chunks = enc_size_without_header.div_ceil(encrypted_chunk_size);
+        if num_chunks == 0 {
+            return 0;
+        }
+        let last_chunk_size = enc_size_without_header - (num_chunks - 1) * encrypted_chunk_size;
+        (num_chunks - 1) * plain_chunk_size
+            + (last_chunk_size.saturating_sub(overhead))
     }
 }
 
@@ -44,7 +87,7 @@ pub trait Cipher: Send + Sync {
 
 struct XChaCha20Poly1305Cipher {
     stream_encryptor: StreamBE32<XChaCha20Poly1305>,
-    plain_chunk_size: usize,
+    cipher_type: CipherType,
 }
 
 impl Cipher for XChaCha20Poly1305Cipher {
@@ -61,11 +104,11 @@ impl Cipher for XChaCha20Poly1305Cipher {
     }
 
     fn plain_chunk_size(&self) -> usize {
-        self.plain_chunk_size
+        self.cipher_type.plain_chunk_size()
     }
 
     fn cipher_type(&self) -> CipherType {
-        CipherType::XChaCha20Poly1305
+        self.cipher_type
     }
 }
 
@@ -73,15 +116,14 @@ pub fn create_cipher(
     cipher_type: CipherType,
     key: &[u8; 32],
     nonce: &[u8],
-    plain_chunk_size: usize,
 ) -> Box<dyn Cipher> {
     match cipher_type {
-        CipherType::XChaCha20Poly1305 => {
+        CipherType::XChaCha20Poly1305_1M | CipherType::XChaCha20Poly1305_4K => {
             let aead = XChaCha20Poly1305::new(key.into());
             let stream_encryptor = stream::StreamBE32::from_aead(aead, nonce.into());
             Box::new(XChaCha20Poly1305Cipher {
                 stream_encryptor,
-                plain_chunk_size,
+                cipher_type,
             })
         }
     }
