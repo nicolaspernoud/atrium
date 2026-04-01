@@ -2,6 +2,7 @@ use std::env;
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::Path;
+use filetime::{FileTime, set_file_times};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
@@ -40,20 +41,20 @@ fn convert_file(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let metadata = file.metadata()?;
     let len = metadata.len();
 
+    if len < 19 && len > 0 {
+        eprintln!("ALERT: File {:?} is too small to be a valid old-format encrypted file (size: {} bytes)", path, len);
+    }
+
     // Old format: 19 bytes nonce + chunks
     // New format: 1 byte cipher type + 19 bytes nonce + chunks
-    // If length is less than 19, it might not be encrypted in the old format,
-    // but the instructions say to convert it.
-
-    // We'll read the whole file, prepend the header, and write it back.
-    // For very large files, this is not efficient, but it's a small side binary.
-    // Let's do it by creating a temporary file to be safer.
 
     if len == 0 {
-        // Skip empty files or handle them if needed.
-        // Based on DavFile::open, empty files don't have nonces.
         return Ok(());
     }
+
+    // Capture metadata
+    let atime = FileTime::from_last_access_time(&metadata);
+    let mtime = FileTime::from_last_modification_time(&metadata);
 
     println!("Converting: {:?}", path);
 
@@ -61,7 +62,10 @@ fn convert_file(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     file.read_to_end(&mut content)?;
 
     let mut new_path = path.to_path_buf();
-    new_path.set_extension("tmp_convert");
+    let original_file_name = path.file_name().ok_or("Invalid file name")?;
+    let mut new_file_name = original_file_name.to_os_string();
+    new_file_name.push(".tmp_convert");
+    new_path.set_file_name(new_file_name);
 
     {
         let mut new_file = File::create(&new_path)?;
@@ -72,6 +76,9 @@ fn convert_file(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     fs::rename(&new_path, path)?;
+
+    // Restore metadata
+    set_file_times(path, atime, mtime)?;
 
     Ok(())
 }
