@@ -6,20 +6,16 @@ use chacha20poly1305::{
     },
 };
 
-pub const DEFAULT_PLAIN_CHUNK_SIZE: usize = 1_000_000; // 1 MByte
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum CipherType {
     XChaCha20Poly1305_1M = 0,
-    XChaCha20Poly1305_4K = 1,
 }
 
 impl CipherType {
     pub fn from_u8(v: u8) -> Result<Self, String> {
         match v {
             0 => Ok(CipherType::XChaCha20Poly1305_1M),
-            1 => Ok(CipherType::XChaCha20Poly1305_4K),
             _ => Err(format!("Unknown cipher type: {}", v)),
         }
     }
@@ -27,21 +23,18 @@ impl CipherType {
     pub fn nonce_size(&self) -> usize {
         match self {
             CipherType::XChaCha20Poly1305_1M => 19,
-            CipherType::XChaCha20Poly1305_4K => 19,
         }
     }
 
     pub fn overhead(&self) -> usize {
         match self {
             CipherType::XChaCha20Poly1305_1M => 16,
-            CipherType::XChaCha20Poly1305_4K => 16,
         }
     }
 
     pub fn plain_chunk_size(&self) -> usize {
         match self {
             CipherType::XChaCha20Poly1305_1M => 1_000_000,
-            CipherType::XChaCha20Poly1305_4K => 4096,
         }
     }
 
@@ -118,7 +111,7 @@ pub fn create_cipher(
     nonce: &[u8],
 ) -> Box<dyn Cipher> {
     match cipher_type {
-        CipherType::XChaCha20Poly1305_1M | CipherType::XChaCha20Poly1305_4K => {
+        CipherType::XChaCha20Poly1305_1M => {
             let aead = XChaCha20Poly1305::new(key.into());
             let stream_encryptor = stream::StreamBE32::from_aead(aead, nonce.into());
             Box::new(XChaCha20Poly1305Cipher {

@@ -640,34 +640,6 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_encrypted_file_different_cipher_type() -> io::Result<()> {
-        let dir = tempfile::tempdir()?;
-        let path = dir.path().join("small_chunks.txt.enc");
-        let key = [99u8; 32];
-        let cipher_type = CipherType::XChaCha20Poly1305_4K;
-        let content = vec![0xCD; 5000];
-
-        let mut file = DavFile::create_with_cipher_type(&path, Some(key), cipher_type).await?;
-        file.write_all(&content).await?;
-        file.shutdown().await?;
-
-        // Verify file size on disk
-        let meta = fs::metadata(&path).await?;
-        let expected_size = cipher_type.header_size() as u64
-            + (content.len() as u64 / cipher_type.plain_chunk_size() as u64) * cipher_type.encrypted_chunk_size() as u64
-            + (content.len() as u64 % cipher_type.plain_chunk_size() as u64) + cipher_type.overhead() as u64;
-        assert_eq!(meta.len(), expected_size);
-
-        let mut file = DavFile::open(&path, Some(key)).await?;
-        let mut read_content = Vec::new();
-        file.read_to_end(&mut read_content).await?;
-
-        assert_eq!(content.len(), read_content.len());
-        assert_eq!(content, read_content);
-
-        Ok(())
-    }
 
     #[tokio::test]
     async fn test_encrypted_file_truncated() -> io::Result<()> {
