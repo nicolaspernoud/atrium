@@ -3,7 +3,7 @@ use crate::{
     configuration::OpenIdConfig,
     errors::ErrResponse,
     extract::Host,
-    users::{ADMINS_ROLE, User, UserInfo, create_user_cookie, user_to_token},
+    auth::{ADMINS_ROLE, User, UserInfo, create_user_cookie, user_to_token},
     utils::select_entries_by_value,
 };
 use axum::{
@@ -292,7 +292,7 @@ pub async fn oauth2_callback(
             Redirect::to(&format!(
                 "/oauth2/oauth2.html?is_admin={}&xsrf_token={}&user={}",
                 user.roles.contains(&ADMINS_ROLE.to_owned()),
-                user_token.xsrf_token,
+                user_token.xsrf_token.unwrap_or("no_token".to_owned()),
                 user.login
             ))
         },

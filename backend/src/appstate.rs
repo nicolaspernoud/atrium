@@ -126,7 +126,6 @@ impl FromRef<AppState> for InsecureSkipVerifyClient {
 }
 
 impl FromRef<AppState> for crate::OptionalJail {
-    #[allow(unused_variables)]
     fn from_ref(state: &AppState) -> Self {
         #[cfg(target_os = "linux")]
         {

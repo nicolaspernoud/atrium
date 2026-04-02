@@ -1,7 +1,7 @@
 use atrium::{
     configuration::{Config, OpenIdConfig},
     mocks::mock_oauth2_server,
-    users::User,
+    auth::User,
 };
 use hyper::StatusCode;
 use tokio::net::TcpListener;

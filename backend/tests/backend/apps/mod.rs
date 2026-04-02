@@ -5,7 +5,7 @@ use hyper::header::LOCATION;
 use tokio::net::TcpListener;
 use tracing::info;
 
-use crate::helpers::TestApp;
+use crate::helpers::{TestApp, login_and_get_xsrf_token};
 use std::fs;
 
 mod proxy;
@@ -27,19 +27,11 @@ async fn secured_proxy_test() {
         .expect("failed to execute request");
 
     // Assert that is impossible (redirected to login page)
-    assert_eq!(response.status(), 302);
+    assert_eq!(response.status(), StatusCode::FOUND);
     assert_eq!(response.text().await.unwrap(), "");
 
     // Log as normal user
-    let response = app
-        .client
-        .post(format!("http://atrium.io:{}/auth/local", app.port))
-        .body(r#"{"login":"user","password":"password"}"#)
-        .header("Content-Type", "application/json")
-        .send()
-        .await
-        .expect("failed to execute request");
-    assert!(response.status().is_success());
+    login_and_get_xsrf_token(&app, "user").await;
     // Act : try to access app as logged user
     let response = app
         .client
@@ -52,15 +44,7 @@ async fn secured_proxy_test() {
     assert_eq!(response.text().await.unwrap(), "");
 
     // Log as admin
-    let response = app
-        .client
-        .post(format!("http://atrium.io:{}/auth/local", app.port))
-        .body(r#"{"login":"admin","password":"password"}"#)
-        .header("Content-Type", "application/json")
-        .send()
-        .await
-        .expect("failed to execute request");
-    assert!(response.status().is_success());
+    login_and_get_xsrf_token(&app, "admin").await;
     // Act : try to access app as admin
     let response = app
         .client

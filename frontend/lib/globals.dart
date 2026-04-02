@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:atrium/models/explore_config.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:atrium/models/preferences.dart';
@@ -14,6 +15,15 @@ class App extends ChangeNotifier {
   final Uploads _uploads = Uploads();
 
   static final App _instance = App._privateConstructor();
+
+  bool isExploreMode = false;
+
+  ExploreConfig? get exploreConfig => prefs.exploreConfig;
+
+  set exploreConfig(ExploreConfig? v) {
+    prefs.exploreConfig = v;
+    notifyListeners();
+  }
 
   factory App() {
     return _instance;
@@ -70,8 +80,8 @@ class App extends ChangeNotifier {
     _uploads.uploads.removeWhere((element) => element == upload);
   }
 
-  Stream<Upload?> uploadAll()  {
-    return  _uploads.uploadAll();
+  Stream<Upload?> uploadAll() {
+    return _uploads.uploadAll();
   }
 
   void reportProgress() {

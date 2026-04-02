@@ -1,6 +1,6 @@
-use atrium::{apps::AUTHENTICATED_USER_MAIL_HEADER, users::AUTH_COOKIE};
+use atrium::auth::{AUTH_COOKIE, AUTHENTICATED_USER_MAIL_HEADER};
 
-use crate::helpers::TestApp;
+use crate::helpers::{TestApp, login_and_get_xsrf_token};
 
 #[tokio::test]
 async fn headers_reflect() {
@@ -27,15 +27,7 @@ async fn no_atrium_cookie() {
     let app = TestApp::spawn(None).await;
 
     // Log as admin
-    let response = app
-        .client
-        .post(format!("http://atrium.io:{}/auth/local", app.port))
-        .body(r#"{"login":"admin","password":"password"}"#)
-        .header("Content-Type", "application/json")
-        .send()
-        .await
-        .expect("failed to execute request");
-    assert!(response.status().is_success());
+    login_and_get_xsrf_token(&app, "admin").await;
     // Act : try to access app as admin
     let response = app
         .client
@@ -59,15 +51,7 @@ async fn remote_user_removed() {
     let app = TestApp::spawn(None).await;
 
     // Log as admin
-    let response = app
-        .client
-        .post(format!("http://atrium.io:{}/auth/local", app.port))
-        .body(r#"{"login":"admin","password":"password"}"#)
-        .header("Content-Type", "application/json")
-        .send()
-        .await
-        .expect("failed to execute request");
-    assert!(response.status().is_success());
+    login_and_get_xsrf_token(&app, "admin").await;
     // Act : try to access app as admin
     let response = app
         .client
@@ -100,15 +84,7 @@ async fn remote_user_populated() {
     let app = TestApp::spawn(None).await;
 
     // Log as admin
-    let response = app
-        .client
-        .post(format!("http://atrium.io:{}/auth/local", app.port))
-        .body(r#"{"login":"admin","password":"password"}"#)
-        .header("Content-Type", "application/json")
-        .send()
-        .await
-        .expect("failed to execute request");
-    assert!(response.status().is_success());
+    login_and_get_xsrf_token(&app, "admin").await;
     // Act : try to access app as admin
     let response = app
         .client

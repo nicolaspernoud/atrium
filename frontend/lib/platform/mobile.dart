@@ -311,3 +311,11 @@ class _OpenIdWebViewState extends State<OpenIdWebView> {
 bool isWebDesktop() {
   return false;
 }
+
+void setCookie(String name, String value) {
+  // Not implemented for mobile as it's not used
+}
+
+void removeQueryWithoutReload() {
+  // Not implemented for mobile as it's not used
+}

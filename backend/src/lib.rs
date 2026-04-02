@@ -20,6 +20,6 @@ pub mod oauth2;
 pub mod onlyoffice;
 pub mod server;
 pub mod sysinfo;
-pub mod users;
+pub mod auth;
 pub mod utils;
 pub mod web;

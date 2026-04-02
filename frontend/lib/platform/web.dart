@@ -12,22 +12,30 @@ import 'package:atrium/models/api_provider.dart';
 class NotificationsPlugin {}
 
 // Create new client configured for web
-webdav.Client newExplorerClient(String uri,
-    {String user = '', String password = '', bool debug = false}) {
-  var client =
-      webdav.newClient(uri, user: user, password: password, debug: debug);
+webdav.Client newExplorerClient(
+  String uri, {
+  String user = '',
+  String password = '',
+  bool debug = false,
+}) {
+  var client = webdav.newClient(
+    uri,
+    user: user,
+    password: password,
+    debug: debug,
+  );
   var adapter = HttpClientAdapter() as BrowserHttpClientAdapter;
   adapter.withCredentials = true;
   client.c.httpClientAdapter = adapter;
-  client.c.interceptors.add(QueuedInterceptorsWrapper(
-    onRequest: (
-      RequestOptions requestOptions,
-      RequestInterceptorHandler handler,
-    ) {
-      requestOptions.headers["xsrf-token"] = App().xsrfToken;
-      handler.next(requestOptions);
-    },
-  ));
+  client.c.interceptors.add(
+    QueuedInterceptorsWrapper(
+      onRequest:
+          (RequestOptions requestOptions, RequestInterceptorHandler handler) {
+            requestOptions.headers["xsrf-token"] = App().xsrfToken;
+            handler.next(requestOptions);
+          },
+    ),
+  );
   return client;
 }
 
@@ -39,17 +47,28 @@ Dio newDio(BaseOptions options) {
   return dio;
 }
 
-Future<void> download(String url, webdav.Client client, webdav.File file,
-    BuildContext context) async {
-  var shareToken = await ApiProvider()
-      .getShareToken(url.split("://")[1].split(":")[0], file.path!);
+Future<void> download(
+  String url,
+  webdav.Client client,
+  webdav.File file,
+  BuildContext context,
+) async {
+  var shareResponse = await ApiProvider().getShareToken(
+    url.split("://")[1].split(":")[0],
+    file.path!,
+  );
   web.HTMLAnchorElement()
-    ..href = '$url${escapePath(file.path!)}?token=$shareToken'
+    ..href = '$url${escapePath(file.path!)}?token=${shareResponse!.token}'
     ..click();
 }
 
-Future<void> upload(String destPath, PlatformFile file, webdav.Client client,
-    Function(int, int)? onProgress, CancelToken cancelToken) async {
+Future<void> upload(
+  String destPath,
+  PlatformFile file,
+  webdav.Client client,
+  Function(int, int)? onProgress,
+  CancelToken cancelToken,
+) async {
   var path = "$destPath${file.name}";
   client.c.options.contentType = "application/octet-stream";
   await client.c.wdWriteWithStream(
@@ -70,8 +89,10 @@ void openIdConnectLogin(BuildContext context) {
   );
 
   web.window.onMessage.listen((event) {
-    String xsrfToken =
-        event.data.toString().split('xsrf_token=')[1].split('&')[0];
+    String xsrfToken = event.data
+        .toString()
+        .split('xsrf_token=')[1]
+        .split('&')[0];
     bool isAdmin =
         event.data.toString().split('is_admin=')[1].split('&')[0] == "true";
     String username = event.data.toString().split('user=')[1].split('&')[0];
@@ -105,4 +126,15 @@ bool isWebDesktop() {
   return kIsWeb &&
       !web.window.navigator.userAgent.contains("Safari/6") &&
       defaultTargetPlatform != TargetPlatform.android;
+}
+
+void setCookie(String name, String value) {
+  web.document.cookie =
+      "$name=$value; domain=.${Uri.base.host}; path=/; SameSite=Lax";
+}
+
+void removeQueryWithoutReload() {
+  final uri = Uri.base;
+  final cleanUri = uri.replace(queryParameters: {});
+  web.window.history.replaceState(null, '', cleanUri.toString());
 }

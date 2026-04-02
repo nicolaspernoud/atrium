@@ -6,11 +6,11 @@ use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::Subs
 
 use atrium::{
     apps::App,
+    auth::User,
     configuration::{Config, OnlyOfficeConfig, OpenIdConfig, TlsMode},
     davs::model::Dav,
     mocks::{mock_oauth2_server, mock_proxied_server},
     server::Server,
-    users::User,
     utils::random_string,
 };
 
@@ -330,7 +330,7 @@ pub fn create_default_config(
             login: "admin".to_owned(),
             password: "$argon2id$v=19$m=4096,t=3,p=1$QWsdpHrjCaPwy3IODegzNA$dqyioLh9ndJ3V7OoKpkCaczJmGNKjuG99F5hisd3bPs".to_owned(),
             roles: vec!["ADMINS".to_owned()],
-            info: Some(atrium::users::UserInfo{
+            info: Some(atrium::auth::UserInfo{
                 email:"admin@atrium.io".to_owned(),
                 ..Default::default()
             }),
@@ -396,4 +396,25 @@ fn create_test_tree(base: &str) -> Result<(), io::Error> {
 pub fn encode_uri(v: &str) -> String {
     let parts: Vec<_> = v.split('/').map(urlencoding::encode).collect();
     parts.join("/")
+}
+
+pub async fn login_and_get_xsrf_token(app: &TestApp, user: &str) -> String {
+    // Log as admin
+    let response = app
+        .client
+        .post(format!("http://atrium.io:{}/auth/local", app.port))
+        .body(format!(r#"{{"login":"{user}","password":"password"}}"#))
+        .header("Content-Type", "application/json")
+        .send()
+        .await
+        .expect("failed to execute request");
+    assert_eq!(response.status(), http::StatusCode::OK);
+
+    // Get XSRF token from response
+    response
+        .json::<atrium::auth::AuthResponse>()
+        .await
+        .unwrap()
+        .xsrf_token
+        .unwrap()
 }

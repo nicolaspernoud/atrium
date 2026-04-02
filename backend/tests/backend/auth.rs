@@ -1,7 +1,10 @@
-use atrium::{sysinfo::SystemInfo, users::User};
+use atrium::{
+    auth::{User, share::ShareResponse},
+    sysinfo::SystemInfo,
+};
 use hyper::StatusCode;
 
-use crate::helpers::TestApp;
+use crate::helpers::{TestApp, login_and_get_xsrf_token};
 
 #[tokio::test]
 async fn list_services_api_for_unlogged_user_test() {
@@ -22,7 +25,7 @@ async fn list_services_api_for_unlogged_user_test() {
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     assert_eq!(
         response.text().await.unwrap(),
-        "no user found or xsrf token not provided"
+        "xsrf token not provided or not matching"
     );
 }
 
@@ -31,22 +34,7 @@ async fn list_services_api_for_normal_user_test() {
     // Arrange
     let app = TestApp::spawn(None).await;
     // Log as user
-    let response = app
-        .client
-        .post(format!("http://atrium.io:{}/auth/local", app.port))
-        .body(r#"{"login":"user","password":"password"}"#)
-        .header("Content-Type", "application/json")
-        .send()
-        .await
-        .expect("failed to execute request");
-    assert_eq!(response.status(), StatusCode::OK);
-
-    // Get XSRF token from response
-    let xsrf_token: String = response
-        .json::<atrium::users::AuthResponse>()
-        .await
-        .unwrap()
-        .xsrf_token;
+    login_and_get_xsrf_token(&app, "user").await;
 
     // Get the services without XSRF token
     let response = app
@@ -58,11 +46,14 @@ async fn list_services_api_for_normal_user_test() {
         .send()
         .await
         .expect("failed to execute request");
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
     assert_eq!(
         response.text().await.unwrap(),
-        "no user found or xsrf token not provided"
+        "xsrf token not provided or not matching"
     );
+
+    // Log as user
+    login_and_get_xsrf_token(&app, "user").await;
 
     // Get the services with a wrong XSRF token
     let response = app
@@ -76,7 +67,13 @@ async fn list_services_api_for_normal_user_test() {
         .await
         .expect("failed to execute request");
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
-    assert_eq!(response.text().await.unwrap(), "xsrf token doesn't match");
+    assert_eq!(
+        response.text().await.unwrap(),
+        "xsrf token not provided or not matching"
+    );
+
+    // Log as user
+    let xsrf_token = login_and_get_xsrf_token(&app, "user").await;
 
     // Act and Assert : Get the services with XSRF token
     let response = app
@@ -110,22 +107,7 @@ async fn get_share_token_test() {
     // Arrange
     let app = TestApp::spawn(None).await;
     // Log as user
-    let response = app
-        .client
-        .post(format!("http://atrium.io:{}/auth/local", app.port))
-        .body(r#"{"login":"user","password":"password"}"#)
-        .header("Content-Type", "application/json")
-        .send()
-        .await
-        .expect("failed to execute request");
-    assert_eq!(response.status(), StatusCode::OK);
-
-    // Get XSRF token from response
-    let xsrf_token: String = response
-        .json::<atrium::users::AuthResponse>()
-        .await
-        .unwrap()
-        .xsrf_token;
+    let xsrf_token = login_and_get_xsrf_token(&app, "user").await;
 
     // Act and Assert : Get the a share token for an unexisting host
     let response = app
@@ -190,22 +172,8 @@ async fn use_share_token_test() {
     // Arrange
     let app = TestApp::spawn(None).await;
     // Log as admin (could be an user, it is just because the secured test app service is reserved to admins)
-    let response = app
-        .client
-        .post(format!("http://atrium.io:{}/auth/local", app.port))
-        .body(r#"{"login":"admin","password":"password"}"#)
-        .header("Content-Type", "application/json")
-        .send()
-        .await
-        .expect("failed to execute request");
-    assert_eq!(response.status(), StatusCode::OK);
-
-    // Get XSRF token from response
-    let xsrf_token: String = response
-        .json::<atrium::users::AuthResponse>()
-        .await
-        .unwrap()
-        .xsrf_token;
+    // Log as user
+    let xsrf_token = login_and_get_xsrf_token(&app, "admin").await;
 
     let dir = "A' directory with special chars like é or è";
     let resource = format!("{dir}/A' file with special chars like é or è.txt");
@@ -247,8 +215,7 @@ async fn use_share_token_test() {
         .await
         .expect("failed to execute request");
     assert_eq!(response.status(), StatusCode::OK);
-    let share_token = response.text().await.unwrap();
-    let share_token = share_token.split('=').collect::<Vec<_>>()[1];
+    let share_token = response.json::<ShareResponse>().await.unwrap().token;
 
     // Create a client without cookie store
     let client = reqwest::Client::builder()
@@ -309,26 +276,182 @@ async fn use_share_token_test() {
 }
 
 #[tokio::test]
-async fn get_system_info_test() {
+async fn share_token_security_test() {
     // Arrange
     let app = TestApp::spawn(None).await;
-    // Log as user
+    // Log as admin
+    let xsrf_token = login_and_get_xsrf_token(&app, "admin").await;
+
+    // 1. Create a read-only share token for /dira
     let response = app
         .client
-        .post(format!("http://atrium.io:{}/auth/local", app.port))
-        .body(r#"{"login":"user","password":"password"}"#)
+        .post(format!(
+            "http://atrium.io:{}/api/user/get_share_token",
+            app.port
+        ))
         .header("Content-Type", "application/json")
+        .header("xsrf-token", &xsrf_token)
+        .body(r#"{"hostname":"secured-files.atrium.io","path":"/dira","writable":false,"share_for_days":1}"#)
         .send()
         .await
         .expect("failed to execute request");
     assert_eq!(response.status(), StatusCode::OK);
+    let share_response = response.json::<ShareResponse>().await.unwrap();
+    let share_token = share_response.token;
+    let share_xsrf_token = share_response.xsrf_token.unwrap();
 
-    // Get XSRF token from response
-    let xsrf_token: String = response
-        .json::<atrium::users::AuthResponse>()
+    let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .resolve(
+            "secured-files.atrium.io",
+            format!("127.0.0.1:{}", app.port).parse().unwrap(),
+        )
+        .resolve(
+            "atrium.io",
+            format!("127.0.0.1:{}", app.port).parse().unwrap(),
+        )
+        .cookie_store(false)
+        .build()
+        .unwrap();
+
+    // 2. Verify read-only: GET should work, PUT should fail
+    let url_get = format!(
+        "http://secured-files.atrium.io:{}/dira/file1?token={share_token}",
+        app.port
+    );
+    let resp = client.get(url_get).send().await.unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    let url_put = format!(
+        "http://secured-files.atrium.io:{}/dira/file1?token={share_token}",
+        app.port
+    );
+    let resp = client.put(url_put).body("data").send().await.unwrap();
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+
+    // 3. Try to generate a NEW share token from the existing share token
+    // a) Try to make it read-write (should fail)
+    let resp = client
+        .post(format!(
+            "http://atrium.io:{}/api/user/get_share_token",
+            app.port
+        ))
+        .header("Content-Type", "application/json")
+        .header("xsrf-token", &share_xsrf_token)
+        .header("Cookie", format!("ATRIUM_AUTH={share_token}"))
+        .body(r#"{"hostname":"secured-files.atrium.io","path":"/dira","writable":true,"share_for_days":1}"#)
+        .send()
         .await
-        .unwrap()
-        .xsrf_token;
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+
+    // b) Try to change hostname (should fail)
+    let resp = client
+        .post(format!(
+            "http://atrium.io:{}/api/user/get_share_token",
+            app.port
+        ))
+        .header("Content-Type", "application/json")
+        .header("xsrf-token", &share_xsrf_token)
+        .header("Cookie", format!("ATRIUM_AUTH={share_token}"))
+        .body(
+            r#"{"hostname":"files2.atrium.io","path":"/dira","writable":false,"share_for_days":1}"#,
+        )
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+
+    // c) Try to share a subpath (should work)
+    let resp = client
+        .post(format!(
+            "http://atrium.io:{}/api/user/get_share_token",
+            app.port
+        ))
+        .header("Content-Type", "application/json")
+        .header("xsrf-token", &share_xsrf_token)
+        .header("Cookie", format!("ATRIUM_AUTH={share_token}"))
+        .body(r#"{"hostname":"secured-files.atrium.io","path":"/dira/subdira","writable":false,"share_for_days":1}"#)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::OK);
+
+    // d) Try to share a parent path (should fail)
+    let resp = client
+        .post(format!(
+            "http://atrium.io:{}/api/user/get_share_token",
+            app.port
+        ))
+        .header("Content-Type", "application/json")
+        .header("xsrf-token", &share_xsrf_token)
+        .header("Cookie", format!("ATRIUM_AUTH={share_token}"))
+        .body(r#"{"hostname":"secured-files.atrium.io","path":"/","writable":false,"share_for_days":1}"#)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+
+    // e) Try to share a parent path with .. (should fail)
+    let resp = client
+        .post(format!(
+            "http://atrium.io:{}/api/user/get_share_token",
+            app.port
+        ))
+        .header("Content-Type", "application/json")
+        .header("xsrf-token", &share_xsrf_token)
+        .header("Cookie", format!("ATRIUM_AUTH={share_token}"))
+        .body(r#"{"hostname":"secured-files.atrium.io","path":"/dira/..","writable":false,"share_for_days":1}"#)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+
+    // 4. Try to access the services list (should fail)
+    let response = app
+        .client
+        .get(format!(
+            "http://atrium.io:{}/api/user/list_services",
+            app.port
+        ))
+        .header("xsrf-token", &share_xsrf_token)
+        .header("Cookie", format!("ATRIUM_AUTH={share_token}"))
+        .send()
+        .await
+        .expect("failed to execute request");
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+
+    // 5. Try to access a secured app (should fail)
+    let resp = app
+        .client
+        .get(format!("http://secured-app.atrium.io:{}", app.port))
+        .header("xsrf-token", &share_xsrf_token)
+        .header("Cookie", format!("ATRIUM_AUTH={share_token}"))
+        .send()
+        .await
+        .expect("failed to execute request");
+    // Assert that is impossible
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+
+    // 6. Try to access the admin api (should fail)
+    let resp = app
+        .client
+        .get(format!("http://atrium.io:{}/api/admin/apps", app.port))
+        .header("xsrf-token", &share_xsrf_token)
+        .header("Cookie", format!("ATRIUM_AUTH={share_token}"))
+        .send()
+        .await
+        .expect("failed to execute request");
+    // Assert that is impossible
+    assert_eq!(resp.status(), StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn get_system_info_test() {
+    // Arrange
+    let app = TestApp::spawn(None).await;
+    // Log as user
+    let xsrf_token = login_and_get_xsrf_token(&app, "user").await;
 
     // Test the system info route
     let response = app
@@ -351,15 +474,7 @@ async fn whoami_test() {
     // Arrange
     let app = TestApp::spawn(None).await;
     // Log as user
-    let response = app
-        .client
-        .post(format!("http://atrium.io:{}/auth/local", app.port))
-        .body(r#"{"login":"user","password":"password"}"#)
-        .header("Content-Type", "application/json")
-        .send()
-        .await
-        .expect("failed to execute request");
-    assert_eq!(response.status(), StatusCode::OK);
+    login_and_get_xsrf_token(&app, "user").await;
 
     // Act and Assert : Test that the whoami route sends back who we are
     let response = app
@@ -380,15 +495,7 @@ async fn logout_test() {
     // Arrange
     let app = TestApp::spawn(None).await;
     // Log as user
-    let response = app
-        .client
-        .post(format!("http://atrium.io:{}/auth/local", app.port))
-        .body(r#"{"login":"user","password":"password"}"#)
-        .header("Content-Type", "application/json")
-        .send()
-        .await
-        .expect("failed to execute request");
-    assert_eq!(response.status(), StatusCode::OK);
+    login_and_get_xsrf_token(&app, "user").await;
 
     // Test that we can log out
     let response = app

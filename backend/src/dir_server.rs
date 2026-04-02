@@ -1,12 +1,6 @@
-use super::extract::Host;
-use crate::{
-    appstate::ConfigState,
-    configuration::HostType,
-    users::{UserTokenWithoutXSRFCheck, authorized_or_redirect_to_login},
-};
+use crate::configuration::HostType;
 use axum::{
     body::Body,
-    extract::State,
     http::{Request, Response, StatusCode},
     response::IntoResponse,
 };
@@ -14,14 +8,9 @@ use tower::util::ServiceExt;
 use tower_http::services::ServeDir;
 
 pub async fn dir_handler(
-    user: Option<UserTokenWithoutXSRFCheck>,
     app: HostType,
-    host: Host,
-    State(config): State<ConfigState>,
     req: Request<Body>,
 ) -> Result<impl IntoResponse, Response<Body>> {
-    authorized_or_redirect_to_login(&app, &user, host.as_str(), &req, &config).map_err(|b| *b)?;
-
     let app = match app {
         HostType::StaticApp(app) => app,
         _ => panic!("Service is not a static app !"),

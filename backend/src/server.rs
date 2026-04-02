@@ -10,13 +10,17 @@ use axum::{
 use hyper::Request;
 use tokio::sync::broadcast::Sender;
 
-use tower::ServiceExt;
+use tower::{ServiceBuilder, ServiceExt};
 
 #[cfg(target_os = "linux")]
 use crate::jail::Jail;
 use crate::{
     apps::{add_app, delete_app, get_apps, proxy_handler},
     appstate::{AppState, Client, InsecureSkipVerifyClient},
+    auth::{
+        AdminToken, auth_middleware, cookie_to_body, dav_auth_middleware, get_share_token,
+        xsrf_middleware,
+    },
     configuration::{HostType, load_config},
     davs::{
         model::{add_dav, delete_dav, get_davs},
@@ -27,13 +31,10 @@ use crate::{
     middlewares::{cors_middleware, debug_cors_middleware, inject_security_headers},
 };
 use crate::{
+    auth::{add_user, delete_user, get_users, list_services, local_auth, logout, whoami},
     oauth2::{oauth2_available, oauth2_callback, oauth2_login},
     onlyoffice::{onlyoffice_callback, onlyoffice_page},
     sysinfo::system_info,
-    users::{
-        add_user, cookie_to_body, delete_user, get_share_token, get_users, list_services,
-        local_auth, logout, whoami,
-    },
 };
 
 pub struct Server {
@@ -78,13 +79,20 @@ impl Server {
         );
 
         let user_router = Router::new()
-            .route("/api/user/whoami", get(whoami))
             .route("/api/user/list_services", get(list_services))
             .route("/api/user/system_info", get(system_info))
             .route(
                 "/api/user/get_share_token",
-                post(get_share_token).layer(middleware::from_fn(cookie_to_body)),
-            );
+                post(get_share_token).layer(middleware::from_fn_with_state(
+                    state.clone(),
+                    cookie_to_body,
+                )),
+            )
+            .route_layer(middleware::from_fn_with_state(
+                state.clone(),
+                xsrf_middleware,
+            ))
+            .route("/api/user/whoami", get(whoami));
 
         let admin_router = Router::new()
             .route("/api/admin/users", get(get_users).post(add_user))
@@ -92,7 +100,19 @@ impl Server {
             .route("/api/admin/apps", get(get_apps).post(add_app))
             .route("/api/admin/apps/{app_id}", delete(delete_app))
             .route("/api/admin/davs", get(get_davs).post(add_dav))
-            .route("/api/admin/davs/{dav_id}", delete(delete_dav));
+            .route("/api/admin/davs/{dav_id}", delete(delete_dav))
+            .route_layer(
+                ServiceBuilder::new()
+                    .layer(
+                        middleware::from_extractor_with_state::<AdminToken, AppState>(
+                            state.clone(),
+                        ),
+                    )
+                    .layer(middleware::from_fn_with_state(
+                        state.clone(),
+                        xsrf_middleware,
+                    )),
+            );
 
         let main_router = Router::new()
             .route(
@@ -124,7 +144,12 @@ impl Server {
 
         let router = if single_proxy {
             let main_router = main_router
-                .fallback(proxy_handler::<Client>)
+                .fallback(
+                    proxy_handler::<Client>.layer(middleware::from_fn_with_state(
+                        state.clone(),
+                        auth_middleware,
+                    )),
+                )
                 .with_state(state.clone());
             any(|_: Option<HostType>, request: Request<Body>| async move {
                 main_router.oneshot(request).await
@@ -133,21 +158,43 @@ impl Server {
             let main_router = main_router
                 .fallback(crate::web::static_handler)
                 .with_state(state.clone());
-            let proxy_router = proxy_handler::<Client>.with_state(state.clone());
-            let unsecure_proxy_router =
-                proxy_handler::<InsecureSkipVerifyClient>.with_state(state.clone());
+            let proxy_router = proxy_handler::<Client>
+                .layer(middleware::from_fn_with_state(
+                    state.clone(),
+                    auth_middleware,
+                ))
+                .with_state(state.clone());
+            let unsecure_proxy_router = proxy_handler::<InsecureSkipVerifyClient>
+                .layer(middleware::from_fn_with_state(
+                    state.clone(),
+                    auth_middleware,
+                ))
+                .with_state(state.clone());
             let webdav_router = webdav_handler
+                .layer(middleware::from_fn_with_state(
+                    state.clone(),
+                    xsrf_middleware,
+                ))
                 .layer(middleware::from_fn_with_state(
                     state.clone(),
                     cors_middleware,
                 ))
+                .layer(middleware::from_fn_with_state(
+                    state.clone(),
+                    dav_auth_middleware,
+                ))
                 .with_state(state.clone());
-            let dir_router = dir_handler.with_state(state.clone());
+            let dir_router = dir_handler
+                .layer(middleware::from_fn_with_state(
+                    state.clone(),
+                    auth_middleware,
+                ))
+                .with_state(state.clone());
             any(
                 |hostype: Option<HostType>, request: Request<Body>| async move {
                     match hostype {
-                        Some(HostType::StaticApp(_)) => dir_router.oneshot(request).await,
                         Some(HostType::ReverseApp(_)) => proxy_router.oneshot(request).await,
+                        Some(HostType::StaticApp(_)) => dir_router.oneshot(request).await,
                         Some(HostType::SkipVerifyReverseApp(_)) => {
                             unsecure_proxy_router.oneshot(request).await
                         }
