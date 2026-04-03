@@ -10,6 +10,7 @@ use axum::{
     extract::{RawQuery, State},
     response::{Html, IntoResponse},
 };
+use base64ct::{Base64, Encoding};
 use http::{Method, Request, StatusCode, header, header::CONTENT_TYPE};
 use hyper_rustls::HttpsConnectorBuilder;
 use hyper_util::{client::legacy::Client, rt::TokioExecutor};
@@ -99,9 +100,7 @@ pub async fn onlyoffice_page(
         .map_err(|_| QUERY_ERROR)?;
         let url = format!("{file}?token={share_token}");
 
-        let mut hasher = Sha256::new();
-        hasher.update(format!("{file}{mtime}"));
-        let key: String = format!("{:X}", hasher.finalize());
+        let key = Base64::encode_string(&Sha256::digest(format!("{file}{mtime}")));
 
         let mut ooconf = OnlyOfficeConfiguration {
             document: Document {

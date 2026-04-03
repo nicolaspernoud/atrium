@@ -7,7 +7,7 @@ use quick_xml::escape::escape;
 use sha2::{Digest, Sha512};
 use std::{
     fs,
-    io::{self, BufWriter, Write},
+    io::{self, BufWriter, Read},
     time::{Duration, Instant},
 };
 use tokio::fs::File;
@@ -123,12 +123,10 @@ async fn put_and_get_file(
     wanted_content: &str,
     encrypted: bool,
 ) -> BoxResult<()> {
-    let mut file = std::fs::File::open(format!("tests/data/{file_name}"))?;
+    let file = std::fs::File::open(format!("tests/data/{file_name}"))?;
 
-    let mut hasher = Sha512::new();
-    io::copy(&mut file, &mut hasher)?;
-    let hash_source = hasher.finalize();
-    println!("Source file hash: {}", Base64::encode_string(&hash_source));
+    let hash_source = file_hash(file)?;
+    println!("Source file hash: {}", hash_source);
 
     let file = File::open(format!("tests/data/{file_name}")).await?;
     // Act : send the file
@@ -145,11 +143,9 @@ async fn put_and_get_file(
     } else {
         format!("data/{}/dir2/{file_name}", app.id)
     };
-    let mut stored_file = std::fs::File::open(stored_file_path)?;
-    let mut hasher = Sha512::new();
-    io::copy(&mut stored_file, &mut hasher)?;
-    let hash_stored = hasher.finalize();
-    println!("Stored file hash: {}", Base64::encode_string(&hash_stored));
+    let stored_file = std::fs::File::open(stored_file_path)?;
+    let hash_stored = file_hash(stored_file)?;
+    println!("Stored file hash: {}", hash_stored);
     // Assert that the stored file is the same as the send file... or not if it it encrypted
     if !encrypted {
         assert_eq!(hash_source, hash_stored);
@@ -174,16 +170,28 @@ async fn put_and_get_file(
     let mut hasher = Sha512::new();
     while let Some(item) = stream.next().await {
         let chunk = item?;
-        hasher.write_all(&chunk)?;
+        hasher.update(&chunk);
     }
-    let hash_retrieved = hasher.finalize();
-    println!(
-        "Retrieved file hash: {}",
-        Base64::encode_string(&hash_retrieved)
-    );
+    let hash_retrieved = Base64::encode_string(&hasher.finalize());
+    println!("Retrieved file hash: {}", hash_retrieved);
     // Assert that the retrieved file is the same as the original file
     assert_eq!(hash_source, hash_retrieved);
     Ok(())
+}
+
+fn file_hash(mut file: fs::File) -> Result<String, io::Error> {
+    let mut hasher = Sha512::new();
+    let mut buffer = [0u8; 8192];
+    loop {
+        let n = file.read(&mut buffer)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buffer[..n]);
+    }
+    let hash_source = hasher.finalize();
+    let hash_source = Base64::encode_string(&hash_source);
+    Ok(hash_source)
 }
 
 fn file_to_body(file: File) -> reqwest::Body {

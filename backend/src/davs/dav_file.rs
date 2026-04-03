@@ -1,10 +1,4 @@
-use chacha20poly1305::{
-    XChaCha20Poly1305,
-    aead::{
-        KeyInit,
-        stream::{self, NewStream, StreamBE32, StreamPrimitive},
-    },
-};
+use super::crypto::{Cipher, CipherType, create_cipher};
 use futures::ready;
 use headers::{ETag, LastModified};
 use rand::{TryRng, rngs::SysRng};
@@ -15,11 +9,6 @@ use std::{path::Path, time::SystemTime};
 use tokio::fs::{self, File};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncSeek, AsyncWrite, AsyncWriteExt, ReadBuf};
 
-const PLAIN_CHUNK_SIZE: usize = 1_000_000; // 1 MByte
-const ENCRYPTION_OVERHEAD: usize = 16;
-const ENCRYPTED_CHUNK_SIZE: usize = PLAIN_CHUNK_SIZE + ENCRYPTION_OVERHEAD;
-// Using stream::StreamBE32 with XChaCha20Poly1305 does take a 19-byte nonce prefix and internally composes a 24-byte XChaCha nonce with a 32-bit big-endian counter.
-const NONCE_SIZE: usize = 19;
 
 const BUFFER_ERROR: &str = "buffer error for encryption or decryption";
 
@@ -33,29 +22,42 @@ pub enum DavFile {
         write_buffer: Vec<u8>,
         pos: u64,
         decrypted_len: u64,
-        nonce: [u8; NONCE_SIZE],
+        nonce: Vec<u8>,
         offset_in_chunk: u32,
         read_chunk_idx: u32,
         write_chunk_idx: u32,
         seeked_after_open: bool,
-        stream_encryptor: StreamBE32<XChaCha20Poly1305>,
+        cipher: Box<dyn Cipher>,
         write_op_in_progress: bool,
     },
 }
 
 impl DavFile {
     pub async fn create(path: &Path, key: Option<[u8; 32]>) -> io::Result<DavFile> {
+        Self::create_with_cipher_type(path, key, CipherType::XChaCha20Poly1305_1M).await
+    }
+
+    pub async fn create_with_cipher_type(
+        path: &Path,
+        key: Option<[u8; 32]>,
+        cipher_type: CipherType,
+    ) -> io::Result<DavFile> {
         let mut file = fs::File::create(&path).await?;
 
         match key {
             Some(key) => {
-                let mut nonce = [0u8; NONCE_SIZE];
+                let nonce_size = cipher_type.nonce_size();
+                let mut nonce = vec![0u8; nonce_size];
                 TryRng::try_fill_bytes(&mut SysRng, &mut nonce)
                     .map_err(|e| io::Error::other(e.to_string()))?;
+
+                // Header: cipher_type (u8), nonce
+                file.write_all(&[cipher_type as u8]).await?;
                 file.write_all(&nonce).await?;
                 file.flush().await?;
-                let aead = XChaCha20Poly1305::new(key.as_ref().into());
-                let stream_encryptor = stream::StreamBE32::from_aead(aead, nonce.as_ref().into());
+
+                let cipher = create_cipher(cipher_type, &key, &nonce);
+
                 Ok(DavFile::Encrypted {
                     file: Box::new(file),
                     key,
@@ -69,7 +71,7 @@ impl DavFile {
                     read_chunk_idx: 0,
                     write_chunk_idx: 0,
                     seeked_after_open: false,
-                    stream_encryptor,
+                    cipher,
                     write_op_in_progress: false,
                 })
             }
@@ -86,15 +88,47 @@ impl DavFile {
         let metadata = file.metadata().await?;
         match key {
             Some(key) => {
-                let mut nonce = [0u8; NONCE_SIZE];
-                if metadata.len() > 0 {
-                    file.read_exact(&mut nonce).await?;
+                if metadata.len() == 0 {
+                    let cipher_type = CipherType::XChaCha20Poly1305_1M;
+                    let nonce_size = cipher_type.nonce_size();
+                    let nonce = vec![0u8; nonce_size];
+                    let cipher = create_cipher(cipher_type, &key, &nonce);
+                    return Ok(DavFile::Encrypted {
+                        file: Box::new(file),
+                        key,
+                        read_buffer: Vec::new(),
+                        encrypted_read_buffer: Vec::new(),
+                        write_buffer: Vec::new(),
+                        pos: 0,
+                        decrypted_len: 0,
+                        nonce,
+                        offset_in_chunk: 0,
+                        read_chunk_idx: 0,
+                        write_chunk_idx: 0,
+                        seeked_after_open: false,
+                        cipher,
+                        write_op_in_progress: false,
+                    });
                 }
-                let enc_size_without_nonce = metadata.len().saturating_sub(NONCE_SIZE as u64);
+
+                let mut cipher_type_byte = [0u8; 1];
+                file.read_exact(&mut cipher_type_byte).await?;
+                let cipher_type = CipherType::from_u8(cipher_type_byte[0])
+                    .map_err(io::Error::other)?;
+
+                let nonce_size = cipher_type.nonce_size();
+                let mut nonce = vec![0u8; nonce_size];
+                file.read_exact(&mut nonce).await?;
+
+                let encrypted_chunk_size = cipher_type.encrypted_chunk_size();
+                let header_size = cipher_type.header_size();
+
+                let enc_size_without_header = metadata.len().saturating_sub(header_size as u64);
                 let write_chunk_idx_initial =
-                    (enc_size_without_nonce / ENCRYPTED_CHUNK_SIZE as u64) as u32;
-                let aead = XChaCha20Poly1305::new(key.as_ref().into());
-                let stream_encryptor = stream::StreamBE32::from_aead(aead, nonce.as_ref().into());
+                    (enc_size_without_header / encrypted_chunk_size as u64) as u32;
+
+                let cipher = create_cipher(cipher_type, &key, &nonce);
+
                 Ok(DavFile::Encrypted {
                     file: Box::new(file),
                     key,
@@ -102,13 +136,13 @@ impl DavFile {
                     encrypted_read_buffer: Vec::new(),
                     write_buffer: Vec::new(),
                     pos: 0,
-                    decrypted_len: decrypted_size(metadata.len()),
+                    decrypted_len: cipher_type.decrypted_size(metadata.len()),
                     nonce,
                     offset_in_chunk: 0,
                     read_chunk_idx: 0,
                     write_chunk_idx: write_chunk_idx_initial,
                     seeked_after_open: false,
-                    stream_encryptor,
+                    cipher,
                     write_op_in_progress: false,
                 })
             }
@@ -165,9 +199,12 @@ impl AsyncRead for DavFile {
                 pos,
                 offset_in_chunk,
                 read_chunk_idx,
-                stream_encryptor,
+                cipher,
                 ..
             } => {
+                let plain_chunk_size = cipher.plain_chunk_size();
+                let cipher_type = cipher.cipher_type();
+                let encrypted_chunk_size = plain_chunk_size + cipher_type.overhead();
                 // first, return any leftover plaintext
                 if !read_buffer.is_empty() {
                     let len = std::cmp::min(buf.remaining(), read_buffer.len());
@@ -182,10 +219,10 @@ impl AsyncRead for DavFile {
                 }
 
                 // fill encrypted_read_buffer to at least one chunk
-                while encrypted_read_buffer.len() < ENCRYPTED_CHUNK_SIZE {
-                    let mut tmp = vec![0u8; ENCRYPTED_CHUNK_SIZE - encrypted_read_buffer.len()];
+                while encrypted_read_buffer.len() < encrypted_chunk_size {
+                    let mut tmp = vec![0u8; encrypted_chunk_size - encrypted_read_buffer.len()];
                     let mut read_buf = ReadBuf::new(&mut tmp);
-                    match Pin::new(&mut *file).poll_read(cx, &mut read_buf) {
+                    match Pin::new(&mut **file).poll_read(cx, &mut read_buf) {
                         Poll::Ready(Ok(())) => {
                             let n = read_buf.filled().len();
                             if n == 0 {
@@ -206,26 +243,9 @@ impl AsyncRead for DavFile {
                     return Poll::Ready(Ok(()));
                 }
 
-                let is_last = encrypted_read_buffer.len() < ENCRYPTED_CHUNK_SIZE;
+                let is_last = encrypted_read_buffer.len() < encrypted_chunk_size;
 
-                /*
-                /// FOR TEST PURPOSE ONLY ////
-                let hash = Sha256::digest(&encrypted_read_buffer);
-                let fp = hash
-                    .iter()
-                    .map(|b| format!("{:02x}", b))
-                    .collect::<String>();
-
-                eprintln!(
-                    "READ chunk_idx={} len={} fp={} is_last={is_last} pos={pos}",
-                    *read_chunk_idx,
-                    encrypted_read_buffer.len(),
-                    fp
-                );
-                ////
-                */
-
-                let mut plaintext = stream_encryptor
+                let mut plaintext = cipher
                     .decrypt(*read_chunk_idx, is_last, encrypted_read_buffer.as_slice())
                     .map_err(|e| io::Error::other(format!("Decryption error: {e}")))?;
 
@@ -273,7 +293,7 @@ impl AsyncWrite for DavFile {
                 decrypted_len,
                 write_chunk_idx,
                 seeked_after_open,
-                stream_encryptor,
+                cipher,
                 write_op_in_progress,
                 ..
             } => {
@@ -296,7 +316,7 @@ impl AsyncWrite for DavFile {
                     file,
                     write_buffer,
                     write_chunk_idx,
-                    stream_encryptor,
+                    cipher,
                     false,
                 ) {
                     Poll::Ready(Ok(())) => {
@@ -321,7 +341,7 @@ impl AsyncWrite for DavFile {
                 write_buffer,
                 write_chunk_idx,
                 seeked_after_open,
-                stream_encryptor,
+                cipher,
                 ..
             } => {
                 if *seeked_after_open {
@@ -335,10 +355,10 @@ impl AsyncWrite for DavFile {
                     file,
                     write_buffer,
                     write_chunk_idx,
-                    stream_encryptor,
+                    cipher,
                     false
                 ))?;
-                Pin::new(file).poll_flush(cx)
+                Pin::new(&mut **file).poll_flush(cx)
             }
         }
     }
@@ -353,7 +373,7 @@ impl AsyncWrite for DavFile {
                 write_buffer,
                 write_chunk_idx,
                 seeked_after_open,
-                stream_encryptor,
+                cipher,
                 ..
             } => {
                 if *seeked_after_open {
@@ -367,10 +387,10 @@ impl AsyncWrite for DavFile {
                     file,
                     write_buffer,
                     write_chunk_idx,
-                    stream_encryptor,
+                    cipher,
                     true
                 ))?;
-                Pin::new(file).poll_shutdown(cx)
+                Pin::new(&mut **file).poll_shutdown(cx)
             }
         }
     }
@@ -389,6 +409,7 @@ impl AsyncSeek for DavFile {
                 offset_in_chunk,
                 read_chunk_idx,
                 seeked_after_open,
+                cipher,
                 ..
             } => {
                 *seeked_after_open = true;
@@ -409,10 +430,12 @@ impl AsyncSeek for DavFile {
                 read_buffer.clear();
                 encrypted_read_buffer.clear();
 
-                let encrypted_pos = encrypted_chunk_start(*pos);
-                *offset_in_chunk = *pos as u32 % PLAIN_CHUNK_SIZE as u32;
-                *read_chunk_idx = *pos as u32 / PLAIN_CHUNK_SIZE as u32;
-                Pin::new(file).start_seek(SeekFrom::Start(encrypted_pos))
+                let plain_chunk_size = cipher.plain_chunk_size();
+                let cipher_type = cipher.cipher_type();
+                let encrypted_pos = cipher_type.encrypted_chunk_start(*pos);
+                *offset_in_chunk = (*pos % plain_chunk_size as u64) as u32;
+                *read_chunk_idx = (*pos / plain_chunk_size as u64) as u32;
+                Pin::new(&mut **file).start_seek(SeekFrom::Start(encrypted_pos))
             }
         }
     }
@@ -421,30 +444,15 @@ impl AsyncSeek for DavFile {
         match self.get_mut() {
             DavFile::Plain(file) => Pin::new(file).poll_complete(cx),
             DavFile::Encrypted { file, pos, .. } => {
-                ready!(Pin::new(file).poll_complete(cx))?;
+                ready!(Pin::new(&mut **file).poll_complete(cx))?;
                 Poll::Ready(Ok(*pos))
             }
         }
     }
 }
 
-fn encrypted_chunk_start(dec_offset: u64) -> u64 {
-    let chunk_idx = dec_offset / PLAIN_CHUNK_SIZE as u64;
-    NONCE_SIZE as u64 + chunk_idx * ENCRYPTED_CHUNK_SIZE as u64
-}
-
 pub fn decrypted_size(enc_size: u64) -> u64 {
-    if enc_size <= NONCE_SIZE as u64 {
-        return 0;
-    }
-    let enc_size_without_nonce = enc_size - NONCE_SIZE as u64;
-    let num_chunks = enc_size_without_nonce.div_ceil(ENCRYPTED_CHUNK_SIZE as u64);
-    if num_chunks == 0 {
-        return 0;
-    }
-    let last_chunk_size = enc_size_without_nonce - (num_chunks - 1) * ENCRYPTED_CHUNK_SIZE as u64;
-    (num_chunks - 1) * PLAIN_CHUNK_SIZE as u64
-        + (last_chunk_size.saturating_sub(ENCRYPTION_OVERHEAD as u64))
+    CipherType::XChaCha20Poly1305_1M.decrypted_size(enc_size)
 }
 
 fn poll_write_chunks(
@@ -452,35 +460,20 @@ fn poll_write_chunks(
     file: &mut File,
     write_buffer: &mut Vec<u8>,
     write_chunk_idx: &mut u32,
-    stream_encryptor: &mut StreamBE32<XChaCha20Poly1305>,
+    cipher: &mut Box<dyn Cipher>,
     finalize: bool,
 ) -> Poll<io::Result<()>> {
-    while write_buffer.len() >= PLAIN_CHUNK_SIZE || (finalize && !write_buffer.is_empty()) {
-        let is_last = finalize && write_buffer.len() <= PLAIN_CHUNK_SIZE;
-        let chunk_len = std::cmp::min(write_buffer.len(), PLAIN_CHUNK_SIZE);
+    let plain_chunk_size = cipher.plain_chunk_size();
+    while write_buffer.len() >= plain_chunk_size || (finalize && !write_buffer.is_empty()) {
+        let is_last = finalize && write_buffer.len() <= plain_chunk_size;
+        let chunk_len = std::cmp::min(write_buffer.len(), plain_chunk_size);
         let chunk = write_buffer
             .get(..chunk_len)
             .ok_or(io::Error::other(BUFFER_ERROR))?;
 
-        let ciphertext = stream_encryptor
+        let ciphertext = cipher
             .encrypt(*write_chunk_idx, is_last, chunk)
             .map_err(|e| io::Error::other(format!("Encryption error: {}", e)))?;
-
-        /*
-        //// FOR TEST PURPOSE ONLY ////
-        let hash = Sha256::digest(&ciphertext);
-        let fp = hash
-            .iter()
-            .map(|b| format!("{:02x}", b))
-            .collect::<String>();
-        eprintln!(
-            "WROTE chunk_idx={} len={} fp={}",
-            *write_chunk_idx,
-            ciphertext.len(),
-            fp
-        );
-        ////
-        */
 
         // write the ciphertext fully to disk
         let mut written = 0;
@@ -512,26 +505,6 @@ mod tests {
     use super::*;
     use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
-    #[test]
-    fn test_decrypted_size() {
-        let nonce_size = NONCE_SIZE as u64;
-        let encryption_overhead = ENCRYPTION_OVERHEAD as u64;
-        let encrypted_chunk_size = ENCRYPTED_CHUNK_SIZE as u64;
-        let plain_chunk_size = PLAIN_CHUNK_SIZE as u64;
-
-        assert_eq!(decrypted_size(0), 0);
-        assert_eq!(decrypted_size(nonce_size + encryption_overhead), 0);
-        assert_eq!(
-            decrypted_size(nonce_size + 3 * encrypted_chunk_size),
-            3 * plain_chunk_size
-        );
-        assert_eq!(
-            decrypted_size(
-                nonce_size + 3 * encrypted_chunk_size + ENCRYPTION_OVERHEAD as u64 + 150
-            ),
-            3 * plain_chunk_size + 150
-        );
-    }
 
     #[tokio::test]
     async fn test_plain_file() -> io::Result<()> {
@@ -610,7 +583,7 @@ mod tests {
         let dir = tempfile::tempdir()?;
         let path = dir.path().join("large.txt.enc");
         let key = [42u8; 32];
-        let content = vec![0xAB; PLAIN_CHUNK_SIZE * 3 + 123];
+        let content = vec![0xAB; 1_000_000 * 3 + 123];
 
         let mut file = DavFile::create(&path, Some(key)).await?;
         file.write_all(&content).await?;
@@ -625,6 +598,7 @@ mod tests {
 
         Ok(())
     }
+
 
     #[tokio::test]
     async fn test_encrypted_file_truncated() -> io::Result<()> {
@@ -664,11 +638,12 @@ mod tests {
         let dir = tempfile::tempdir()?;
         let path = dir.path().join("large.txt.enc");
         let key = [42u8; 32];
-        let mut content = vec![0u8; PLAIN_CHUNK_SIZE * 2];
-        for i in 0..PLAIN_CHUNK_SIZE {
+        let plain_chunk_size = 1_000_000;
+        let mut content = vec![0u8; plain_chunk_size * 2];
+        for i in 0..plain_chunk_size {
             content[i] = 0xAA;
         }
-        for i in PLAIN_CHUNK_SIZE..(PLAIN_CHUNK_SIZE * 2) {
+        for i in plain_chunk_size..(plain_chunk_size * 2) {
             content[i] = 0xBB;
         }
 
@@ -677,12 +652,12 @@ mod tests {
         file.shutdown().await?;
 
         let mut file = DavFile::open(&path, Some(key)).await?;
-        file.seek(SeekFrom::Start((PLAIN_CHUNK_SIZE - 5) as u64))
+        file.seek(SeekFrom::Start((plain_chunk_size - 5) as u64))
             .await?;
         let mut buf = [0u8; 10];
         file.read_exact(&mut buf).await?;
 
-        assert_eq!(&buf, &content[PLAIN_CHUNK_SIZE - 5..PLAIN_CHUNK_SIZE + 5]);
+        assert_eq!(&buf, &content[plain_chunk_size - 5..plain_chunk_size + 5]);
 
         Ok(())
     }
@@ -692,7 +667,7 @@ mod tests {
         let dir = tempfile::tempdir()?;
         let path = dir.path().join("large_byte_by_byte.txt.enc");
         let key = [88u8; 32];
-        let content = vec![0xAB; PLAIN_CHUNK_SIZE * 2 + 555];
+        let content = vec![0xAB; 1_000_000 * 2 + 555];
 
         let mut file = DavFile::create(&path, Some(key)).await?;
         file.write_all(&content).await?;
