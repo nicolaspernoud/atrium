@@ -1,13 +1,13 @@
 use filetime::{FileTime, set_file_times};
 use std::env;
 use std::fs::{self, File};
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::Path;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
-        eprintln!("Usage: {} <encrypted_dir>", args.get(0).expect("args"));
+        eprintln!("Usage: {} <encrypted_dir>", args.first().expect("args"));
         std::process::exit(1);
     }
 
@@ -61,9 +61,6 @@ fn convert_file(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Converting: {:?}", path);
 
-    let mut content = Vec::new();
-    file.read_to_end(&mut content)?;
-
     let mut new_path = path.to_path_buf();
     let original_file_name = path.file_name().ok_or("Invalid file name")?;
     let mut new_file_name = original_file_name.to_os_string();
@@ -75,7 +72,7 @@ fn convert_file(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
         let cipher_type: u8 = 0; // XChaCha20Poly1305_1M
 
         new_file.write_all(&[cipher_type])?;
-        new_file.write_all(&content)?;
+        std::io::copy(&mut file, &mut new_file)?;
     }
 
     fs::rename(&new_path, path)?;

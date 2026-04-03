@@ -5,6 +5,12 @@ It comes with a multiplatform client application.
 
 Rust/Flutter version of Vestibule.
 
+## ⚠️ Breaking change ⚠️
+
+From version 1.8.0 atrium encrypted file format changed to ensure future crypto agility.
+To migrate from 1.7.x to 1.8+ use the `backend/src/bin/convert_encryption.rs` binary to convert encrypted files to the new format.
+The encryption key is not needed since it is only an encryption type prefix added to every files.
+
 ## Installation
 
 Example service installation can be found [HERE](https://github.com/nicolaspernoud/atrium/blob/main/scripts/systemd/install_atrium.sh).

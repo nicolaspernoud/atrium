@@ -69,6 +69,19 @@ impl CipherType {
         (num_chunks - 1) * plain_chunk_size
             + (last_chunk_size.saturating_sub(overhead))
     }
+
+    pub fn create_cipher(&self, key: &[u8; 32], nonce: &[u8]) -> Box<dyn Cipher> {
+        match self {
+            CipherType::XChaCha20Poly1305_1M => {
+                let aead = XChaCha20Poly1305::new(key.into());
+                let stream_encryptor = stream::StreamBE32::from_aead(aead, nonce.into());
+                Box::new(XChaCha20Poly1305Cipher {
+                    stream_encryptor,
+                    cipher_type: *self,
+                })
+            }
+        }
+    }
 }
 
 pub trait Cipher: Send + Sync {
@@ -105,22 +118,6 @@ impl Cipher for XChaCha20Poly1305Cipher {
     }
 }
 
-pub fn create_cipher(
-    cipher_type: CipherType,
-    key: &[u8; 32],
-    nonce: &[u8],
-) -> Box<dyn Cipher> {
-    match cipher_type {
-        CipherType::XChaCha20Poly1305_1M => {
-            let aead = XChaCha20Poly1305::new(key.into());
-            let stream_encryptor = stream::StreamBE32::from_aead(aead, nonce.into());
-            Box::new(XChaCha20Poly1305Cipher {
-                stream_encryptor,
-                cipher_type,
-            })
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {
