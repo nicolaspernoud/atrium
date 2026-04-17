@@ -208,6 +208,7 @@ fn setup_logger(debug_mode: bool, log_to_file: bool) -> Vec<WorkerGuard> {
         guards.push(guard);
         let file_writer = fmt::Layer::new()
             .with_ansi(false)
+            .with_target(false)
             .with_timer(timer)
             .with_writer(non_blocking);
         Some(file_writer)
