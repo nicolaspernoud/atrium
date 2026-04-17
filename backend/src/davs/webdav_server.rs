@@ -22,7 +22,9 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
-use super::{dav_file::decrypted_size, headers::Depth, model::Dav};
+use super::{
+    dav_file::{decrypted_size_from_file}, headers::Depth, model::Dav,
+};
 use crate::{
     davs::{dav_file::DavFile, headers::Overwrite},
     utils::extract_query_pairs,
@@ -895,7 +897,7 @@ impl WebdavServer {
         let size = match path_type {
             PathType::Dir | PathType::SymlinkDir => None,
             PathType::File | PathType::SymlinkFile => Some(if key.is_some() {
-                decrypted_size(meta.len())
+                decrypted_size_from_file(path, meta.len()).await
             } else {
                 meta.len()
             }),

@@ -1,3 +1,4 @@
+pub mod crypto;
 pub mod dav_file;
 pub mod error;
 pub(crate) mod headers;

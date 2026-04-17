@@ -99,9 +99,10 @@ pub async fn onlyoffice_page(
         .map_err(|_| QUERY_ERROR)?;
         let url = format!("{file}?token={share_token}");
 
-        let mut hasher = Sha256::new();
-        hasher.update(format!("{file}{mtime}"));
-        let key: String = format!("{:X}", hasher.finalize());
+        let key = Sha256::digest(format!("{file}{mtime}"))
+            .iter()
+            .map(|b| format!("{:02x}", b))
+            .collect::<String>();
 
         let mut ooconf = OnlyOfficeConfiguration {
             document: Document {
