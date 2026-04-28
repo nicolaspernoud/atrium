@@ -51,7 +51,7 @@ impl Server {
         let http_port = config.0.http_port;
         let single_proxy = config.0.single_proxy;
         #[cfg(target_os = "linux")]
-        let jail = Jail::new_from_config(&config.0.jail);
+        let jail = Jail::new_from_config(&config.0.jail).await;
 
         // Start pruning task once a day
         #[cfg(target_os = "linux")]
@@ -61,7 +61,7 @@ impl Server {
                 let mut interval =
                     tokio::time::interval(tokio::time::Duration::from_secs(24 * 3600));
                 loop {
-                    jail_clone.prune_expired_rules();
+                    jail_clone.prune_expired_rules().await;
                     interval.tick().await;
                 }
             });
@@ -142,14 +142,30 @@ impl Server {
                 )),
             );
 
+        let proxy_router = proxy_handler::<Client>
+            .layer(middleware::from_fn_with_state(
+                state.clone(),
+                auth_middleware,
+            ))
+            .with_state(state.clone());
+        let unsecure_proxy_router = proxy_handler::<InsecureSkipVerifyClient>
+            .layer(middleware::from_fn_with_state(
+                state.clone(),
+                auth_middleware,
+            ))
+            .with_state(state.clone());
         let router = if single_proxy {
             let main_router = main_router
-                .fallback(
-                    proxy_handler::<Client>.layer(middleware::from_fn_with_state(
-                        state.clone(),
-                        auth_middleware,
-                    )),
-                )
+                .fallback(any(
+                    |hostype: Option<HostType>, request: Request<Body>| async move {
+                        match hostype {
+                            Some(HostType::SkipVerifyReverseApp(_)) => {
+                                unsecure_proxy_router.oneshot(request).await
+                            }
+                            _ => proxy_router.oneshot(request).await,
+                        }
+                    },
+                ))
                 .with_state(state.clone());
             any(|_: Option<HostType>, request: Request<Body>| async move {
                 main_router.oneshot(request).await
@@ -157,18 +173,6 @@ impl Server {
         } else {
             let main_router = main_router
                 .fallback(crate::web::static_handler)
-                .with_state(state.clone());
-            let proxy_router = proxy_handler::<Client>
-                .layer(middleware::from_fn_with_state(
-                    state.clone(),
-                    auth_middleware,
-                ))
-                .with_state(state.clone());
-            let unsecure_proxy_router = proxy_handler::<InsecureSkipVerifyClient>
-                .layer(middleware::from_fn_with_state(
-                    state.clone(),
-                    auth_middleware,
-                ))
                 .with_state(state.clone());
             let webdav_router = webdav_handler
                 .layer(middleware::from_fn_with_state(

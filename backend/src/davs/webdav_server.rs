@@ -45,15 +45,15 @@ use hyper::{
         CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, HeaderValue, RANGE,
     },
 };
+use dashmap::DashMap;
 use quick_xml::{Reader, escape::escape, events::Event};
 use serde::Serialize;
 use std::{
     borrow::Cow,
-    collections::HashMap,
     io::{Error, SeekFrom},
     net::SocketAddr,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::Arc,
     time::SystemTime,
 };
 use tokio::io::AsyncWriteExt;
@@ -84,7 +84,7 @@ pub struct LockInfo {
     expires_at: DateTime<Utc>,
 }
 
-pub type LockMap = Arc<Mutex<HashMap<PathBuf, LockInfo>>>;
+pub type LockMap = Arc<DashMap<PathBuf, LockInfo>>;
 
 pub struct WebdavServer {
     locks: LockMap,
@@ -93,7 +93,7 @@ pub struct WebdavServer {
 impl WebdavServer {
     pub fn new() -> Self {
         Self {
-            locks: Arc::new(Mutex::new(HashMap::new())),
+            locks: Arc::new(DashMap::new()),
         }
     }
 
@@ -351,9 +351,7 @@ impl WebdavServer {
             true => fs::remove_dir_all(path).await?,
             false => fs::remove_file(path).await?,
         }
-        if let Ok(mut locks) = self.locks.lock() {
-            locks.remove(path);
-        }
+        self.locks.remove(path);
 
         status_no_content(res);
         Ok(())
@@ -642,99 +640,92 @@ impl WebdavServer {
         is_miss: bool,
         res: &mut Response,
     ) -> BoxResult<()> {
-        if let Ok(mut locks) = self.locks.lock() {
-            debug!("LockMap on lock: {:?}", locks);
-            clean_expired_locks(&mut locks);
+        debug!("LockMap on lock: {:?}", self.locks);
+        clean_expired_locks(&self.locks);
 
-            if locks.contains_key(path) {
-                *res.status_mut() = StatusCode::LOCKED;
-                *res.body_mut() = Body::from("Resource is already locked");
-                return Ok(());
-            }
+        if self.locks.contains_key(path) {
+            *res.status_mut() = StatusCode::LOCKED;
+            *res.body_mut() = Body::from("Resource is already locked");
+            return Ok(());
+        }
 
-            let timeout_secs = parse_timeout_header(req.headers());
+        let timeout_secs = parse_timeout_header(req.headers());
 
-            let token = format!("opaquelocktoken:{}", Uuid::new_v4());
-            locks.insert(
-                path.to_path_buf(),
-                LockInfo {
-                    token: token.clone(),
-                    expires_at: Utc::now() + Duration::seconds(timeout_secs),
-                },
-            );
-            drop(locks);
+        let token = format!("opaquelocktoken:{}", Uuid::new_v4());
+        self.locks.insert(
+            path.to_path_buf(),
+            LockInfo {
+                token: token.clone(),
+                expires_at: Utc::now() + Duration::seconds(timeout_secs),
+            },
+        );
 
-            // Timeout header in response
-            let timeout_resp = if timeout_secs == i64::MAX {
-                "Infinite".to_string()
-            } else {
-                format!("Second-{timeout_secs}")
-            };
-            res.headers_mut().insert(
-                CONTENT_TYPE,
-                HeaderValue::from_static("application/xml; charset=utf-8"),
-            );
-            res.headers_mut()
-                .insert("lock-token", format!("<{token}>").parse()?);
-            res.headers_mut()
-                .insert("Timeout", HeaderValue::from_str(&timeout_resp)?);
+        // Timeout header in response
+        let timeout_resp = if timeout_secs == i64::MAX {
+            "Infinite".to_string()
+        } else {
+            format!("Second-{timeout_secs}")
+        };
+        res.headers_mut().insert(
+            CONTENT_TYPE,
+            HeaderValue::from_static("application/xml; charset=utf-8"),
+        );
+        res.headers_mut()
+            .insert("lock-token", format!("<{token}>").parse()?);
+        res.headers_mut()
+            .insert("Timeout", HeaderValue::from_str(&timeout_resp)?);
 
-            *res.body_mut() = Body::from(format!(
-                r#"<?xml version="1.0" encoding="utf-8"?>
+        *res.body_mut() = Body::from(format!(
+            r#"<?xml version="1.0" encoding="utf-8"?>
 <D:prop xmlns:D="DAV:"><D:lockdiscovery><D:activelock>
 <D:locktoken><D:href>{}</D:href></D:locktoken>
 <D:lockroot><D:href>{}</D:href></D:lockroot>
 <D:timeout>{}</D:timeout>
 </D:activelock></D:lockdiscovery></D:prop>"#,
-                token,
-                req.uri().path(),
-                timeout_resp
-            ));
-            if is_miss {
-                *res.status_mut() = StatusCode::CREATED;
-            }
-        } else {
-            *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+            token,
+            req.uri().path(),
+            timeout_resp
+        ));
+        if is_miss {
+            *res.status_mut() = StatusCode::CREATED;
         }
         Ok(())
     }
 
     fn handle_unlock(&self, path: &Path, req: Request, res: &mut Response) -> BoxResult<()> {
-        if let Ok(mut locks) = self.locks.lock() {
-            clean_expired_locks(&mut locks);
-            debug!("LockMap on lock: {:?}", locks);
+        clean_expired_locks(&self.locks);
+        debug!("LockMap on lock: {:?}", self.locks);
 
-            // Extract Lock-Token header
-            let token_header = req
-                .headers()
-                .get("Lock-Token")
-                .and_then(|v| v.to_str().ok())
-                .map(|s| s.trim_matches(['<', '>'].as_ref()));
-            let token_header = if let Some(t) = token_header {
-                t
-            } else {
-                *res.status_mut() = StatusCode::BAD_REQUEST;
-                *res.body_mut() = Body::from("Missing Lock-Token header");
-                return Ok(());
-            };
-
-            // Check if lock exists and token matches
-            match locks.get(path) {
-                Some(lock_info) if lock_info.token == token_header => {
-                    locks.remove(path);
-                    *res.status_mut() = StatusCode::NO_CONTENT;
-                }
-                Some(_) => {
-                    *res.status_mut() = StatusCode::FORBIDDEN;
-                    *res.body_mut() = Body::from("Lock-Token does not match");
-                }
-                None => {
-                    *res.status_mut() = StatusCode::NOT_FOUND;
-                    *res.body_mut() = Body::from("No lock found on resource");
-                }
-            }
+        // Extract Lock-Token header
+        let token_header = req
+            .headers()
+            .get("Lock-Token")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.trim_matches(['<', '>'].as_ref()));
+        let token_header = if let Some(t) = token_header {
+            t
         } else {
-            *res.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+            *res.status_mut() = StatusCode::BAD_REQUEST;
+            *res.body_mut() = Body::from("Missing Lock-Token header");
+            return Ok(());
+        };
+
+        // Check if lock exists and token matches
+        match self.locks.get(path) {
+            Some(lock_info) if lock_info.token == token_header => {
+                // avoid deadlock
+                drop(lock_info);
+                self.locks.remove(path);
+                *res.status_mut() = StatusCode::NO_CONTENT;
+            }
+            Some(_) => {
+                *res.status_mut() = StatusCode::FORBIDDEN;
+                *res.body_mut() = Body::from("Lock-Token does not match");
+            }
+            None => {
+                *res.status_mut() = StatusCode::NOT_FOUND;
+                *res.body_mut() = Body::from("No lock found on resource");
+            }
         }
         Ok(())
     }
@@ -1389,7 +1380,7 @@ impl Destination {
     }
 }
 
-fn clean_expired_locks(locks: &mut HashMap<PathBuf, LockInfo>) {
+fn clean_expired_locks(locks: &DashMap<PathBuf, LockInfo>) {
     let now = Utc::now();
     locks.retain(|_, info| now < info.expires_at);
 }

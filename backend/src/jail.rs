@@ -1,73 +1,95 @@
 use crate::OptionalJail;
 use crate::configuration::JailConfig;
+use dashmap::{DashMap, DashSet};
 use iptables::IPTables;
-use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
-use std::sync::Mutex;
+use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tracing::{info, warn};
 
 pub struct Jail {
     config: JailConfig,
-    failures: Mutex<HashMap<IpAddr, Vec<Instant>>>,
-    banned_ips: Mutex<HashSet<IpAddr>>,
-    ipt: IPTables,
-    ipt6: IPTables,
+    failures: DashMap<IpAddr, Vec<Instant>>,
+    banned_ips: DashSet<IpAddr>,
+    ipt: Arc<IPTables>,
+    ipt6: Arc<IPTables>,
 }
 
 impl Jail {
-    pub fn new_from_config(jail_config: &JailConfig) -> OptionalJail {
+    pub async fn new_from_config(jail_config: &JailConfig) -> OptionalJail {
         let mut jail = None;
         if jail_config.enabled {
             let ipt = iptables::new(false).ok();
             let ipt6 = iptables::new(true).ok();
-            if let (Some(ipt), Some(ipt6)) = (ipt, ipt6)
-                && Jail::init_iptables(&ipt).is_ok()
-                && Jail::init_iptables(&ipt6).is_ok()
-            {
-                jail = Some(std::sync::Arc::new({
-                    let jail = Self {
+            if let (Some(ipt), Some(ipt6)) = (ipt, ipt6) {
+                let ipt = Arc::new(ipt);
+                let ipt6 = Arc::new(ipt6);
+                if Self::init_iptables(Arc::clone(&ipt)).await.is_ok()
+                    && Self::init_iptables(Arc::clone(&ipt6)).await.is_ok()
+                {
+                    let jail_obj = Self {
                         config: jail_config.clone(),
-                        failures: Mutex::new(HashMap::new()),
-                        banned_ips: Mutex::new(HashSet::new()),
+                        failures: DashMap::new(),
+                        banned_ips: DashSet::new(),
                         ipt,
                         ipt6,
                     };
-                    jail.load_banned_ips();
-                    jail
-                }));
+                    jail_obj.load_banned_ips().await;
+                    jail = Some(std::sync::Arc::new(jail_obj));
+                }
             }
         }
         jail
     }
 
-    pub fn init_iptables(ipt: &IPTables) -> Result<(), Box<dyn std::error::Error>> {
-        if !ipt.chain_exists("filter", "ATRIUM_JAIL").unwrap_or(false) {
-            ipt.new_chain("filter", "ATRIUM_JAIL")?;
-            info!("Created {} chain ATRIUM_JAIL", ipt.cmd);
-        }
-        if !ipt
-            .exists("filter", "INPUT", "-j ATRIUM_JAIL")
-            .unwrap_or(false)
-        {
-            ipt.insert("filter", "INPUT", "-j ATRIUM_JAIL", 1)?;
-            info!("Linked {} chain ATRIUM_JAIL to INPUT", ipt.cmd);
-        }
-        Ok(())
+    pub async fn init_iptables(
+        ipt: Arc<IPTables>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        tokio::task::spawn_blocking(move || {
+            if !ipt.chain_exists("filter", "ATRIUM_JAIL").unwrap_or(false) {
+                ipt.new_chain("filter", "ATRIUM_JAIL")
+                    .map_err(|e| e.to_string())?;
+                info!("Created {} chain ATRIUM_JAIL", ipt.cmd);
+            }
+            if !ipt
+                .exists("filter", "INPUT", "-j ATRIUM_JAIL")
+                .unwrap_or(false)
+            {
+                ipt.insert("filter", "INPUT", "-j ATRIUM_JAIL", 1)
+                    .map_err(|e| e.to_string())?;
+                info!("Linked {} chain ATRIUM_JAIL to INPUT", ipt.cmd);
+            }
+            Ok(())
+        })
+        .await
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?
+        .map_err(|e: String| e.into())
     }
 
-    fn load_banned_ips(&self) {
-        let mut banned = self.banned_ips.lock().expect("mutex poisoned");
-        for ipt in [&self.ipt, &self.ipt6] {
-            if let Ok(rules) = ipt.list("filter", "ATRIUM_JAIL") {
-                for rule in rules {
-                    if let Some(ip) = Self::extract_ip(&rule) {
-                        banned.insert(ip);
+    async fn load_banned_ips(&self) {
+        let ipt = Arc::clone(&self.ipt);
+        let ipt6 = Arc::clone(&self.ipt6);
+
+        let ips = tokio::task::spawn_blocking(move || {
+            let mut ips = Vec::new();
+            for ipt_tool in [&ipt, &ipt6] {
+                if let Ok(rules) = ipt_tool.list("filter", "ATRIUM_JAIL") {
+                    for rule in rules {
+                        if let Some(ip) = Self::extract_ip(&rule) {
+                            ips.push(ip);
+                        }
                     }
                 }
             }
+            ips
+        })
+        .await
+        .unwrap_or_default();
+
+        for ip in ips {
+            self.banned_ips.insert(ip);
         }
-        info!("Loaded {} banned IPs from iptables", banned.len());
+        info!("Loaded {} banned IPs from iptables", self.banned_ips.len());
     }
 
     pub fn extract_ip(rule: &str) -> Option<IpAddr> {
@@ -82,7 +104,7 @@ impl Jail {
         None
     }
 
-    pub fn report_failure(&self, ip: IpAddr) {
+    pub async fn report_failure(&self, ip: IpAddr) {
         let ip = Self::normalize_ip(ip);
 
         if ip.is_loopback()
@@ -92,18 +114,19 @@ impl Jail {
             return;
         }
 
-        let mut failures = self.failures.lock().expect("mutex poisoned");
         let now = Instant::now();
-        let entry = failures.entry(ip).or_default();
+        let mut entry = self.failures.entry(ip).or_default();
 
         if Self::update_failures(
-            entry,
+            entry.value_mut(),
             now,
             Duration::from_secs(self.config.find_time),
             self.config.max_retry,
         ) {
-            self.ban_ip(ip);
-            failures.remove(&ip);
+            // avoid deadlock
+            drop(entry);
+            self.ban_ip(ip).await;
+            self.failures.remove(&ip);
         }
     }
 
@@ -132,14 +155,11 @@ impl Jail {
         entry.len() >= max_retry as usize
     }
 
-    fn ban_ip(&self, ip: IpAddr) {
-        {
-            let mut banned = self.banned_ips.lock().expect("mutex poisoned");
-            if banned.contains(&ip) {
-                return;
-            }
-            banned.insert(ip);
+    async fn ban_ip(&self, ip: IpAddr) {
+        if self.banned_ips.contains(&ip) {
+            return;
         }
+        self.banned_ips.insert(ip);
 
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -147,12 +167,22 @@ impl Jail {
             .as_secs();
 
         let (rule, is_ipv6) = Self::generate_ban_rule(ip, timestamp);
-        let ipt = if is_ipv6 { &self.ipt6 } else { &self.ipt };
-
-        if let Err(e) = ipt.append("filter", "ATRIUM_JAIL", &rule) {
-            warn!("Failed to ban IP {}: {}", ip, e);
+        let ipt = if is_ipv6 {
+            Arc::clone(&self.ipt6)
         } else {
-            info!("BANNED IP: {}", ip);
+            Arc::clone(&self.ipt)
+        };
+
+        let res = tokio::task::spawn_blocking(move || {
+            ipt.append("filter", "ATRIUM_JAIL", &rule)
+                .map_err(|e| e.to_string())
+        })
+        .await;
+
+        match res {
+            Ok(Err(e)) => warn!("Failed to ban IP {}: {}", ip, e),
+            Ok(Ok(_)) => info!("BANNED IP: {}", ip),
+            Err(e) => warn!("Task join error during ban IP {}: {}", ip, e),
         }
     }
 
@@ -163,33 +193,42 @@ impl Jail {
         (rule, is_ipv6)
     }
 
-    pub fn prune_expired_rules(&self) {
+    pub async fn prune_expired_rules(&self) {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
         let ban_duration = self.config.ban_time * 24 * 3600;
 
-        let mut banned = self.banned_ips.lock().expect("mutex poisoned");
+        let ipt = Arc::clone(&self.ipt);
+        let ipt6 = Arc::clone(&self.ipt6);
 
-        for ipt in [&self.ipt, &self.ipt6] {
-            if let Ok(rules) = ipt.list("filter", "ATRIUM_JAIL") {
-                for rule in rules {
-                    if let Some(timestamp) = Self::extract_timestamp(&rule)
-                        && now > timestamp + ban_duration
-                        && let Some(rule_content) = rule.strip_prefix("-A ATRIUM_JAIL ")
-                    {
-                        if let Err(e) = ipt.delete("filter", "ATRIUM_JAIL", rule_content) {
-                            warn!("Failed to delete expired rule {}: {}", rule, e);
-                        } else {
-                            if let Some(ip) = Self::extract_ip(&rule) {
-                                banned.remove(&ip);
-                                info!("UNBANNED IP: {}", ip);
+        let unbanned_ips = tokio::task::spawn_blocking(move || {
+            let mut unbanned = Vec::new();
+            for ipt_tool in [&ipt, &ipt6] {
+                if let Ok(rules) = ipt_tool.list("filter", "ATRIUM_JAIL") {
+                    for rule in rules {
+                        if let Some(timestamp) = Self::extract_timestamp(&rule)
+                            && now > timestamp + ban_duration
+                            && let Some(rule_content) = rule.strip_prefix("-A ATRIUM_JAIL ")
+                        {
+                            if let Err(e) = ipt_tool.delete("filter", "ATRIUM_JAIL", rule_content) {
+                                warn!("Failed to delete expired rule {}: {}", rule, e);
+                            } else if let Some(ip) = Self::extract_ip(&rule) {
+                                unbanned.push(ip);
                             }
                         }
                     }
                 }
             }
+            unbanned
+        })
+        .await
+        .unwrap_or_default();
+
+        for ip in unbanned_ips {
+            self.banned_ips.remove(&ip);
+            info!("UNBANNED IP: {}", ip);
         }
     }
 
@@ -349,13 +388,13 @@ mod tests {
         assert!(!config.whitelist.contains(&"8.8.8.8".parse().unwrap()));
     }
 
-    #[test]
-    fn test_jail_disabled() {
+    #[tokio::test]
+    async fn test_jail_disabled() {
         let config = JailConfig {
             enabled: false,
             ..Default::default()
         };
-        let jail = Jail::new_from_config(&config);
+        let jail = Jail::new_from_config(&config).await;
         assert!(jail.is_none());
     }
 }

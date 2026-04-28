@@ -203,7 +203,7 @@ where
                     Err(e) => {
                         #[cfg(target_os = "linux")]
                         if let Some(jail) = jail {
-                            jail.report_failure(addr.0.ip());
+                            jail.report_failure(addr.0.ip()).await;
                         }
                         return Err((e.0, "no user found in basic auth").into_response());
                     }
@@ -298,13 +298,16 @@ pub async fn local_auth(
     Json(payload): Json<LocalAuth>,
 ) -> Result<(PrivateCookieJar, Json<AuthResponse>), (StatusCode, &'static str)> {
     // Find the user in configuration
-    let (user, user_token) = authenticate_local_user(&config, payload, MAXMIND_READER.get(), addr)
-        .inspect_err(|_| {
+    let (user, user_token) = match authenticate_local_user(&config, payload, MAXMIND_READER.get(), addr) {
+        Ok(v) => v,
+        Err(e) => {
             #[cfg(target_os = "linux")]
             if let Some(jail) = jail {
-                jail.report_failure(addr.ip());
+                jail.report_failure(addr.ip()).await;
             }
-        })?;
+            return Err(e);
+        }
+    };
     let cookie = create_user_cookie(
         &user_token,
         &host,

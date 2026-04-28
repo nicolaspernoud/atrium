@@ -124,7 +124,7 @@ pub async fn dav_auth_middleware(
     {
         #[cfg(target_os = "linux")]
         if let Some(jail) = jail {
-            jail.report_failure(addr.ip());
+            jail.report_failure(addr.ip()).await;
         }
         info!("FILE ACCESS DENIED: {log_str}");
         return match err {

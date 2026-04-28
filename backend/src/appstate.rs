@@ -3,6 +3,9 @@ use crate::configuration::{Config, HostType};
 use crate::jail::Jail;
 use axum::{body::Body, extract::FromRef};
 use axum_extra::extract::cookie::Key;
+use http::Request;
+use hyper::Response;
+use hyper::body::Incoming;
 use hyper_hickory::{HickoryResolver, TokioHickoryResolver};
 use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
 use hyper_util::{client::legacy::connect::HttpConnector, rt::TokioExecutor};
@@ -17,10 +20,24 @@ pub type OptionalMaxMindReader = Option<&'static Reader<Vec<u8>>>;
 pub type ConfigMap = Arc<HashMap<String, HostType>>;
 pub type ConfigFile = Arc<String>;
 pub type ConfigState = Arc<Config>;
-pub type Client =
-    hyper_util::client::legacy::Client<HttpsConnector<HttpConnector<TokioHickoryResolver>>, Body>;
-pub type InsecureSkipVerifyClient =
-    hyper_util::client::legacy::Client<HttpsConnector<HttpConnector>, Body>;
+pub struct Client(
+    pub hyper_util::client::legacy::Client<HttpsConnector<HttpConnector<TokioHickoryResolver>>, Body>,
+);
+pub struct InsecureSkipVerifyClient(
+    pub hyper_util::client::legacy::Client<HttpsConnector<HttpConnector<TokioHickoryResolver>>, Body>,
+);
+
+impl Clone for Client {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+
+impl Clone for InsecureSkipVerifyClient {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
 
 pub static MAXMIND_READER: OnceLock<Reader<Vec<u8>>> = OnceLock::new();
 
@@ -58,19 +75,18 @@ impl AppState {
             .with_webpki_roots()
             .https_or_http()
             .enable_http1()
-            .wrap_connector(dns_resolver);
+            .wrap_connector(dns_resolver.clone());
 
         let client: hyper_util::client::legacy::Client<_, Body> =
             hyper_util::client::legacy::Client::builder(TokioExecutor::new())
                 .http1_title_case_headers(true)
                 .build(rustls_connector);
 
-        // Create an unsecure HTTPS Client that use the default DNS resolver
         let unsecure_connector = HttpsConnectorBuilder::new()
             .with_tls_config(get_rustls_config_dangerous())
             .https_or_http()
             .enable_http1()
-            .build();
+            .wrap_connector(dns_resolver);
 
         let unsecure_client = hyper_util::client::legacy::Client::builder(TokioExecutor::new())
             .http1_title_case_headers(true)
@@ -81,8 +97,8 @@ impl AppState {
             config,
             config_map,
             config_file: Arc::new(config_file),
-            client,
-            insecure_skip_verify_client: unsecure_client,
+            client: Client(client),
+            insecure_skip_verify_client: InsecureSkipVerifyClient(unsecure_client),
             #[cfg(target_os = "linux")]
             jail,
         }
@@ -122,6 +138,40 @@ impl FromRef<AppState> for Client {
 impl FromRef<AppState> for InsecureSkipVerifyClient {
     fn from_ref(state: &AppState) -> Self {
         state.insecure_skip_verify_client.clone()
+    }
+}
+
+impl tower_service::Service<Request<Body>> for Client {
+    type Response = Response<Incoming>;
+    type Error = hyper_util::client::legacy::Error;
+    type Future = hyper_util::client::legacy::ResponseFuture;
+
+    fn poll_ready(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        self.0.poll_ready(cx)
+    }
+
+    fn call(&mut self, req: Request<Body>) -> Self::Future {
+        self.0.call(req)
+    }
+}
+
+impl tower_service::Service<Request<Body>> for InsecureSkipVerifyClient {
+    type Response = Response<Incoming>;
+    type Error = hyper_util::client::legacy::Error;
+    type Future = hyper_util::client::legacy::ResponseFuture;
+
+    fn poll_ready(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        self.0.poll_ready(cx)
+    }
+
+    fn call(&mut self, req: Request<Body>) -> Self::Future {
+        self.0.call(req)
     }
 }
 
