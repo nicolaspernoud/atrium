@@ -181,7 +181,7 @@ class ExplorerState extends State<Explorer> {
                         icon: const Icon(Icons.upload),
                         onPressed: () async {
                           file_picker.FilePickerResult? result =
-                              await file_picker.FilePicker.platform.pickFiles(
+                              await file_picker.FilePicker.pickFiles(
                                 allowMultiple: true,
                                 withReadStream: true,
                               );

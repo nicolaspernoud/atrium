@@ -44,7 +44,7 @@ class AppWebViewState extends State<AppWebView> {
       final androidController = controller.platform as AndroidWebViewController;
       androidController.setOnShowFileSelector((params) async {
         file_picker.FilePickerResult? result =
-            await file_picker.FilePicker.platform.pickFiles();
+            await file_picker.FilePicker.pickFiles();
         if (result != null && result.files.single.path != null) {
           File file = File(result.files.single.path!);
           return [file.uri.toString()];
