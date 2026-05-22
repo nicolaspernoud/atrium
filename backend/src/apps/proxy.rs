@@ -262,7 +262,7 @@ where
         let proxied_request = Request::from_parts(parts, Body::from(bytes));
     */
     let mut response = client.call(proxied_request).await.map_err(|e| {
-        tracing::error!("error connecting to backend: {:?}", e);
+        //tracing::error!("error connecting to backend: {:?}", e);
         ProxyError::ClientError(
             "error connecting to backend, use option to skip TLS certificate verification if needed",
         )

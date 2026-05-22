@@ -42,9 +42,7 @@ impl Jail {
         jail
     }
 
-    pub async fn init_iptables(
-        ipt: Arc<IPTables>,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn init_iptables(ipt: Arc<IPTables>) -> Result<(), String> {
         tokio::task::spawn_blocking(move || {
             if !ipt.chain_exists("filter", "ATRIUM_JAIL").unwrap_or(false) {
                 ipt.new_chain("filter", "ATRIUM_JAIL")
@@ -62,8 +60,7 @@ impl Jail {
             Ok(())
         })
         .await
-        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?
-        .map_err(|e: String| e.into())
+        .map_err(|e| e.to_string())?
     }
 
     async fn load_banned_ips(&self) {

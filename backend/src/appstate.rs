@@ -6,9 +6,9 @@ use axum_extra::extract::cookie::Key;
 use http::Request;
 use hyper::Response;
 use hyper::body::Incoming;
-use hyper_hickory::{HickoryResolver, TokioHickoryResolver};
+use hyper_hickory::{TokioHickoryHttpConnector, TokioHickoryResolver};
 use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
-use hyper_util::{client::legacy::connect::HttpConnector, rt::TokioExecutor};
+use hyper_util::rt::TokioExecutor;
 use maxminddb::Reader;
 use rustls::ClientConfig;
 use std::{
@@ -21,10 +21,10 @@ pub type ConfigMap = Arc<HashMap<String, HostType>>;
 pub type ConfigFile = Arc<String>;
 pub type ConfigState = Arc<Config>;
 pub struct Client(
-    pub hyper_util::client::legacy::Client<HttpsConnector<HttpConnector<TokioHickoryResolver>>, Body>,
+    pub hyper_util::client::legacy::Client<HttpsConnector<TokioHickoryHttpConnector>, Body>,
 );
 pub struct InsecureSkipVerifyClient(
-    pub hyper_util::client::legacy::Client<HttpsConnector<HttpConnector<TokioHickoryResolver>>, Body>,
+    pub hyper_util::client::legacy::Client<HttpsConnector<TokioHickoryHttpConnector>, Body>,
 );
 
 impl Clone for Client {
@@ -66,31 +66,29 @@ impl AppState {
         }
 
         // Create a secure HTTPS Client that use Hickory as DNS resolver, and get the configuration from system conf
-        let mut dns_resolver = HickoryResolver::from_system_conf()
+        let mut dns_resolver = TokioHickoryResolver::from_system_conf()
             .expect("could not create DNS resolver from system configuration")
             .into_http_connector();
         dns_resolver.enforce_http(false);
 
-        let rustls_connector = HttpsConnectorBuilder::new()
-            .with_webpki_roots()
-            .https_or_http()
-            .enable_http1()
-            .wrap_connector(dns_resolver.clone());
+        let mut client_builder = hyper_util::client::legacy::Client::builder(TokioExecutor::new());
+        client_builder.http1_title_case_headers(true);
 
-        let client: hyper_util::client::legacy::Client<_, Body> =
-            hyper_util::client::legacy::Client::builder(TokioExecutor::new())
-                .http1_title_case_headers(true)
-                .build(rustls_connector);
+        let client = client_builder.build(
+            HttpsConnectorBuilder::new()
+                .with_webpki_roots()
+                .https_or_http()
+                .enable_http1()
+                .wrap_connector(dns_resolver.clone()),
+        );
 
-        let unsecure_connector = HttpsConnectorBuilder::new()
-            .with_tls_config(get_rustls_config_dangerous())
-            .https_or_http()
-            .enable_http1()
-            .wrap_connector(dns_resolver);
-
-        let unsecure_client = hyper_util::client::legacy::Client::builder(TokioExecutor::new())
-            .http1_title_case_headers(true)
-            .build::<_, Body>(unsecure_connector);
+        let unsecure_client = client_builder.build(
+            HttpsConnectorBuilder::new()
+                .with_tls_config(get_rustls_config_dangerous())
+                .https_or_http()
+                .enable_http1()
+                .wrap_connector(dns_resolver),
+        );
 
         AppState {
             key,

@@ -22,9 +22,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
-use super::{
-    dav_file::{decrypted_size_from_file}, headers::Depth, model::Dav,
-};
+use super::{dav_file::decrypted_size_from_file, headers::Depth, model::Dav};
 use crate::{
     davs::{dav_file::DavFile, headers::Overwrite},
     utils::extract_query_pairs,
@@ -33,6 +31,7 @@ use async_walkdir::WalkDir;
 use async_zip::{Compression, ZipEntryBuilder, tokio::write::ZipFileWriter};
 use axum::body::Body;
 use chrono::{DateTime, Duration, TimeZone, Utc};
+use dashmap::DashMap;
 use futures_util::{FutureExt, StreamExt, future::BoxFuture};
 use headers::{
     AcceptRanges, ContentType, HeaderMap, HeaderMapExt, IfModifiedSince, IfNoneMatch, IfRange,
@@ -45,7 +44,6 @@ use hyper::{
         CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, HeaderValue, RANGE,
     },
 };
-use dashmap::DashMap;
 use quick_xml::{Reader, escape::escape, events::Event};
 use serde::Serialize;
 use std::{
@@ -789,11 +787,9 @@ impl WebdavServer {
                 Ok(Event::End(_)) => {
                     in_lastmodified_tag = false;
                 }
-                Ok(Event::Text(e)) => {
-                    if in_lastmodified_tag {
-                        lastmodified_value = e.decode()?.into_owned();
-                        break;
-                    }
+                Ok(Event::Text(e)) if in_lastmodified_tag => {
+                    lastmodified_value = e.decode()?.into_owned();
+                    break;
                 }
                 _ => (),
             }
