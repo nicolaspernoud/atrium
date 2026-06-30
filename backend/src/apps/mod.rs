@@ -32,12 +32,12 @@ mod proxy;
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct App {
-    pub id: usize,
+    pub id: u32,
     #[serde(deserialize_with = "string_trim")]
     pub name: String,
     #[serde(default, skip_serializing_if = "is_default")]
     pub icon: String,
-    pub color: usize,
+    pub color: u32,
     #[serde(default, skip_serializing_if = "is_default")]
     pub is_proxy: bool,
     #[serde(default, skip_serializing_if = "is_default")]
@@ -236,7 +236,7 @@ pub async fn get_apps(
 pub async fn delete_app(
     State(config_file): State<ConfigFile>,
     _admin: AdminToken,
-    Path(app_id): Path<usize>,
+    Path(app_id): Path<u32>,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
     let mut config = config_or_error(&config_file).await?;
     // Find the app
@@ -263,16 +263,19 @@ pub async fn add_app(
 ) -> Result<(StatusCode, &'static str), (StatusCode, &'static str)> {
     // Clone the config
     let mut config = (*config).clone();
+    let status;
     // Find the app
     if let Some(app) = config.apps.iter_mut().find(|a| a.id == payload.id) {
         *app = payload;
+        status = StatusCode::OK;
     } else {
         config.apps.push(payload);
+        status = StatusCode::CREATED;
     }
 
     config
         .to_file_or_internal_server_error(&config_file)
         .await?;
 
-    Ok((StatusCode::CREATED, "app created or updated successfully"))
+    Ok((status, "app created or updated successfully"))
 }

@@ -93,6 +93,14 @@ unused-features analyze --bins --lib --tests && unused-features build-report --i
 flutter run -d chrome --web-hostname atrium.127.0.0.1.nip.io --web-port 3000 --web-browser-flag "--unsafely-treat-insecure-origin-as-secure=http://atrium.127.0.0.1.nip.io:3000"
 ```
 
+## Upgrade guide
+
+- Regenerate a clean flutter project (see below)
+- Upgrade versions in versions.env
+- Upgrade flutter dependencies in pubspec.yml
+- Upgrade Dockerfile and GitHub actions build.yml
+- Upgrade Rust Cargo.toml dependencies
+
 ### Regenerate the frontend
 
 ```

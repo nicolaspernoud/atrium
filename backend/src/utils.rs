@@ -66,7 +66,7 @@ pub(crate) fn is_default<T: Default + PartialEq>(t: &T) -> bool {
     t == &T::default()
 }
 
-const QUERY_ERROR: (StatusCode, &str) = (StatusCode::INTERNAL_SERVER_ERROR, "query is empty");
+const QUERY_ERROR: (StatusCode, &str) = (StatusCode::BAD_REQUEST, "query is empty");
 
 pub fn query_pairs_or_error(
     query: Option<&str>,
@@ -94,14 +94,11 @@ pub fn select_entries_by_value(
     hashmap: &HashMap<String, String>,
     values_to_select: Vec<&str>,
 ) -> Vec<String> {
-    let selected_entries: Vec<(&String, &String)> = hashmap
+    let values_set: std::collections::HashSet<&str> = values_to_select.into_iter().collect();
+    hashmap
         .iter()
-        .filter(|(_, value)| values_to_select.contains(&value.as_str()))
-        .collect();
-
-    selected_entries
-        .iter()
-        .map(|(key, _)| (**key).clone())
+        .filter(|(_, value)| values_set.contains(value.as_str()))
+        .map(|(key, _)| key.clone())
         .collect()
 }
 

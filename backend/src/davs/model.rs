@@ -1,7 +1,7 @@
 use crate::{
     appstate::{ConfigFile, ConfigState},
-    configuration::config_or_error,
     auth::AdminToken,
+    configuration::config_or_error,
     utils::{is_default, option_string_trim, string_trim, vec_trim_remove_empties},
 };
 use axum::{
@@ -98,15 +98,25 @@ pub async fn add_dav(
     // Clone the config
     let mut config = (*config).clone();
     // Find the dav
+    let is_update;
     if let Some(dav) = config.davs.iter_mut().find(|d| d.id == payload.id) {
         *dav = payload;
+        is_update = true;
     } else {
         config.davs.push(payload);
+        is_update = false;
     }
 
     config
         .to_file_or_internal_server_error(&config_file)
         .await?;
 
-    Ok((StatusCode::CREATED, "dav created or updated successfully"))
+    Ok((
+        if is_update {
+            StatusCode::OK
+        } else {
+            StatusCode::CREATED
+        },
+        "dav created or updated successfully",
+    ))
 }

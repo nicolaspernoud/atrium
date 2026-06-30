@@ -190,7 +190,7 @@ async fn shutdown_signal() {
 fn setup_logger(debug_mode: bool, log_to_file: bool) -> Vec<WorkerGuard> {
     let mut guards = Vec::new();
     let time_format =
-        time::format_description::parse("[year]-[month]-[day] [hour]:[minute]:[second]")
+        time::format_description::parse_borrowed::<1>("[year]-[month]-[day] [hour]:[minute]:[second]")
             .expect("format string should be valid!");
     let offset = time::UtcOffset::current_local_offset().expect("should get local offset!");
     let timer = OffsetTime::new(offset, time_format);

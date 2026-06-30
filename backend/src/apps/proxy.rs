@@ -199,8 +199,14 @@ fn create_proxied_request<B>(
         hyper::header::Entry::Occupied(mut entry) => {
             debug!("X-Forwarded-For header was occupied");
             let client_ip_str = client_ip.to_string();
-            let mut addr =
-                String::with_capacity(entry.get().as_bytes().len() + 2 + client_ip_str.len());
+            let mut addr = String::with_capacity(
+                entry
+                    .get()
+                    .as_bytes()
+                    .len()
+                    .saturating_add(2)
+                    .saturating_add(client_ip_str.len()),
+            );
             if let Ok(entry_str) = std::str::from_utf8(entry.get().as_bytes()) {
                 addr.push_str(entry_str);
                 addr.push(',');
@@ -261,7 +267,7 @@ where
         }
         let proxied_request = Request::from_parts(parts, Body::from(bytes));
     */
-    let mut response = client.call(proxied_request).await.map_err(|e| {
+    let mut response = client.call(proxied_request).await.map_err(|_e| {
         //tracing::error!("error connecting to backend: {:?}", e);
         ProxyError::ClientError(
             "error connecting to backend, use option to skip TLS certificate verification if needed",
@@ -276,14 +282,23 @@ where
                 let response_upgraded = response
                     .extensions_mut()
                     .remove::<OnUpgrade>()
-                    .expect("response does not have an upgrade extension")
+                    .ok_or_else(|| {
+                        ProxyError::UpgradeError(
+                            "response does not have an upgrade extension".to_string(),
+                        )
+                    })?
                     .await?;
 
                 debug!("Responding to a connection upgrade response");
 
                 tokio::spawn(async move {
-                    let request_upgraded =
-                        request_upgraded.await.expect("failed to upgrade request");
+                    let request_upgraded = match request_upgraded.await {
+                        Ok(s) => s,
+                        Err(e) => {
+                            tracing::error!("failed to upgrade request: {:?}", e);
+                            return;
+                        }
+                    };
 
                     let mut request_upgraded =
                         hyper_util::rt::tokio::TokioIo::new(request_upgraded);

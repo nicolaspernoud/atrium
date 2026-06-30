@@ -1,7 +1,6 @@
 use crate::{
     appstate::ConfigFile,
     appstate::{ConfigState, MAXMIND_READER, OptionalMaxMindReader},
-    auth::check_user_has_role,
     configuration::Config,
     configuration::config_or_error,
     errors::ErrResponse,
@@ -105,10 +104,14 @@ impl UserToken {
     pub(crate) fn check_expires(self) -> Result<Self, (StatusCode, &'static str)> {
         let now = OffsetDateTime::now_utc().unix_timestamp();
         if now > self.expires {
-            Err((StatusCode::FORBIDDEN, "user token is expired"))
+            Err((StatusCode::UNAUTHORIZED, "user token is expired"))
         } else {
             Ok(self)
         }
+    }
+
+    pub(crate) fn has_role(&self, roles: &[String]) -> bool {
+        roles.iter().any(|role| self.roles.contains(role))
     }
 }
 
@@ -140,7 +143,7 @@ where
         let jail = crate::OptionalJail::from_ref(state);
         let jar = PrivateCookieJar::from_request_parts(parts, state)
             .await
-            .expect("Cookie jar retrieval is Infallible");
+            .map_err(|_: Infallible| StatusCode::INTERNAL_SERVER_ERROR.into_response())?;
 
         // Try to get user_token from the query
         let Ok(query) = RawQuery::from_request_parts(parts, state).await;
@@ -185,7 +188,13 @@ where
                 let Extension(addr) = parts
                     .extract::<Extension<ConnectInfo<SocketAddr>>>()
                     .await
-                    .expect("Could not find socket address");
+                    .map_err(|_| {
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            "socket address unavailable",
+                        )
+                            .into_response()
+                    })?;
                 match authenticate_local_user(
                     &config,
                     LocalAuth {
@@ -298,16 +307,17 @@ pub async fn local_auth(
     Json(payload): Json<LocalAuth>,
 ) -> Result<(PrivateCookieJar, Json<AuthResponse>), (StatusCode, &'static str)> {
     // Find the user in configuration
-    let (user, user_token) = match authenticate_local_user(&config, payload, MAXMIND_READER.get(), addr) {
-        Ok(v) => v,
-        Err(e) => {
-            #[cfg(target_os = "linux")]
-            if let Some(jail) = jail {
-                jail.report_failure(addr.ip()).await;
+    let (user, user_token) =
+        match authenticate_local_user(&config, payload, MAXMIND_READER.get(), addr) {
+            Ok(v) => v,
+            Err(e) => {
+                #[cfg(target_os = "linux")]
+                if let Some(jail) = jail {
+                    jail.report_failure(addr.ip()).await;
+                }
+                return Err(e);
             }
-            return Err(e);
-        }
-    };
+        };
     let cookie = create_user_cookie(
         &user_token,
         &host,
@@ -421,7 +431,16 @@ pub async fn get_users(
 ) -> Result<Json<Vec<User>>, (StatusCode, &'static str)> {
     let config = config_or_error(&config_file).await?;
     // Return all the users as Json
-    Ok(Json(config.users))
+    Ok(Json(
+        config
+            .users
+            .into_iter()
+            .map(|mut u| {
+                u.password = REDACTED.to_owned();
+                u
+            })
+            .collect(),
+    ))
 }
 
 pub async fn delete_user(
@@ -511,7 +530,7 @@ pub async fn list_services(
         config
             .apps
             .iter()
-            .filter(|app| !app.secured || check_user_has_role(&user, &app.roles))
+            .filter(|app| !app.secured || user.has_role(&app.roles))
             .cloned()
             .map(|mut app| {
                 app.login = REDACTED.to_owned();
@@ -522,7 +541,7 @@ pub async fn list_services(
         config
             .davs
             .iter()
-            .filter(|dav| !dav.secured || check_user_has_role(&user, &dav.roles))
+            .filter(|dav| !dav.secured || user.has_role(&dav.roles))
             .cloned()
             .map(|mut dav| {
                 dav.passphrase = None;

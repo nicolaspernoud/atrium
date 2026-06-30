@@ -24,7 +24,7 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let jar = PrivateCookieJar::<Key>::from_request_parts(parts, state)
             .await
-            .expect("Cookie jar retrieval is Infallible");
+            .map_err(|_: Infallible| StatusCode::INTERNAL_SERVER_ERROR.into_response())?;
 
         // ONLY Get the serialized user_token from the cookie jar
         if let Some(cookie) = jar.get(AUTH_COOKIE) {

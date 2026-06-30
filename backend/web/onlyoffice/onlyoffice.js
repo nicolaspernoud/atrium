@@ -1,6 +1,6 @@
 openDocument();
 
-async function openDocument() {
+function openDocument() {
   const config = JSON.parse(
     document.getElementById("OnlyOfficeConfiguration").innerText
   );

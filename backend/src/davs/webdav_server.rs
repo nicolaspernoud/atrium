@@ -59,6 +59,7 @@ use tokio::{
     fs,
     io::{AsyncReadExt, AsyncSeekExt},
 };
+use tokio_util::sync::CancellationToken;
 use tokio_util::{
     compat::FuturesAsyncWriteCompatExt,
     io::{ReaderStream, StreamReader},
@@ -296,12 +297,20 @@ impl WebdavServer {
         res: &mut Response,
         key: Option<[u8; 32]>,
     ) -> BoxResult<()> {
+        if self.locks.contains_key(path) {
+            *res.status_mut() = StatusCode::LOCKED;
+            *res.body_mut() = Body::from("Resource is locked");
+            return Ok(());
+        }
         ensure_path_parent(path).await?;
 
         let mut file = if let Ok(v) = DavFile::create(path, key).await {
             v
         } else {
-            status_forbid(res);
+            {
+                *res.status_mut() = StatusCode::CONFLICT;
+                *res.body_mut() = Body::from("Cannot create file at given path");
+            };
             return Ok(());
         };
 
@@ -324,16 +333,19 @@ impl WebdavServer {
                 parts.uri,
                 e
             );
-            drop(fs::remove_file(path).await);
+            if let Err(e) = fs::remove_file(path).await {
+                error!("Failed to remove partial file {:?}: {}", path, e);
+            }
             return Ok(());
         };
 
         file.shutdown().await?;
 
-        // If the X-OC-Mtime header is present, alter the file modified time according to that header's value.
         if let Some(h) = parts.headers.get("X-OC-Mtime")
             && let Ok(h) = h.to_str()
             && let Ok(t) = h.parse::<i64>()
+            && t >= 0 // Reject negative timestamps (before Unix epoch)
+            && t <= Utc::now().timestamp() + 86400 // Reject timestamps more than 1 day in the future
             && filetime::set_file_mtime(path, filetime::FileTime::from_unix_time(t, 0)).is_ok()
         {
             // Respond with the appropriate header on success
@@ -434,13 +446,15 @@ impl WebdavServer {
         if head_only {
             return Ok(());
         }
+        let token = CancellationToken::new();
         let path = path.to_owned();
+        let token_clone = token.clone();
         tokio::spawn(async move {
-            if let Err(e) = zip_dir(writer, &path, key).await {
+            if let Err(e) = zip_dir(writer, &path, key, token_clone).await {
                 error!("Failed to zip {}, {}", path.display(), e);
             }
         });
-        *res.body_mut() = Body::from_stream(ReaderStream::new(reader));
+        *res.body_mut() = Body::from_stream(CancelOnDrop::new(ReaderStream::new(reader), token));
         Ok(())
     }
 
@@ -737,6 +751,12 @@ impl WebdavServer {
         let output: String;
         let req_path = req.uri().path().to_string();
         if let Ok(modtime) = Self::extract_lastmodified_value(req).await {
+            // Validate timestamp is within a reasonable range
+            let now = Utc::now().timestamp();
+            if modtime < 0 || modtime > now + 86400 {
+                status_forbid(res);
+                return Ok(());
+            }
             filetime::set_file_mtime(path, filetime::FileTime::from_unix_time(modtime, 0))?;
             output = format!(
                 r#"
@@ -820,8 +840,23 @@ impl WebdavServer {
     }
 
     fn extract_path(wanted_path: &str, dav_path: &str) -> Option<PathBuf> {
-        let decoded_path = decode_uri(&wanted_path[1..])?.into_owned();
+        let mut decoded_path = decode_uri(&wanted_path.get(1..)?)?.into_owned();
+        // Prevent double-encoding attacks: decode until stable
+        loop {
+            let next = decode_uri(&decoded_path).map(|s| s.into_owned());
+            match next {
+                Some(n) if n != decoded_path => decoded_path = n,
+                _ => break,
+            }
+        }
         let stripped_path = Path::new(&decoded_path).components().collect::<PathBuf>();
+        // Reject any '..' components explicitly
+        if stripped_path
+            .components()
+            .any(|c| c == std::path::Component::ParentDir)
+        {
+            return None;
+        }
         let self_path = Path::new(dav_path);
         Some(self_path.join(stripped_path))
     }
@@ -863,7 +898,7 @@ impl WebdavServer {
         key: &Option<[u8; 32]>,
     ) -> BoxResult<Option<PathItem>> {
         let path = path.as_ref();
-        let rel_path = path.strip_prefix(&base_path).unwrap_or(path);
+        let rel_path = path.strip_prefix(&base_path)?;
         let (meta, meta2) = tokio::join!(fs::metadata(&path), fs::symlink_metadata(&path));
         let (meta, meta2) = (meta?, meta2?);
         let is_symlink = meta2.is_symlink();
@@ -1197,10 +1232,14 @@ async fn zip_dir<W: tokio::io::AsyncWrite + Unpin>(
     writer: W,
     dir: &Path,
     key: Option<[u8; 32]>,
+    token: CancellationToken,
 ) -> BoxResult<()> {
     let mut zip_writer = ZipFileWriter::with_tokio(writer);
     let mut walkdir = WalkDir::new(dir);
     while let Some(entry) = walkdir.next().await {
+        if token.is_cancelled() {
+            return Ok(());
+        }
         if let Ok(entry) = entry {
             let entry_path = entry.path();
             let meta = match fs::symlink_metadata(entry.path()).await {
@@ -1221,7 +1260,12 @@ async fn zip_dir<W: tokio::io::AsyncWrite + Unpin>(
             let entry_writer = zip_writer.write_entry_stream(builder).await?;
             let mut entry_writer_compat = entry_writer.compat_write();
 
-            tokio::io::copy(&mut file, &mut entry_writer_compat).await?;
+            tokio::select! {
+                _ = token.cancelled() => return Ok(()),
+                res = tokio::io::copy(&mut file, &mut entry_writer_compat) => {
+                    res?;
+                }
+            }
 
             entry_writer_compat.into_inner().close().await?;
         }
@@ -1303,6 +1347,38 @@ pub fn decode_uri(v: &str) -> Option<Cow<'_, str>> {
     percent_encoding::percent_decode(v.as_bytes())
         .decode_utf8()
         .ok()
+}
+
+use futures_util::task::{Context, Poll};
+use std::pin::Pin;
+
+pub struct CancelOnDrop<S> {
+    inner: S,
+    token: CancellationToken,
+}
+
+impl<S> CancelOnDrop<S> {
+    pub fn new(inner: S, token: CancellationToken) -> Self {
+        Self { inner, token }
+    }
+}
+
+impl<S: futures_util::Stream + Unpin> futures_util::Stream for CancelOnDrop<S> {
+    type Item = S::Item;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        Pin::new(&mut self.inner).poll_next(cx)
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
+}
+
+impl<S> Drop for CancelOnDrop<S> {
+    fn drop(&mut self) {
+        self.token.cancel();
+    }
 }
 
 enum Destination {
@@ -1390,6 +1466,7 @@ fn parse_timeout_header(headers: &HeaderMap<HeaderValue>) -> i64 {
             let val = val.trim();
             if let Some(secs) = val.strip_prefix("Second-")
                 && let Ok(secs) = secs.parse::<i64>()
+                && secs > 0
             {
                 return secs.min(LOCK_TIMEOUT);
             }

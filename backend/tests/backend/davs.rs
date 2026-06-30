@@ -560,7 +560,7 @@ async fn put_file_conflict_dir() -> BoxResult<()> {
         .body(b"abc".to_vec())
         .send()
         .await?;
-    assert_eq!(resp.status(), 403);
+    assert_eq!(resp.status(), StatusCode::CONFLICT);
     Ok(())
 }
 

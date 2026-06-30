@@ -193,8 +193,7 @@ pub fn get_rustls_config_dangerous() -> ClientConfig {
         .with_root_certificates(empty_store)
         .with_no_client_auth();
 
-    let mut dangerous_config = ClientConfig::dangerous(&mut config);
-    dangerous_config.set_certificate_verifier(Arc::new(
+    config.dangerous().set_certificate_verifier(Arc::new(
         insecure_certificate_verifier::NoCertificateVerification {},
     ));
 

@@ -43,7 +43,7 @@ impl Header for Depth {
         match value.as_bytes() {
             b"0" => Ok(Depth::Zero),
             b"1" => Ok(Depth::One),
-            b"infinity" | b"Infinity" => Ok(Depth::Infinity),
+            _ if value.as_bytes().eq_ignore_ascii_case(b"infinity") => Ok(Depth::Infinity),
             _ => Err(invalid()),
         }
     }

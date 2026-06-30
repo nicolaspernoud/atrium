@@ -74,7 +74,7 @@ Future<void> upload(
   await client.c.wdWriteWithStream(
     client,
     path,
-    file.readStream!,
+    file.readAsByteStream(),
     file.size,
     onProgress: onProgress,
     cancelToken: cancelToken,

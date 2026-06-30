@@ -9,7 +9,6 @@ use std::{path::Path, time::SystemTime};
 use tokio::fs::{self, File};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncSeek, AsyncWrite, AsyncWriteExt, ReadBuf};
 
-
 const BUFFER_ERROR: &str = "buffer error for encryption or decryption";
 
 pub enum DavFile {
@@ -33,12 +32,7 @@ pub struct EncryptedFile {
 }
 
 impl EncryptedFile {
-    fn new(
-        file: File,
-        cipher: Box<dyn Cipher>,
-        decrypted_len: u64,
-        write_chunk_idx: u32,
-    ) -> Self {
+    fn new(file: File, cipher: Box<dyn Cipher>, decrypted_len: u64, write_chunk_idx: u32) -> Self {
         Self {
             file: Box::new(file),
             cipher,
@@ -82,9 +76,7 @@ impl DavFile {
 
                 let cipher = cipher_type.create_cipher(&key, &nonce);
 
-                Ok(DavFile::Encrypted(EncryptedFile::new(
-                    file, cipher, 0, 0,
-                )))
+                Ok(DavFile::Encrypted(EncryptedFile::new(file, cipher, 0, 0)))
             }
             None => Ok(DavFile::Plain(file)),
         }
@@ -100,19 +92,18 @@ impl DavFile {
         match key {
             Some(key) => {
                 if metadata.len() == 0 {
-                    let cipher_type = CipherType::XChaCha20Poly1305_1M;
-                    let nonce_size = cipher_type.nonce_size();
-                    let nonce = vec![0u8; nonce_size];
-                    let cipher = cipher_type.create_cipher(&key, &nonce);
-                    return Ok(DavFile::Encrypted(EncryptedFile::new(
-                        file, cipher, 0, 0,
-                    )));
+                    return Self::create_with_cipher_type(
+                        path.as_ref(),
+                        Some(key),
+                        CipherType::XChaCha20Poly1305_1M,
+                    )
+                    .await;
                 }
 
                 let mut cipher_type_byte = [0u8; 1];
                 file.read_exact(&mut cipher_type_byte).await?;
-                let cipher_type = CipherType::from_u8(cipher_type_byte[0])
-                    .map_err(io::Error::other)?;
+                let cipher_type =
+                    CipherType::from_u8(cipher_type_byte[0]).map_err(io::Error::other)?;
 
                 let nonce_size = cipher_type.nonce_size();
                 let mut nonce = vec![0u8; nonce_size];
@@ -224,8 +215,13 @@ impl AsyncRead for DavFile {
 
                 let is_last = f.encrypted_read_buffer.len() < encrypted_chunk_size;
 
-                let mut plaintext = f.cipher
-                    .decrypt(f.read_chunk_idx, is_last, f.encrypted_read_buffer.as_slice())
+                let mut plaintext = f
+                    .cipher
+                    .decrypt(
+                        f.read_chunk_idx,
+                        is_last,
+                        f.encrypted_read_buffer.as_slice(),
+                    )
                     .map_err(|e| io::Error::other(format!("Decryption error: {e}")))?;
 
                 f.encrypted_read_buffer.clear();
@@ -403,7 +399,9 @@ pub async fn decrypted_size_from_file(path: &Path, enc_size: u64) -> u64 {
     match fs::File::open(path).await {
         Ok(mut file) => {
             let mut cipher_type_byte = [0u8; 1];
-            if file.read_exact(&mut cipher_type_byte).await.is_ok() && let Ok(cipher_type) = CipherType::from_u8(cipher_type_byte[0]) {
+            if file.read_exact(&mut cipher_type_byte).await.is_ok()
+                && let Ok(cipher_type) = CipherType::from_u8(cipher_type_byte[0])
+            {
                 return cipher_type.decrypted_size(enc_size);
             }
             0
@@ -461,7 +459,6 @@ fn poll_write_chunks(
 mod tests {
     use super::*;
     use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
-
 
     #[tokio::test]
     async fn test_plain_file() -> io::Result<()> {
@@ -556,7 +553,6 @@ mod tests {
         Ok(())
     }
 
-
     #[tokio::test]
     async fn test_encrypted_file_truncated() -> io::Result<()> {
         let dir = tempfile::tempdir()?;
@@ -640,6 +636,75 @@ mod tests {
         assert_eq!(content.len(), read_content.len());
         assert_eq!(content, read_content);
 
+        Ok(())
+    }
+
+     #[tokio::test]
+    async fn test_encrypted_file_write_after_seek_fails() -> io::Result<()> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("seek_write.txt.enc");
+        let key = [42u8; 32];
+
+        let mut file = DavFile::create(&path, Some(key)).await?;
+        file.write_all(b"initial data").await?;
+
+        // Seek should set seeked_after_open to true
+        file.seek(SeekFrom::Start(0)).await?;
+
+        // Attempt to write after seek should fail
+        let res = file.write_all(b"more data").await;
+        assert!(res.is_err());
+        let err = res.unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::Unsupported);
+        assert_eq!(
+            err.to_string(),
+            "writing after seek is not supported for encrypted files"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_encrypted_file_header_corruption_fails() -> io::Result<()> {
+        let dir = tempfile::tempdir()?;
+        let path = dir.path().join("corrupt.txt.enc");
+        let key = [42u8; 32];
+
+        // 1. Invalid cipher type
+        {
+            let mut file = DavFile::create(&path, Some(key)).await?;
+            file.write_all(b"data").await?;
+            file.shutdown().await?;
+
+            // Corrupt the first byte (cipher type)
+            let mut f = std::fs::OpenOptions::new().write(true).open(&path)?;
+            use std::io::Write;
+            f.write_all(&[255u8])?; // Invalid cipher type
+            f.sync_all()?;
+            drop(f);
+
+            let res = DavFile::open(&path, Some(key)).await;
+            assert!(res.is_err());
+        }
+
+        // 2. Truncated header (only cipher type byte, missing nonce)
+        {
+            // Reset file
+            let mut file = DavFile::create(&path, Some(key)).await?;
+            file.write_all(b"data").await?;
+            file.shutdown().await?;
+
+            let f = std::fs::OpenOptions::new().write(true).open(&path)?;
+            f.set_len(1)?; // Only cipher type byte
+            f.sync_all()?;
+            drop(f);
+
+            let res = DavFile::open(&path, Some(key)).await;
+            assert!(res.is_err());
+            if let Err(e) = res {
+                assert_eq!(e.kind(), io::ErrorKind::UnexpectedEof);
+            }
+        }
         Ok(())
     }
 }

@@ -170,10 +170,8 @@ impl Config {
         mut self,
         filepath: &str,
     ) -> Result<(), (StatusCode, &'static str)> {
-        self.apps
-            .sort_by(|a, b| a.id.partial_cmp(&b.id).unwrap_or(std::cmp::Ordering::Equal));
-        self.davs
-            .sort_by(|a, b| a.id.partial_cmp(&b.id).unwrap_or(std::cmp::Ordering::Equal));
+        self.apps.sort_by_key(|a| a.id);
+        self.davs.sort_by_key(|a| a.id);
         self.to_file(filepath).await.map_err(|_| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,

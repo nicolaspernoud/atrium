@@ -371,7 +371,7 @@ async fn onlyoffice_page_test() {
         .send()
         .await
         .expect("failed to execute request");
-    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     // Act
     let response = app
         .client

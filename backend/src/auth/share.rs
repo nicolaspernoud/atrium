@@ -13,7 +13,7 @@ use time::{Duration, OffsetDateTime};
 
 use crate::{
     appstate::ConfigState,
-    auth::{AUTH_COOKIE, UserToken, check_user_has_role, decrypt_user_token},
+    auth::{AUTH_COOKIE, UserToken, decrypt_user_token},
     utils::{is_path_within_base, random_string},
 };
 
@@ -53,7 +53,7 @@ pub async fn get_share_token(
         })
         .ok_or(StatusCode::FORBIDDEN)?;
     // Check that the user is allowed to access the wanted share
-    if !&to_share.secured || check_user_has_role(&user, &to_share.roles) {
+    if !&to_share.secured || user.has_role(&to_share.roles) {
         // If it's already a share token, check that the new share is not more permissive
         if let Some(existing_share) = &user.share {
             if share.hostname != existing_share.hostname {
@@ -86,7 +86,11 @@ pub async fn get_share_token(
 
         let share_token = UserToken {
             login: share_login,
-            roles: user.roles,
+            roles: user
+                .roles
+                .into_iter()
+                .filter(|s| to_share.roles.contains(s))
+                .collect(),
             xsrf_token: Some(random_string(16)),
             share: Some(share),
             expires: expires_timestamp,

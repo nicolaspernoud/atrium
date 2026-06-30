@@ -67,15 +67,18 @@ pub async fn auth_middleware(
                 if let Ok(hn) = HeaderValue::from_str(&login_url) {
                     res.headers_mut().append(LOCATION, hn);
                 }
-
+                let sanitized_hostname = hostname
+                    .chars()
+                    .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '.' || *c == ':')
+                    .collect::<String>();
                 let cookie = Cookie::build((
                     "ATRIUM_REDIRECT",
-                    format!("{}://{hostname}", config.scheme()),
+                    format!("{}://{sanitized_hostname}", config.scheme()),
                 ))
                 .domain(config.domain.clone())
                 .path("/")
                 .same_site(SameSite::Lax)
-                .secure(false)
+                .secure(config.tls_mode.is_secure())
                 .max_age(time::Duration::seconds(60))
                 .http_only(false);
                 if let Ok(header_value) = HeaderValue::from_str(&format!("{cookie}")) {
@@ -196,17 +199,6 @@ pub async fn xsrf_middleware(
     }
 }
 
-pub fn check_user_has_role(user: &UserToken, roles: &[String]) -> bool {
-    for user_role in user.roles.iter() {
-        for role in roles.iter() {
-            if user_role == role {
-                return true;
-            }
-        }
-    }
-    false
-}
-
 pub fn check_user_role_and_share(
     user: Option<&UserToken>,
     target: &HostType,
@@ -214,7 +206,7 @@ pub fn check_user_role_and_share(
     path: &str,
 ) -> Result<(), AuthError> {
     if let Some(user) = user {
-        if check_user_has_role(user, target.roles()) {
+        if user.has_role(target.roles()) {
             match &user.share {
                 None => return Ok(()),
                 Some(share) => {
@@ -237,21 +229,24 @@ pub fn check_user_role_and_share(
 }
 
 fn remove_auth_cookie(req: &mut Request<Body>) -> Result<(), InvalidHeaderValue> {
-    let mut new_cookie = String::new();
+    let mut new_cookies: Vec<String> = Vec::new();
     for c in req.headers_mut().get_all(COOKIE) {
         if let Ok(s) = c.to_str() {
-            new_cookie.push_str(
-                &s.split(';')
-                    .skip_while(|&c| c.contains(AUTH_COOKIE))
-                    .collect::<Vec<&str>>()
-                    .join(";"),
-            );
-            if !new_cookie.is_empty() {
-                new_cookie.push(';');
+            let filtered: Vec<&str> = s
+                .split(';')
+                .filter(|part| !part.trim().contains(AUTH_COOKIE))
+                .filter(|part| !part.trim().is_empty())
+                .collect();
+            if !filtered.is_empty() {
+                new_cookies.push(filtered.join("; "));
             }
         }
     }
-    req.headers_mut().insert(COOKIE, new_cookie.parse()?);
+    if new_cookies.is_empty() {
+        req.headers_mut().remove(COOKIE);
+    } else {
+        req.headers_mut().insert(COOKIE, new_cookies.join("; ").parse()?);
+    }
     Ok(())
 }
 
