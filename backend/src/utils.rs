@@ -70,7 +70,7 @@ const QUERY_ERROR: (StatusCode, &str) = (StatusCode::BAD_REQUEST, "query is empt
 
 pub fn query_pairs_or_error(
     query: Option<&str>,
-) -> Result<std::collections::HashMap<&str, &str>, (StatusCode, &'static str)> {
+) -> Result<std::collections::HashMap<String, String>, (StatusCode, &'static str)> {
     let query = query.ok_or(QUERY_ERROR)?;
     if query.is_empty() {
         return Err(QUERY_ERROR);
@@ -79,12 +79,14 @@ pub fn query_pairs_or_error(
     Ok(ooq)
 }
 
-pub fn extract_query_pairs(query: &str) -> HashMap<&str, &str> {
+pub fn extract_query_pairs(query: &str) -> HashMap<String, String> {
     let mut ooq = std::collections::HashMap::new();
     for keyvalue in query.split('&') {
         let mut kv = keyvalue.splitn(2, '=');
         let key = kv.next().unwrap_or("");
         let value = kv.next().unwrap_or("");
+        let key = urlencoding::decode(key).map_or_else(|_| key.to_string(), |s| s.into_owned());
+        let value = urlencoding::decode(value).map_or_else(|_| value.to_string(), |s| s.into_owned());
         ooq.insert(key, value);
     }
     ooq
@@ -125,7 +127,22 @@ fn normalize_path(path: &Path) -> Option<PathBuf> {
 }
 
 pub fn is_path_within_base(path: &Path, base: &Path) -> bool {
-    if let (Some(norm_path), Some(norm_base)) = (normalize_path(path), normalize_path(base)) {
+    let path_buf = std::fs::canonicalize(path).unwrap_or_else(|_| {
+        if path.is_absolute() {
+            path.to_path_buf()
+        } else {
+            std::env::current_dir().map_or_else(|_| path.to_path_buf(), |d| d.join(path))
+        }
+    });
+    let base_buf = std::fs::canonicalize(base).unwrap_or_else(|_| {
+        if base.is_absolute() {
+            base.to_path_buf()
+        } else {
+            std::env::current_dir().map_or_else(|_| base.to_path_buf(), |d| d.join(base))
+        }
+    });
+    if let (Some(norm_path), Some(norm_base)) = (normalize_path(&path_buf), normalize_path(&base_buf))
+    {
         norm_path.starts_with(norm_base)
     } else {
         false
@@ -212,10 +229,11 @@ mod tests {
 
     #[test]
     fn test_query_pairs_ok() {
-        let query = Some("a=1&b=2&c=3");
+        let query = Some("a=1&b=2&c=3&d=%2e%2e%2f");
         let qp = query_pairs_or_error(query).unwrap();
-        assert_eq!(qp.get("a").unwrap(), &"1");
-        assert_eq!(qp.get("c").unwrap(), &"3");
+        assert_eq!(qp.get("a").unwrap(), "1");
+        assert_eq!(qp.get("c").unwrap(), "3");
+        assert_eq!(qp.get("d").unwrap(), "../");
     }
 
     #[test]
@@ -236,7 +254,7 @@ mod tests {
     fn test_query_pairs_empty_value() {
         let query = Some("a=1&b=2&c=");
         let qp = query_pairs_or_error(query).unwrap();
-        assert_eq!(qp.get("a").unwrap(), &"1");
+        assert_eq!(qp.get("a").unwrap(), "1");
         assert!(qp.get("c").unwrap().is_empty());
     }
 

@@ -2,7 +2,6 @@ use crate::{
     appstate::{ConfigState, MAXMIND_READER},
     configuration::OpenIdConfig,
     errors::ErrResponse,
-    extract::Host,
     auth::{ADMINS_ROLE, User, UserInfo, create_user_cookie, user_to_token},
     utils::select_entries_by_value,
 };
@@ -11,7 +10,7 @@ use axum::{
     extract::{ConnectInfo, Query, State},
     response::{IntoResponse, Redirect},
 };
-use axum_extra::extract::cookie::{Cookie, CookieJar, PrivateCookieJar};
+use axum_extra::extract::cookie::{Cookie, PrivateCookieJar};
 use http::{HeaderValue, Request, StatusCode, Uri, header::AUTHORIZATION};
 use http_body_util::BodyExt;
 use hyper::body::Buf;
@@ -22,7 +21,8 @@ use hyper_util::{
 };
 use oauth2::{
     AsyncHttpClient, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, EndpointNotSet,
-    EndpointSet, HttpRequest, HttpResponse, RedirectUrl, Scope, TokenResponse, TokenUrl,
+    EndpointSet, HttpRequest, HttpResponse, PkceCodeChallenge, PkceCodeVerifier, RedirectUrl, Scope,
+    TokenResponse, TokenUrl,
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, net::SocketAddr, ops::Deref, pin::Pin};
@@ -46,6 +46,12 @@ pub fn default_scopes() -> Vec<String> {
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize, Eq)]
 pub struct RolesMap(HashMap<String, String>);
+
+#[derive(Serialize, Deserialize)]
+struct OAuth2State {
+    csrf_token: CsrfToken,
+    pkce_verifier: PkceCodeVerifier,
+}
 
 impl Default for RolesMap {
     fn default() -> Self {
@@ -146,7 +152,7 @@ fn oauth_client(config: OpenIdConfig, redirect_url: String) -> Result<BasicClien
 
 pub async fn oauth2_login(
     State(config): State<ConfigState>,
-    jar: CookieJar,
+    jar: PrivateCookieJar,
 ) -> Result<impl IntoResponse, ErrResponse> {
     let openid_config = config
         .openid_config
@@ -157,7 +163,11 @@ pub async fn oauth2_login(
         format!("{}/auth/oauth2callback", config.full_domain()),
     )?;
 
-    let mut client = client.authorize_url(CsrfToken::new_random);
+    let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
+
+    let mut client = client
+        .authorize_url(CsrfToken::new_random)
+        .set_pkce_challenge(pkce_challenge);
 
     for s in &openid_config.scopes {
         client = client.add_scope(Scope::new(s.clone()));
@@ -165,10 +175,21 @@ pub async fn oauth2_login(
 
     let (auth_url, csrf_token) = client.url();
 
-    Ok((
-        jar.add(Cookie::new(STATE_COOKIE, csrf_token.secret().clone())),
-        Redirect::to(auth_url.as_ref()),
-    ))
+    let state = OAuth2State {
+        csrf_token,
+        pkce_verifier,
+    };
+    let state_encoded =
+        serde_json::to_string(&state).map_err(|_| ErrResponse::S500("could not encode state"))?;
+
+    let cookie = Cookie::build((STATE_COOKIE, state_encoded))
+        .path("/auth/oauth2callback")
+        .http_only(true)
+        .secure(config.tls_mode.is_secure())
+        .same_site(axum_extra::extract::cookie::SameSite::Lax)
+        .max_age(time::Duration::minutes(15));
+
+    Ok((jar.add(cookie), Redirect::to(auth_url.as_ref())))
 }
 
 pub async fn oauth2_available(
@@ -193,10 +214,8 @@ pub struct AuthRequest {
 pub async fn oauth2_callback(
     Query(query): Query<AuthRequest>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    jar: CookieJar,
     private_jar: PrivateCookieJar,
     State(config): State<ConfigState>,
-    host: Host,
 ) -> Result<(PrivateCookieJar, Redirect), ErrResponse> {
     let oidc_config = config
         .openid_config
@@ -208,16 +227,25 @@ pub async fn oauth2_callback(
     )?;
 
     // Check the state
-    if jar.get(STATE_COOKIE).is_none()
-        || jar.get(STATE_COOKIE).map_or("bad-state", |c| c.value()) != query.state
-    {
+    let state_cookie = private_jar
+        .get(STATE_COOKIE)
+        .ok_or(ErrResponse::S403("OAuth2 state cookie not found"))?;
+
+    let state: OAuth2State = serde_json::from_str(state_cookie.value())
+        .map_err(|_| ErrResponse::S403("could not decode OAuth2 state"))?;
+
+    if state.csrf_token.secret() != &query.state {
         return Err(ErrResponse::S403("OAuth2 state does not match"));
     }
+
+    // Invalidate the state cookie
+    let private_jar = private_jar.remove(Cookie::build(STATE_COOKIE).path("/auth/oauth2callback"));
 
     let client = HyperOAuth2Client::new(oidc_config.insecure_skip_verify);
     // Get an auth token
     let token = oauth_client
         .exchange_code(AuthorizationCode::new(query.code.clone()))
+        .set_pkce_verifier(state.pkce_verifier)
         .request_async(&client)
         .await
         .map_err(|_| ErrResponse::S500("could not get OAuth2 token"))?;
@@ -277,7 +305,6 @@ pub async fn oauth2_callback(
     let user_token = user_to_token(&user, &config);
     let cookie = create_user_cookie(
         &user_token,
-        &host,
         &config,
         addr,
         MAXMIND_READER.get(),

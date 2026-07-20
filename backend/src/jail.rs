@@ -81,6 +81,7 @@ impl Jail {
             ips
         })
         .await
+        .map_err(|e| warn!("Failed to load banned IPs from iptables: {}", e))
         .unwrap_or_default();
 
         for ip in ips {
@@ -156,7 +157,6 @@ impl Jail {
         if self.banned_ips.contains(&ip) {
             return;
         }
-        self.banned_ips.insert(ip);
 
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -178,7 +178,10 @@ impl Jail {
 
         match res {
             Ok(Err(e)) => warn!("Failed to ban IP {}: {}", ip, e),
-            Ok(Ok(_)) => info!("BANNED IP: {}", ip),
+            Ok(Ok(_)) => {
+                self.banned_ips.insert(ip);
+                info!("BANNED IP: {}", ip);
+            }
             Err(e) => warn!("Task join error during ban IP {}: {}", ip, e),
         }
     }
@@ -221,6 +224,7 @@ impl Jail {
             unbanned
         })
         .await
+        .map_err(|e| warn!("Failed to prune expired iptables rules: {}", e))
         .unwrap_or_default();
 
         for ip in unbanned_ips {

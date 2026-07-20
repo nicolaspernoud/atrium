@@ -123,11 +123,17 @@ async fn run() -> Result<(), Error> {
                 rustls_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
                 let acceptor = state.axum_acceptor(Arc::new(rustls_config));
 
+                let mut acme_rx = tx.subscribe();
                 tokio::spawn(async move {
                     loop {
-                        match state.next().await.expect("could not start ACME loop") {
-                            Ok(ok) => info!("ACME (let's encrypt) event: {:?}", ok),
-                            Err(err) => error!("ACME (let's encrypt) error: {:?}", err),
+                        tokio::select! {
+                            _ = acme_rx.recv() => break,
+                            state_next = state.next() => {
+                                match state_next.expect("could not start ACME loop") {
+                                    Ok(ok) => info!("ACME (let's encrypt) event: {:?}", ok),
+                                    Err(err) => error!("ACME (let's encrypt) error: {:?}", err),
+                                }
+                            }
                         }
                     }
                 });

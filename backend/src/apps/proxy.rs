@@ -17,7 +17,7 @@ use hyper::{
 };
 use hyper_util::client::legacy::Error;
 use std::net::IpAddr;
-use tokio::io::copy_bidirectional;
+use tokio::io::{AsyncWriteExt, copy_bidirectional};
 use tracing::debug;
 
 static CONNECTION_HEADER: HeaderName = HeaderName::from_static("connection");
@@ -106,9 +106,13 @@ fn remove_hop_headers(headers: &mut HeaderMap) {
 }
 
 fn get_upgrade_type(headers: &HeaderMap) -> Option<String> {
-    if let Some(value) = headers.get(&CONNECTION_HEADER)
-        && let Ok(value) = value.to_str()
-        && value.split(',').any(|e| e.trim() == UPGRADE_HEADER)
+    let has_upgrade_directive = headers.get_all(&CONNECTION_HEADER).iter().any(|value| {
+        value
+            .to_str()
+            .is_ok_and(|s| s.split(',').any(|e| e.trim() == UPGRADE_HEADER))
+    });
+
+    if has_upgrade_directive
         && let Some(upgrade_value) = headers.get(&UPGRADE_HEADER)
         && let Ok(upgrade_value) = upgrade_value.to_str()
     {
@@ -119,18 +123,22 @@ fn get_upgrade_type(headers: &HeaderMap) -> Option<String> {
 }
 
 fn remove_connection_headers(headers: &mut HeaderMap) {
-    if let Some(value) = headers.get(&CONNECTION_HEADER)
-        && let Ok(value) = value.to_str()
-    {
+    let mut names_to_remove = Vec::new();
+    for value in headers.get_all(&CONNECTION_HEADER) {
+        if let Ok(value_str) = value.to_str() {
+            for name in value_str.split(',') {
+                let name = name.trim();
+                if !name.is_empty() {
+                    names_to_remove.push(name.to_string());
+                }
+            }
+        }
+    }
+
+    if !names_to_remove.is_empty() {
         debug!("Removing connection headers");
-        let names_to_remove: Vec<String> = value
-            .split(',')
-            .map(|name| name.trim())
-            .filter(|name| !name.is_empty())
-            .map(|name| name.to_string())
-            .collect();
         for name in names_to_remove {
-            headers.remove(&name);
+            headers.remove(name);
         }
     }
 }
@@ -226,6 +234,7 @@ pub async fn call<S>(
     forward_authority: &Authority,
     mut request: Request<Body>,
     mut client: S,
+    upgraded_connections_semaphore: Option<std::sync::Arc<tokio::sync::Semaphore>>,
 ) -> Result<Response<Incoming>, ProxyError>
 where
     S: tower_service::Service<Request<Body>, Response = http::Response<Incoming>>,
@@ -291,20 +300,31 @@ where
 
                 debug!("Responding to a connection upgrade response");
 
+                let permit =
+                    if let Some(semaphore) = upgraded_connections_semaphore {
+                        Some(semaphore.acquire_owned().await.map_err(|_| {
+                            ProxyError::UpgradeError("semaphore closed".to_string())
+                        })?)
+                    } else {
+                        None
+                    };
+
                 tokio::spawn(async move {
+                    let _permit = permit;
+                    let mut response_upgraded =
+                        hyper_util::rt::tokio::TokioIo::new(response_upgraded);
+
                     let request_upgraded = match request_upgraded.await {
                         Ok(s) => s,
                         Err(e) => {
                             tracing::error!("failed to upgrade request: {:?}", e);
+                            let _unused = response_upgraded.shutdown().await;
                             return;
                         }
                     };
 
                     let mut request_upgraded =
                         hyper_util::rt::tokio::TokioIo::new(request_upgraded);
-
-                    let mut response_upgraded =
-                        hyper_util::rt::tokio::TokioIo::new(response_upgraded);
 
                     if copy_bidirectional(&mut response_upgraded, &mut request_upgraded)
                         .await
@@ -334,5 +354,43 @@ where
         let proxied_response = create_proxied_response(response);
         debug!("Responding to call with response");
         Ok(proxied_response)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use http::HeaderMap;
+
+    #[test]
+    fn test_get_upgrade_type_multiple_headers() {
+        let mut headers = HeaderMap::new();
+        headers.append(&CONNECTION_HEADER, "keep-alive".parse().unwrap());
+        headers.append(&CONNECTION_HEADER, "upgrade".parse().unwrap());
+        headers.insert(&UPGRADE_HEADER, "websocket".parse().unwrap());
+
+        let upgrade_type = get_upgrade_type(&headers);
+        assert_eq!(upgrade_type, Some("websocket".to_string()));
+    }
+
+    #[test]
+    fn test_remove_connection_headers_multiple_headers() {
+        let mut headers = HeaderMap::new();
+        headers.append(
+            &CONNECTION_HEADER,
+            "X-Custom-1, X-Custom-2".parse().unwrap(),
+        );
+        headers.append(&CONNECTION_HEADER, "X-Custom-3".parse().unwrap());
+        headers.insert("X-Custom-1", "val1".parse().unwrap());
+        headers.insert("X-Custom-2", "val2".parse().unwrap());
+        headers.insert("X-Custom-3", "val3".parse().unwrap());
+        headers.insert("X-Keep-Me", "stay".parse().unwrap());
+
+        remove_connection_headers(&mut headers);
+
+        assert!(!headers.contains_key("X-Custom-1"));
+        assert!(!headers.contains_key("X-Custom-2"));
+        assert!(!headers.contains_key("X-Custom-3"));
+        assert!(headers.contains_key("X-Keep-Me"));
     }
 }

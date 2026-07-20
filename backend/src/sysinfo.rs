@@ -34,11 +34,12 @@ pub struct DiskInfo {
 }
 
 pub async fn disk_info(path: PathBuf) -> Result<DiskInfo, &'static str> {
-    let disksinfo: Result<Vec<DiskInfo>, &str> = task::spawn_blocking(|| {
-        let mut disks = DISKS_INFO.lock().map_err(|_| "could not lock disks info")?;
+    let disksinfo: Vec<DiskInfo> = task::spawn_blocking(|| {
+        let mut disks = DISKS_INFO.lock().unwrap_or_else(|e| e.into_inner());
 
         disks.refresh_specifics(true, DiskRefreshKind::nothing().with_storage());
-        let disksinfo = disks
+        
+        disks
             .iter()
             .map(|disk| DiskInfo {
                 name: disk.name().to_str().unwrap_or_default().to_owned(),
@@ -46,12 +47,10 @@ pub async fn disk_info(path: PathBuf) -> Result<DiskInfo, &'static str> {
                 available_space: disk.available_space(),
                 total_space: disk.total_space(),
             })
-            .collect::<Vec<_>>();
-        Ok(disksinfo)
+            .collect::<Vec<_>>()
     })
     .await
     .map_err(|_| "could not spawn system info task")?;
-    let disksinfo = disksinfo?;
     // Work out which mount points are compatible with the path, and work out which is the more likely to host the given path
     corresponding_disk_info(disksinfo, path)
 }
@@ -83,24 +82,22 @@ fn corresponding_disk_info(
 
 pub async fn system_info(_user: UserToken) -> Result<Json<SystemInfo>, ErrResponse> {
     let sysinfo = task::spawn_blocking(|| {
-        let mut sys = SYSTEM_INFO
-            .lock()
-            .map_err(|_| ErrResponse::S500("could not lock system info"))?;
+        let mut sys = SYSTEM_INFO.lock().unwrap_or_else(|e| e.into_inner());
         sys.refresh_specifics(
             RefreshKind::nothing()
                 .with_memory(MemoryRefreshKind::nothing().with_ram())
                 .with_cpu(CpuRefreshKind::nothing().with_cpu_usage()),
         );
-        Ok::<SystemInfo, ErrResponse>(SystemInfo {
+        SystemInfo {
             total_memory: sys.total_memory(),
             used_memory: sys.used_memory(),
             cpu_usage: sys.global_cpu_usage(),
             uptime: System::uptime(),
             atrium_version: env!("CARGO_PKG_VERSION"),
-        })
+        }
     })
     .await
-    .map_err(|_| ErrResponse::S500("could not spawn system info task"))??;
+    .map_err(|_| ErrResponse::S500("could not spawn system info task"))?;
     Ok(Json(sysinfo))
 }
 

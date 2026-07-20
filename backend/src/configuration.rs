@@ -194,7 +194,7 @@ impl Config {
             "{s}://{h}{p}",
             s = self.scheme(),
             h = self.domain,
-            p = &(if self.tls_mode == TlsMode::No {
+            p = (if self.tls_mode == TlsMode::No {
                 format!(":{}", self.http_port)
             } else {
                 "".to_owned()
@@ -227,6 +227,7 @@ impl Config {
 }
 
 pub async fn load_config(config_file: &str) -> Result<(ConfigState, ConfigMap), Error> {
+    let _lock = crate::appstate::CONFIG_FILE_LOCK.lock().await;
     let mut config = Config::from_file(config_file).await?;
     // if the cookie encryption key is not present, generate it and store it
     if config.cookie_key.is_none() {
@@ -297,13 +298,18 @@ pub(crate) fn trim_host(host: &str) -> String {
 
 fn app_to_host_type(app: &App, port: Option<u16>) -> HostType {
     if app.is_proxy {
+        let app_with_uri = match AppWithUri::try_from_app(app.clone(), port) {
+            Ok(a) => a,
+            Err(e) => {
+                tracing::error!("Failed to parse app target for {}: {:?}", app.name, e);
+                // Return a static app as a fallback to avoid panics
+                return HostType::StaticApp(app.clone());
+            }
+        };
         if app.insecure_skip_verify {
-            return HostType::SkipVerifyReverseApp(Box::new(AppWithUri::from_app(
-                app.clone(),
-                port,
-            )));
+            return HostType::SkipVerifyReverseApp(Box::new(app_with_uri));
         }
-        HostType::ReverseApp(Box::new(AppWithUri::from_app(app.clone(), port)))
+        HostType::ReverseApp(Box::new(app_with_uri))
     } else {
         HostType::StaticApp(app.clone())
     }
@@ -386,8 +392,7 @@ impl HostType {
 
     pub fn inject_security_headers(&self) -> bool {
         match self {
-            HostType::ReverseApp(app) => app.inner.inject_security_headers,
-            HostType::SkipVerifyReverseApp(app) => app.inner.secured,
+            HostType::SkipVerifyReverseApp(app) | HostType::ReverseApp(app) => app.inner.inject_security_headers,
             HostType::Dav(_dav) => true,
             HostType::StaticApp(app) => app.inject_security_headers,
         }

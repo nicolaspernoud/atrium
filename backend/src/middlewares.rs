@@ -111,14 +111,10 @@ fn inject_security_headers_internal(resp: &mut Response, source: &str) -> Result
         // If not, forge a default CSP Header
         None => {
             headers.insert("Content-Security-Policy", 
-            HeaderValue::from_str(&format!("default-src 'self' {source} https://unpkg.com https://*.gstatic.com; script-src 'self' {source} 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://*.gstatic.com; style-src 'self' {source} 'unsafe-inline'; frame-src {source}; frame-ancestors {source}; img-src 'self' {source} blob:"))
+            HeaderValue::from_str(&format!("default-src 'self' {source} https://unpkg.com https://*.gstatic.com blob:; script-src 'self' {source} 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://*.gstatic.com; style-src 'self' {source} 'unsafe-inline'; frame-src {source}; frame-ancestors {source}"))
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,);
         }
     }
-    headers.insert(
-        "X-XSS-Protection",
-        HeaderValue::from_static("1; mode=block"),
-    );
     headers.insert("Referrer-Policy", HeaderValue::from_static("strict-origin"));
     headers.insert(
         "X-Content-Type-Options",
@@ -126,7 +122,7 @@ fn inject_security_headers_internal(resp: &mut Response, source: &str) -> Result
     );
     headers.insert(
         "Strict-Transport-Security",
-        HeaderValue::from_static("max-age=63072000"),
+        HeaderValue::from_static("max-age=63072000; includeSubDomains"),
     );
     Ok(())
 }

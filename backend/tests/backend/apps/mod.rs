@@ -133,8 +133,10 @@ async fn reload_test() {
     let mut dst = fs::File::create(&fp).expect("could not create file");
     std::io::Write::write(&mut dst, new_data.as_bytes()).expect("failed to write to file");
 
+    let xsrf_token = login_and_get_xsrf_token(&app, "admin").await;
     app.client
         .get(format!("http://atrium.io:{}/reload", app.port))
+        .header("xsrf-token", &xsrf_token)
         .send()
         .await
         .expect("failed to execute request");
@@ -268,8 +270,10 @@ async fn redirect_test() {
         single_proxy: false,
     };
     config.to_file(&filepath).await.unwrap();
+    let xsrf_token = login_and_get_xsrf_token(&app, "admin").await;
     app.client
         .get(format!("http://atrium.io:{}/reload", app.port))
+        .header("xsrf-token", &xsrf_token)
         .send()
         .await
         .expect("failed to execute request");

@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1
 
 # Default versions (can be overridden with --build-arg)
-ARG RUST_VERSION=1.96
-ARG FLUTTER_VERSION=3.44.0
+ARG RUST_VERSION=1.97
+ARG FLUTTER_VERSION=3.44.5
 
 # --- Frontend Builder ---
 # Use the Flutter image to build the web assets
-FROM --platform=$BUILDPLATFORM ghcr.io/cirruslabs/flutter:${FLUTTER_VERSION} AS frontend-builder
+FROM --platform=$BUILDPLATFORM ghcr.io/adrianjagielak/flutter:${FLUTTER_VERSION} AS frontend-builder
 WORKDIR /src
 # Build the Flutter web app
 COPY --exclude=.dart_tool frontend .

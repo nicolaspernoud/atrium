@@ -1,6 +1,6 @@
 pub mod crypto;
 pub mod dav_file;
-pub mod error;
+pub mod errors;
 pub(crate) mod headers;
 pub mod model;
 pub(crate) mod webdav_server;

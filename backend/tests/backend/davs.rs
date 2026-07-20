@@ -289,6 +289,296 @@ async fn get_file_range_limit_cases() -> BoxResult<()> {
 }
 
 #[tokio::test]
+async fn check_lock_for_all_write_methods() -> BoxResult<()> {
+    let app = TestApp::spawn(None).await;
+    let url_file = format!("http://files1.atrium.io:{}/locked_file.txt", app.port);
+    let url_dir = format!("http://files1.atrium.io:{}/locked_dir/", app.port);
+
+    // Setup: Create a file to lock
+    let resp = app
+        .client
+        .put(&url_file)
+        .body(b"initial content".to_vec())
+        .send()
+        .await?;
+    assert_eq!(resp.status(), 201);
+
+    // Setup: Create a directory
+    let resp = mkcol(&app, &url_dir).send().await?;
+    assert_eq!(resp.status(), 201);
+
+    // Lock the file
+    let lock_resp = lock(&app, &url_file).send().await?;
+    assert_eq!(lock_resp.status(), 200);
+    let lock_token = lock_resp
+        .headers()
+        .get("lock-token")
+        .unwrap()
+        .to_str()?
+        .to_owned();
+
+    // Lock the directory
+    let dir_lock_resp = lock(&app, &url_dir).send().await?;
+    assert_eq!(dir_lock_resp.status(), 200);
+    let dir_lock_token = dir_lock_resp
+        .headers()
+        .get("lock-token")
+        .unwrap()
+        .to_str()?
+        .to_owned();
+
+    // 1. PUT on locked file (should fail with 423 Locked without correct lock token, succeed with correct token)
+    let resp_put_fail = app
+        .client
+        .put(&url_file)
+        .body(b"new content".to_vec())
+        .send()
+        .await?;
+    assert_eq!(resp_put_fail.status(), StatusCode::LOCKED);
+
+    let resp_put_ok = app
+        .client
+        .put(&url_file)
+        .header("If", format!("({})", lock_token))
+        .body(b"new content".to_vec())
+        .send()
+        .await?;
+    assert_eq!(resp_put_ok.status(), 201);
+
+    // 2. DELETE on locked file (should fail with 423 Locked without correct lock token, succeed with correct token)
+    let resp_del_fail = app.client.delete(&url_file).send().await?;
+    assert_eq!(resp_del_fail.status(), StatusCode::LOCKED);
+
+    // 3. PROPPATCH on locked file (should fail with 423 Locked without correct lock token, succeed with correct token)
+    let prop_body = r#"
+        <?xml version="1.0" encoding="utf-8" ?>
+        <D:propertyupdate xmlns:D="DAV:">
+            <D:set>
+                <D:prop>
+                    <lastmodified xmlns="DAV:">405659400</lastmodified>
+                </D:prop>
+            </D:set>
+        </D:propertyupdate>
+    "#;
+    let resp_prop_fail = proppatch(&app, &url_file).body(prop_body).send().await?;
+    assert_eq!(resp_prop_fail.status(), StatusCode::LOCKED);
+
+    let resp_prop_ok = proppatch(&app, &url_file)
+        .header("If", format!("({})", lock_token))
+        .body(prop_body)
+        .send()
+        .await?;
+    assert_eq!(resp_prop_ok.status(), 207);
+
+    // 4. MKCOL under a path (should fail with 423 Locked if that exact path is locked)
+    let url_locked_miss = format!("{}locked_miss", url_dir);
+
+    // Create a lock on the missing resource (creates empty locked resource)
+    let lock_miss_resp = lock(&app, &url_locked_miss).send().await?;
+    assert_eq!(lock_miss_resp.status(), 201); // Created lock on unexisting resource
+    let lock_miss_token = lock_miss_resp
+        .headers()
+        .get("lock-token")
+        .unwrap()
+        .to_str()?
+        .to_owned();
+
+    // Trying to MKCOL at url_locked_miss without correct lock tokens should fail (due to lock_miss_token or dir_lock_token parent lock)
+    let resp_mkcol_fail = mkcol(&app, &url_locked_miss).send().await?;
+    assert_eq!(resp_mkcol_fail.status(), StatusCode::LOCKED);
+
+    // MKCOL fails on a locked-miss if we have only one of the two required lock tokens (either the resource lock token or the parent directory lock token)
+    let resp_mkcol_fail = mkcol(&app, &url_locked_miss)
+        .header("If", format!("({})", lock_miss_token))
+        .send()
+        .await?;
+    assert_eq!(resp_mkcol_fail.status(), StatusCode::LOCKED);
+
+    let resp_mkcol_fail = mkcol(&app, &url_locked_miss)
+        .header("If", format!("({})", dir_lock_token))
+        .send()
+        .await?;
+    assert_eq!(resp_mkcol_fail.status(), StatusCode::LOCKED);
+
+    // MKCOL succeeds on a locked-miss with the correct lock tokens (the resource lock token and parent directory lock token both provided in the If header!)
+    let resp_mkcol_ok = mkcol(&app, &url_locked_miss)
+        .header("If", format!("({}) ({})", lock_miss_token, dir_lock_token))
+        .send()
+        .await?;
+    assert_eq!(resp_mkcol_ok.status(), 201);
+
+    // 5. COPY with destination locked (should fail with 423 Locked if destination is locked and token is missing, succeed with correct token)
+    let src_file = format!("http://files1.atrium.io:{}/src_file.txt", app.port);
+    app.client
+        .put(&src_file)
+        .body(b"src content".to_vec())
+        .send()
+        .await?;
+
+    let resp_copy_fail = copy(&app, &src_file)
+        .header("Destination", &url_file)
+        .send()
+        .await?;
+    assert_eq!(resp_copy_fail.status(), StatusCode::LOCKED);
+
+    let resp_copy_ok = copy(&app, &src_file)
+        .header("Destination", &url_file)
+        .header("If", format!("({})", lock_token))
+        .send()
+        .await?;
+    assert_eq!(resp_copy_ok.status(), 204); // Overwrite was true (default)
+
+    // 6. MOVE with source and destination locked (should fail with 423 Locked if either is locked, succeed with correct tokens)
+    let other_locked_file = format!("http://files1.atrium.io:{}/other_locked.txt", app.port);
+    app.client
+        .put(&other_locked_file)
+        .body(b"other locked content".to_vec())
+        .send()
+        .await?;
+    let other_lock_resp = lock(&app, &other_locked_file).send().await?;
+    assert_eq!(other_lock_resp.status(), 200);
+    let other_lock_token = other_lock_resp
+        .headers()
+        .get("lock-token")
+        .unwrap()
+        .to_str()?
+        .to_owned();
+
+    // Source locked, destination unlocked:
+    let unlocked_dest = format!("http://files1.atrium.io:{}/unlocked_dest.txt", app.port);
+    let resp_move_fail1 = mv(&app, &other_locked_file)
+        .header("Destination", &unlocked_dest)
+        .send()
+        .await?;
+    assert_eq!(resp_move_fail1.status(), StatusCode::LOCKED);
+
+    // Source unlocked, destination locked:
+    let unlocked_src = format!("http://files1.atrium.io:{}/unlocked_src.txt", app.port);
+    app.client
+        .put(&unlocked_src)
+        .body(b"unlocked source content".to_vec())
+        .send()
+        .await?;
+    let resp_move_fail2 = mv(&app, &unlocked_src)
+        .header("Destination", &other_locked_file)
+        .send()
+        .await?;
+    assert_eq!(resp_move_fail2.status(), StatusCode::LOCKED);
+
+    // Source locked and destination locked, correct If lock tokens supplied:
+    // Testing multiple tokens extraction: "If: (<token1>) (<token2>)"
+    let resp_move_ok = mv(&app, &other_locked_file)
+        .header("Destination", &url_file)
+        .header("If", format!("({}) ({})", other_lock_token, lock_token))
+        .send()
+        .await?;
+    assert_eq!(resp_move_ok.status(), 204); // Destination was already mapped, overwrite is true, so 204 No Content
+
+    // Finally, clean up by deleting with valid lock token
+    let resp_del_ok = app
+        .client
+        .delete(&url_file)
+        .header("If", format!("({})", lock_token))
+        .send()
+        .await?;
+    assert_eq!(resp_del_ok.status(), 204);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn check_collection_locking() -> BoxResult<()> {
+    let app = TestApp::spawn(None).await;
+    let url_coll = format!("http://files1.atrium.io:{}/my_locked_coll/", app.port);
+
+    // 1. Create a directory (collection)
+    let resp = mkcol(&app, &url_coll).send().await?;
+    assert_eq!(resp.status(), 201);
+
+    // 2. LOCK the collection (should succeed with 200 OK because it is an existing directory)
+    let lock_resp = lock(&app, &url_coll).send().await?;
+    assert_eq!(lock_resp.status(), 200);
+    let lock_token = lock_resp
+        .headers()
+        .get("lock-token")
+        .unwrap()
+        .to_str()?
+        .to_owned();
+
+    // 3. Attempt to PUT a file inside the locked collection without the lock token (should fail with 423 Locked)
+    let url_file = format!("{}test_file.txt", url_coll);
+    let resp_put_fail = app
+        .client
+        .put(&url_file)
+        .body(b"some content".to_vec())
+        .send()
+        .await?;
+    assert_eq!(resp_put_fail.status(), StatusCode::LOCKED);
+
+    // 4. Attempt to PUT the file with the collection lock token (should succeed with 201 Created)
+    let resp_put_ok = app
+        .client
+        .put(&url_file)
+        .header("If", format!("({})", lock_token))
+        .body(b"some content".to_vec())
+        .send()
+        .await?;
+    assert_eq!(resp_put_ok.status(), 201);
+
+    // 5. Attempt to create a subdirectory without the lock token (should fail with 423 Locked)
+    let url_sub = format!("{}sub_dir/", url_coll);
+    let resp_sub_fail = mkcol(&app, &url_sub).send().await?;
+    assert_eq!(resp_sub_fail.status(), StatusCode::LOCKED);
+
+    // 6. Attempt to create the subdirectory with the lock token (should succeed with 201 Created)
+    let resp_sub_ok = mkcol(&app, &url_sub)
+        .header("If", format!("({})", lock_token))
+        .send()
+        .await?;
+    assert_eq!(resp_sub_ok.status(), 201);
+
+    // 7. Attempt to DELETE the file inside without the lock token (should fail with 423 Locked)
+    let resp_del_fail = app.client.delete(&url_file).send().await?;
+    assert_eq!(resp_del_fail.status(), StatusCode::LOCKED);
+
+    // 8. Attempt to DELETE the file with the lock token (should succeed with 204 No Content)
+    let resp_del_ok = app
+        .client
+        .delete(&url_file)
+        .header("If", format!("({})", lock_token))
+        .send()
+        .await?;
+    assert_eq!(resp_del_ok.status(), 204);
+
+    // 9. MOVE a resource out of the locked collection (requires lock token because it alters the locked parent collection)
+    let url_file2 = format!("{}test_file_2.txt", url_coll);
+    let resp_put2 = app
+        .client
+        .put(&url_file2)
+        .header("If", format!("({})", lock_token))
+        .body(b"other content".to_vec())
+        .send()
+        .await?;
+    assert_eq!(resp_put2.status(), 201);
+
+    let url_unlocked_dest = format!("http://files1.atrium.io:{}/unlocked_dest.txt", app.port);
+    let resp_move_fail = mv(&app, &url_file2)
+        .header("Destination", &url_unlocked_dest)
+        .send()
+        .await?;
+    assert_eq!(resp_move_fail.status(), StatusCode::LOCKED);
+
+    let resp_move_ok = mv(&app, &url_file2)
+        .header("Destination", &url_unlocked_dest)
+        .header("If", format!("({})", lock_token))
+        .send()
+        .await?;
+    assert_eq!(resp_move_ok.status(), 201);
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn try_to_hack() -> BoxResult<()> {
     let app = TestApp::spawn(None).await;
     let mut dst = std::fs::File::create(format!("./data/{}/test.txt", app.id))
@@ -325,16 +615,24 @@ async fn try_to_use_wrong_key_to_decrypt() -> BoxResult<()> {
     let new_data = data.replace("ABCD123", "ABCDEFG");
     let mut dst = std::fs::File::create(&fp).expect("could not create file");
     std::io::Write::write(&mut dst, new_data.as_bytes()).expect("failed to write to file");
+
+    let xsrf_token = login_and_get_xsrf_token(&app, "admin").await;
     app.client
         .get(format!("http://atrium.io:{}/reload", app.port))
+        .header("xsrf-token", &xsrf_token)
         .send()
         .await
         .expect("failed to execute request");
-
     app.is_ready().await;
 
     // Assert that the file cannot be retrieved or that the server closes the connection
-    if let Ok(response) = app.client.get(&url).send().await {
+    if let Ok(response) = app
+        .client
+        .get(&url)
+        .header("xsrf-token", &xsrf_token)
+        .send()
+        .await
+    {
         assert!(response.bytes().await.is_err());
     }
 

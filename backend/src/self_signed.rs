@@ -2,7 +2,7 @@ use crate::CONFIG_FILE;
 use atrium::errors::Error;
 use axum::{extract::connect_info::IntoMakeServiceWithConnectInfo, routing::MethodRouter};
 use axum_server::{Handle, tls_rustls::RustlsConfig};
-use std::{net::SocketAddr, path::Path};
+use std::net::SocketAddr;
 use tokio::fs;
 use tracing::info;
 
@@ -31,16 +31,17 @@ pub async fn serve_with_self_signed_cert(
 
 /// Load or generate a self-signed certificate and private key
 async fn load_or_generate_cert() -> Result<(Vec<u8>, Vec<u8>), Error> {
-    if Path::new(CERT_PATH).exists() && Path::new(KEY_PATH).exists() {
-        info!("Loading existing certificate and key from disk...");
-        let cert = fs::read(CERT_PATH).await?;
-        let key = fs::read(KEY_PATH).await?;
-        Ok((cert, key))
-    } else {
-        info!("Generating new self-signed certificate and key...");
-        let (cert, key) = generate_self_signed_cert().await?;
-        persist_cert_and_key(&cert, &key).await?;
-        Ok((cert, key))
+    match (fs::read(CERT_PATH).await, fs::read(KEY_PATH).await) {
+        (Ok(cert), Ok(key)) => Ok((cert, key)),
+        (Err(e1), Err(e2))
+            if e1.kind() == std::io::ErrorKind::NotFound
+                || e2.kind() == std::io::ErrorKind::NotFound =>
+        {
+            let (cert, key) = generate_self_signed_cert().await?;
+            persist_cert_and_key(&cert, &key).await?;
+            Ok((cert, key))
+        }
+        (Err(e), _) | (_, Err(e)) => Err(e.into()),
     }
 }
 

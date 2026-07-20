@@ -1,5 +1,5 @@
 use crate::{
-    appstate::ConfigFile,
+    appstate::{ConfigFile, ConfigLock},
     appstate::{ConfigState, MAXMIND_READER, OptionalMaxMindReader},
     configuration::Config,
     configuration::config_or_error,
@@ -10,7 +10,7 @@ use crate::{
         is_default, query_pairs_or_error, random_string, string_trim, vec_trim_remove_empties,
     },
 };
-use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier, password_hash::SaltString};
+use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier, password_hash::{SaltString, rand_core::OsRng}};
 use axum::{
     Extension, Json, RequestPartsExt,
     extract::{
@@ -22,7 +22,6 @@ use axum_extra::{
     TypedHeader,
     extract::cookie::{Cookie, Key, PrivateCookieJar},
 };
-use chacha20poly1305::aead::OsRng;
 use headers::{Authorization, authorization::Basic};
 use http::{StatusCode, request::Parts};
 use serde::{Deserialize, Serialize};
@@ -35,6 +34,8 @@ pub use super::share::Share;
 pub static AUTH_COOKIE: &str = "ATRIUM_AUTH";
 pub static ADMINS_ROLE: &str = "ADMINS";
 pub static REDACTED: &str = "REDACTED";
+
+pub const MAX_LOGIN_LEN: usize = 256;
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UserInfo {
@@ -147,11 +148,11 @@ where
 
         // Try to get user_token from the query
         let Ok(query) = RawQuery::from_request_parts(parts, state).await;
-        if let Some(Some(password)) = query_pairs_or_error(query.0.as_deref())
+        if let Some(password) = query_pairs_or_error(query.0.as_deref())
             .ok()
-            .map(|hm| hm.get("token").map(|v| v.to_owned()))
+            .and_then(|hm| hm.get("token").cloned())
         {
-            let user_token = decrypt_user_token(AUTH_COOKIE, &jar, password)
+            let user_token = decrypt_user_token(AUTH_COOKIE, &jar, &password)
                 .map(|mut t| {
                     t.xsrf_token = None;
                     t
@@ -160,7 +161,7 @@ where
             return Ok(user_token);
         }
 
-        // OR Try to get the serialized user_token from the cookie jar, and check the xsrf token
+        // OR Try to get the serialized user_token from the cookie jar
         if let Some(cookie) = jar.get(AUTH_COOKIE) {
             // Deserialize the user_token and return him/her
             let serialized_user_token = cookie.value();
@@ -303,7 +304,6 @@ pub async fn local_auth(
     jar: PrivateCookieJar,
     State(config): State<ConfigState>,
     #[cfg(target_os = "linux")] State(jail): State<crate::OptionalJail>,
-    host: Host,
     Json(payload): Json<LocalAuth>,
 ) -> Result<(PrivateCookieJar, Json<AuthResponse>), (StatusCode, &'static str)> {
     // Find the user in configuration
@@ -320,7 +320,6 @@ pub async fn local_auth(
         };
     let cookie = create_user_cookie(
         &user_token,
-        &host,
         &config,
         addr,
         MAXMIND_READER.get(),
@@ -345,7 +344,6 @@ pub async fn logout(jar: PrivateCookieJar, host: Host) -> Result<PrivateCookieJa
 
 pub(crate) fn create_user_cookie(
     user_token: &UserToken,
-    host: &Host,
     config: &Config,
     addr: SocketAddr,
     reader: OptionalMaxMindReader,
@@ -354,7 +352,7 @@ pub(crate) fn create_user_cookie(
     let encoded = serde_json::to_string(user_token)
         .map_err(|_| ErrResponse::S500("could not encode user"))?;
     let cookie = Cookie::build((AUTH_COOKIE, encoded))
-        .domain(host.hostname().to_owned())
+        .domain(config.domain.clone())
         .path("/")
         .same_site(axum_extra::extract::cookie::SameSite::Lax)
         .secure(config.tls_mode.is_secure())
@@ -375,6 +373,9 @@ pub fn authenticate_local_user(
     reader: OptionalMaxMindReader,
     addr: SocketAddr,
 ) -> Result<(&User, UserToken), (StatusCode, &'static str)> {
+    if payload.login.len() > MAX_LOGIN_LEN {
+        return Err((StatusCode::UNAUTHORIZED, "user does not exist"));
+    }
     let user = config
         .users
         .iter()
@@ -397,7 +398,7 @@ pub fn authenticate_local_user(
         )
     })?;
     Argon2::default()
-        .verify_password(payload.password.as_bytes(), &parsed_hash)
+        .verify_password(payload.password.trim().as_bytes(), &parsed_hash)
         .map_err(|_| {
             info!(
                 "AUTHENTICATION ERROR for {} from {} : password does not match",
@@ -427,8 +428,10 @@ pub(crate) fn user_to_token(user: &User, config: &Config) -> UserToken {
 
 pub async fn get_users(
     State(config_file): State<ConfigFile>,
+    State(config_lock): State<ConfigLock>,
     _admin: AdminToken,
 ) -> Result<Json<Vec<User>>, (StatusCode, &'static str)> {
+    let _lock = config_lock.lock().await;
     let config = config_or_error(&config_file).await?;
     // Return all the users as Json
     Ok(Json(
@@ -445,9 +448,11 @@ pub async fn get_users(
 
 pub async fn delete_user(
     State(config_file): State<ConfigFile>,
+    State(config_lock): State<ConfigLock>,
     _admin: AdminToken,
     Path(user_login): Path<String>,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
+    let _lock = config_lock.lock().await;
     let mut config = config_or_error(&config_file).await?;
     // Find the user
     if let Some(pos) = config.users.iter().position(|u| u.login == user_login) {
@@ -467,12 +472,16 @@ pub async fn delete_user(
 
 pub async fn add_user(
     State(config_file): State<ConfigFile>,
-    State(config): State<ConfigState>,
+    State(config_lock): State<ConfigLock>,
     _admin: AdminToken,
     Json(mut payload): Json<User>,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
+    if payload.login.len() > MAX_LOGIN_LEN {
+        return Err((StatusCode::BAD_REQUEST, "login too long"));
+    }
+    let _lock = config_lock.lock().await;
     // Clone the config
-    let mut config = (*config).clone();
+    let mut config = config_or_error(&config_file).await?;
     // Find the user
     if let Some(user) = config.users.iter_mut().find(|u| u.login == payload.login) {
         // It is an existing user, we only hash the password if it is not empty

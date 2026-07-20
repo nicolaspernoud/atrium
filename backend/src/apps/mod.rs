@@ -22,7 +22,7 @@ use tracing::error;
 
 use crate::{
     apps::proxy::ProxyError,
-    appstate::{ConfigFile, ConfigState},
+    appstate::{ConfigFile, ConfigLock, UpgradedConnectionsSemaphore},
     auth::AdminToken,
     configuration::{HostType, config_or_error},
     utils::{is_default, option_vec_trim_remove_empties, string_trim, vec_trim_remove_empties},
@@ -93,7 +93,7 @@ pub struct AppWithUri {
 }
 
 impl AppWithUri {
-    pub fn from_app(inner: App, port: Option<u16>) -> Self {
+    pub fn try_from_app(inner: App, port: Option<u16>) -> Result<Self, ProxyError> {
         let app_scheme = if port.is_some() {
             Scheme::HTTP
         } else {
@@ -107,18 +107,18 @@ impl AppWithUri {
         let forward_base_uri: Uri = inner
             .target
             .parse()
-            .expect("could not parse app target service");
+            .map_err(ProxyError::InvalidUri)?;
         let forward_parts = forward_base_uri.into_parts();
         let forward_authority = forward_parts
             .authority
-            .expect("could not parse app target service host");
+            .ok_or_else(|| ProxyError::ClientError("could not parse app target service host"))?;
 
-        Self {
+        Ok(Self {
             inner,
             app_scheme,
             forward_scheme,
             forward_authority,
-        }
+        })
     }
 }
 
@@ -126,6 +126,7 @@ pub async fn proxy_handler<S>(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     app: HostType,
     host: Host,
+    State(semaphore): State<UpgradedConnectionsSemaphore>,
     State(client): State<S>,
     mut req: Request<Body>,
 ) -> Result<Response<Incoming>, impl IntoResponse>
@@ -179,6 +180,7 @@ where
         &app.forward_authority,
         req,
         client,
+        Some(semaphore),
     )
     .await?;
 
@@ -226,8 +228,10 @@ where
 
 pub async fn get_apps(
     State(config_file): State<ConfigFile>,
+    State(config_lock): State<ConfigLock>,
     _admin: AdminToken,
 ) -> Result<Json<Vec<App>>, (StatusCode, &'static str)> {
+    let _lock = config_lock.lock().await;
     let config = config_or_error(&config_file).await?;
     // Return all the apps as Json
     Ok(Json(config.apps))
@@ -235,9 +239,11 @@ pub async fn get_apps(
 
 pub async fn delete_app(
     State(config_file): State<ConfigFile>,
+    State(config_lock): State<ConfigLock>,
     _admin: AdminToken,
     Path(app_id): Path<u32>,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
+    let _lock = config_lock.lock().await;
     let mut config = config_or_error(&config_file).await?;
     // Find the app
     if let Some(pos) = config.apps.iter().position(|a| a.id == app_id) {
@@ -257,12 +263,23 @@ pub async fn delete_app(
 
 pub async fn add_app(
     State(config_file): State<ConfigFile>,
-    State(config): State<ConfigState>,
+    State(config_lock): State<ConfigLock>,
     _admin: AdminToken,
     Json(payload): Json<App>,
 ) -> Result<(StatusCode, &'static str), (StatusCode, &'static str)> {
+    // Validate the app target
+    if payload.is_proxy {
+        let _unused = AppWithUri::try_from_app(payload.clone(), None).map_err(|_| {
+            (
+                StatusCode::BAD_REQUEST,
+                "invalid app target URI or missing authority",
+            )
+        })?;
+    }
+
+    let _lock = config_lock.lock().await;
     // Clone the config
-    let mut config = (*config).clone();
+    let mut config = config_or_error(&config_file).await?;
     let status;
     // Find the app
     if let Some(app) = config.apps.iter_mut().find(|a| a.id == payload.id) {

@@ -75,8 +75,8 @@ impl Header for Overwrite {
     {
         let line = one(values)?;
         match line.as_bytes() {
-            b"F" => Ok(Overwrite(false)),
-            b"T" => Ok(Overwrite(true)),
+            _ if line.as_bytes().eq_ignore_ascii_case(b"F") => Ok(Overwrite(false)),
+            _ if line.as_bytes().eq_ignore_ascii_case(b"T") => Ok(Overwrite(true)),
             _ => Err(invalid()),
         }
     }

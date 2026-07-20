@@ -22,7 +22,7 @@ pub async fn static_handler(uri: Uri, headers: HeaderMap) -> Response {
         .unwrap_or("");
 
     if !accept_encoding.contains("gzip") {
-        return (StatusCode::INTERNAL_SERVER_ERROR, "client must accept gzip").into_response();
+        return (StatusCode::NOT_ACCEPTABLE, "client must accept gzip").into_response();
     }
 
     // Try finding the file

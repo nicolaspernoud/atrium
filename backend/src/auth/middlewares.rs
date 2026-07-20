@@ -92,10 +92,9 @@ pub async fn auth_middleware(
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
     if let HostType::SkipVerifyReverseApp(app) | HostType::ReverseApp(app) = host_type
-        && insert_authenticated_user_mail_header(&app, user.map(|u| u.0), &mut req).is_err()
-    {
-        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-    }
+        && insert_authenticated_user_mail_header(&app, user.map(|u| u.0), &mut req).is_err() {
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
     next.run(req).await
 }
 
@@ -285,7 +284,7 @@ mod check_user_has_role_or_forbid_tests {
             roles: vec!["role1".to_string(), "role2".to_string()],
             ..Default::default()
         };
-        let app = AppWithUri::from_app(app, None);
+        let app = AppWithUri::try_from_app(app, None).unwrap();
         let target = HostType::ReverseApp(Box::new(app));
         let res = check_user_role_and_share(user, &target, "", "");
         assert!(matches!(res, Err(super::AuthError::Unauthorized)));
@@ -302,7 +301,7 @@ mod check_user_has_role_or_forbid_tests {
             roles: vec!["role1".to_string(), "role2".to_string()],
             ..Default::default()
         };
-        let app = AppWithUri::from_app(app, None);
+        let app = AppWithUri::try_from_app(app, None).unwrap();
         let target = HostType::ReverseApp(Box::new(app));
         assert!(check_user_role_and_share(Some(&user), &target, "", "").is_ok());
     }
@@ -318,7 +317,7 @@ mod check_user_has_role_or_forbid_tests {
             roles: vec!["role1".to_string(), "role2".to_string()],
             ..Default::default()
         };
-        let app = AppWithUri::from_app(app, None);
+        let app = AppWithUri::try_from_app(app, None).unwrap();
         let target = HostType::ReverseApp(Box::new(app));
         assert!(check_user_role_and_share(Some(&user), &target, "", "").is_ok());
     }
@@ -334,7 +333,7 @@ mod check_user_has_role_or_forbid_tests {
             roles: vec!["role1".to_string(), "role2".to_string()],
             ..Default::default()
         };
-        let app = AppWithUri::from_app(app, None);
+        let app = AppWithUri::try_from_app(app, None).unwrap();
         let target = HostType::ReverseApp(Box::new(app));
         let res = check_user_role_and_share(Some(&user), &target, "", "");
         assert!(matches!(res, Err(super::AuthError::Forbidden)));
@@ -348,7 +347,7 @@ mod check_user_has_role_or_forbid_tests {
             roles: vec!["role1".to_string(), "role2".to_string()],
             ..Default::default()
         };
-        let app = AppWithUri::from_app(app, None);
+        let app = AppWithUri::try_from_app(app, None).unwrap();
         let target = HostType::ReverseApp(Box::new(app));
         let res = check_user_role_and_share(Some(&user), &target, "", "");
         assert!(matches!(res, Err(super::AuthError::Forbidden)));
@@ -364,7 +363,7 @@ mod check_user_has_role_or_forbid_tests {
             target: "www.example.com".to_string(), // to prevent failing when parsing url
             ..Default::default()
         };
-        let app = AppWithUri::from_app(app, None);
+        let app = AppWithUri::try_from_app(app, None).unwrap();
         let target = HostType::ReverseApp(Box::new(app));
         let res = check_user_role_and_share(Some(&user), &target, "", "");
         assert!(matches!(res, Err(super::AuthError::Forbidden)));
@@ -377,7 +376,7 @@ mod check_user_has_role_or_forbid_tests {
             target: "www.example.com".to_string(), // to prevent failing when parsing url
             ..Default::default()
         };
-        let app = AppWithUri::from_app(app, None);
+        let app = AppWithUri::try_from_app(app, None).unwrap();
         let target = HostType::ReverseApp(Box::new(app));
         let res = check_user_role_and_share(Some(&user), &target, "", "");
         assert!(matches!(res, Err(super::AuthError::Forbidden)));

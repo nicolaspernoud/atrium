@@ -31,7 +31,7 @@ use async_walkdir::WalkDir;
 use async_zip::{Compression, ZipEntryBuilder, tokio::write::ZipFileWriter};
 use axum::body::Body;
 use chrono::{DateTime, Duration, TimeZone, Utc};
-use dashmap::DashMap;
+use dashmap::{DashMap, Entry};
 use futures_util::{FutureExt, StreamExt, future::BoxFuture};
 use headers::{
     AcceptRanges, ContentType, HeaderMap, HeaderMapExt, IfModifiedSince, IfNoneMatch, IfRange,
@@ -70,12 +70,13 @@ use uuid::Uuid;
 pub type Request = hyper::Request<Body>;
 pub type Response = hyper::Response<Body>;
 
-pub type BoxResult<T> = Result<T, Box<dyn std::error::Error>>;
+pub type BoxResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 static APPLICATION_JSON: HeaderValue = HeaderValue::from_static("application/json");
 static ACCEPTED: HeaderValue = HeaderValue::from_static("accepted");
 
 const LOCK_TIMEOUT: i64 = 24 * 60 * 60; // 24 hours in seconds
 const BUF_SIZE: usize = 65536;
+const MAX_PROP_FIND_ENTRIES: usize = 10000;
 
 #[derive(Debug)]
 pub struct LockInfo {
@@ -84,6 +85,133 @@ pub struct LockInfo {
 }
 
 pub type LockMap = Arc<DashMap<PathBuf, LockInfo>>;
+
+pub enum RealPathError {
+    Forbidden,
+    NotFound,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PathKind {
+    Dir,
+    File,
+    Other,
+    Miss,
+}
+
+#[derive(Debug, Clone)]
+pub struct RealPath {
+    path: PathBuf,
+    kind: PathKind,
+    size: u64,
+    base_path: PathBuf,
+    allow_symlinks: bool,
+}
+
+impl RealPath {
+    pub async fn new(
+        dav_path: &str,
+        url_path: &str,
+        allow_symlinks: bool,
+    ) -> Result<Self, RealPathError> {
+        let path = Self::extract_path(url_path, dav_path).ok_or(RealPathError::Forbidden)?;
+        Self::new_from_path(path, dav_path.into(), allow_symlinks).await
+    }
+
+    pub async fn new_from_path(
+        path: PathBuf,
+        base_path: PathBuf,
+        allow_symlinks: bool,
+    ) -> Result<Self, RealPathError> {
+        let (kind, size) = match fs::metadata(&path).await.ok() {
+            Some(meta) => {
+                let kind = if meta.is_dir() {
+                    PathKind::Dir
+                } else if meta.is_file() {
+                    PathKind::File
+                } else {
+                    PathKind::Other
+                };
+                (kind, meta.len())
+            }
+            None => (PathKind::Miss, 0),
+        };
+
+        if !allow_symlinks && kind != PathKind::Miss && !is_root_contained(&path, &base_path).await
+        {
+            return Err(RealPathError::NotFound);
+        }
+
+        Ok(Self {
+            path,
+            kind,
+            size,
+            base_path,
+            allow_symlinks,
+        })
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    pub fn is_miss(&self) -> bool {
+        self.kind == PathKind::Miss
+    }
+
+    pub fn is_dir(&self) -> bool {
+        self.kind == PathKind::Dir
+    }
+
+    pub fn is_file(&self) -> bool {
+        self.kind == PathKind::File
+    }
+
+    pub fn size(&self) -> u64 {
+        self.size
+    }
+
+    pub fn base_path(&self) -> &Path {
+        &self.base_path
+    }
+
+    pub fn allow_symlinks(&self) -> bool {
+        self.allow_symlinks
+    }
+
+    pub fn extract_path(wanted_path: &str, dav_path: &str) -> Option<PathBuf> {
+        let mut decoded_path = decode_uri(wanted_path.get(1..)?)?.into_owned();
+        // Prevent double-encoding attacks: decode until stable
+        loop {
+            let next = decode_uri(&decoded_path).map(|s| s.into_owned());
+            match next {
+                Some(n) if n != decoded_path => decoded_path = n,
+                _ => break,
+            }
+        }
+        let stripped_path = Path::new(&decoded_path).components().collect::<PathBuf>();
+        // Reject any '..' components explicitly
+        if stripped_path
+            .components()
+            .any(|c| c == std::path::Component::ParentDir || c == std::path::Component::RootDir)
+        {
+            return None;
+        }
+        Some(Path::new(dav_path).join(stripped_path))
+    }
+}
+
+async fn is_root_contained(path: &Path, directory: &Path) -> bool {
+    let (path_canon, dir_canon) = tokio::join!(fs::canonicalize(path), fs::canonicalize(directory));
+    let dir = match dir_canon {
+        Ok(dir) => dir,
+        Err(_) => return false,
+    };
+    path_canon
+        .ok()
+        .map(|v| v.starts_with(dir))
+        .unwrap_or_default()
+}
 
 pub struct WebdavServer {
     locks: LockMap,
@@ -126,61 +254,85 @@ impl WebdavServer {
         let mut res = Response::default();
         let head_only = req.method() == Method::HEAD;
 
-        let path = if let Some(v) = Self::extract_path(req.uri().path(), &dav.directory) {
-            v
-        } else {
-            status_forbid(&mut res);
-            return Ok(res);
-        };
-        let path = path.as_path();
+        let real_path =
+            match RealPath::new(&dav.directory, req.uri().path(), dav.allow_symlinks).await {
+                Ok(v) => v,
+                Err(RealPathError::Forbidden) => {
+                    status_forbid(&mut res);
+                    return Ok(res);
+                }
+                Err(RealPathError::NotFound) => {
+                    status_not_found(&mut res);
+                    return Ok(res);
+                }
+            };
 
         let query = extract_query_pairs(req.uri().query().unwrap_or_default());
-
-        let (is_miss, is_dir, is_file, size) = match fs::metadata(path).await.ok() {
-            Some(meta) => (false, meta.is_dir(), meta.is_file(), meta.len()),
-            None => (true, false, false, 0),
-        };
 
         let allow_upload = dav.writable;
         let allow_delete = dav.writable;
         let allow_search = true;
         let key = dav.key;
 
-        if !dav.allow_symlinks
-            && !is_miss
-            && !self
-                .is_root_contained(path, Path::new(&dav.directory))
-                .await
-        {
-            status_not_found(&mut res);
+        // Perform WebDAV lock checking before dispatching
+        let lock_check_result = match req.method() {
+            &Method::PUT | &Method::DELETE => {
+                self.check_lock(real_path.path(), req.headers())
+            }
+            m => match m.as_str() {
+                "PROPPATCH" | "MKCOL" => {
+                    self.check_lock(real_path.path(), req.headers())
+                }
+                "COPY" => {
+                    if let Some(dest) = self.extract_dest(req.headers(), &dav.directory).await {
+                        self.check_lock(dest.path(), req.headers())
+                    } else {
+                        Ok(())
+                    }
+                }
+                "MOVE" => {
+                    if let Err(status) = self.check_lock(real_path.path(), req.headers()) {
+                        Err(status)
+                    } else if let Some(dest) = self.extract_dest(req.headers(), &dav.directory).await {
+                        self.check_lock(dest.path(), req.headers())
+                    } else {
+                        Ok(())
+                    }
+                }
+                _ => Ok(()),
+            }
+        };
+
+        if let Err(status) = lock_check_result {
+            *res.status_mut() = status;
+            *res.body_mut() = Body::from("Resource is locked");
             return Ok(res);
         }
 
         match req.method() {
             &Method::GET | &Method::HEAD => {
-                if is_dir {
+                if real_path.is_dir() {
                     if let Some(search_str) = query.get("q") {
                         if allow_search {
                             let q = decode_uri(search_str).unwrap_or_default();
-                            self.handle_query_dir(
-                                path,
-                                &q,
-                                &mut res,
-                                &dav.directory,
-                                dav.allow_symlinks,
-                                key,
-                            )
-                            .await?;
+                            self.handle_query_dir(&real_path, &q, &mut res, key).await?;
                         }
                     } else if query.contains_key("diskusage") {
-                        self.handle_disk_usage(path, &mut res).await?;
+                        self.handle_disk_usage(real_path.path(), &mut res).await?;
                     } else {
-                        Self::handle_zip_dir(path, head_only, &mut res, key)?;
+                        Self::handle_zip_dir(real_path.path(), head_only, &mut res, key)?;
                     }
-                } else if is_file {
+                } else if real_path.is_file() {
                     let inline = query.contains_key("inline");
-                    self.handle_send_file(path, req.headers(), head_only, &mut res, key, inline)
-                        .await?;
+                    self.handle_send_file(
+                        real_path.path(),
+                        req.headers(),
+                        head_only,
+                        &mut res,
+                        key,
+                        inline,
+                    )
+                    .await?;
                 } else {
                     status_not_found(&mut res);
                 }
@@ -189,49 +341,36 @@ impl WebdavServer {
                 set_webdav_headers(&mut res);
             }
             &Method::PUT => {
-                if !allow_upload || (!allow_delete && is_file && size > 0) {
+                if !allow_upload || (!allow_delete && real_path.is_file() && real_path.size() > 0) {
                     status_forbid(&mut res);
                 } else {
-                    self.handle_upload(path, req, &mut res, key).await?;
+                    self.handle_upload(&real_path, req, &mut res, key).await?;
                 }
             }
             &Method::DELETE => {
                 if !allow_delete {
                     status_forbid(&mut res);
-                } else if !is_miss {
-                    self.handle_delete(path, is_dir, &mut res).await?;
+                } else if !real_path.is_miss() {
+                    self.handle_delete(&real_path, &mut res).await?;
                 } else {
                     status_not_found(&mut res);
                 }
             }
             method => match method.as_str() {
                 "PROPFIND" => {
-                    if is_dir {
-                        self.handle_propfind_dir(
-                            path,
-                            req.headers(),
-                            &mut res,
-                            &dav.directory,
-                            dav.allow_symlinks,
-                            key,
-                        )
-                        .await?;
-                    } else if is_file {
-                        self.handle_propfind_file(
-                            path,
-                            &mut res,
-                            &dav.directory,
-                            dav.allow_symlinks,
-                            key,
-                        )
-                        .await?;
+                    if real_path.is_dir() {
+                        self.handle_propfind_dir(&real_path, req.headers(), &mut res, key)
+                            .await?;
+                    } else if real_path.is_file() {
+                        self.handle_propfind_file(&real_path, &mut res, key).await?;
                     } else {
                         status_not_found(&mut res);
                     }
                 }
                 "PROPPATCH" => {
-                    if is_file {
-                        self.handle_proppatch(req, path, &mut res).await?;
+                    if real_path.is_file() {
+                        self.handle_proppatch(req, real_path.path(), &mut res)
+                            .await?;
                     } else {
                         status_not_found(&mut res);
                     }
@@ -239,47 +378,43 @@ impl WebdavServer {
                 "MKCOL" => {
                     if !allow_upload {
                         status_forbid(&mut res);
-                    } else if !is_miss {
+                    } else if !real_path.is_miss() {
                         status_method_not_allowed(&mut res);
                     } else if !req.into_body().collect().await?.to_bytes().is_empty() {
                         *res.status_mut() = StatusCode::UNSUPPORTED_MEDIA_TYPE;
                         *res.body_mut() = Body::from("Unsupported Media Type");
                     } else {
-                        self.handle_mkcol(path, &mut res).await?;
+                        self.handle_mkcol(real_path.path(), &mut res).await?;
                     }
                 }
                 "COPY" => {
                     if !allow_upload {
                         status_forbid(&mut res);
-                    } else if is_miss {
+                    } else if real_path.is_miss() {
                         status_not_found(&mut res);
                     } else {
-                        self.handle_copymove(path, req, &mut res, &dav.directory)
+                        self.handle_copymove(&real_path, req, &mut res, &dav.directory)
                             .await?;
                     }
                 }
                 "MOVE" => {
                     if !allow_upload || !allow_delete {
                         status_forbid(&mut res);
-                    } else if is_miss {
+                    } else if real_path.is_miss() {
                         status_not_found(&mut res);
                     } else {
-                        self.handle_copymove(path, req, &mut res, &dav.directory)
+                        self.handle_copymove(&real_path, req, &mut res, &dav.directory)
                             .await?;
                     }
                 }
                 "LOCK" => {
-                    if is_dir {
-                        status_not_found(&mut res);
-                    } else {
-                        self.handle_lock(path, req, is_miss, &mut res)?;
-                    }
+                    self.handle_lock(&real_path, req, &mut res)?;
                 }
                 "UNLOCK" => {
-                    if is_miss {
+                    if real_path.is_miss() {
                         status_not_found(&mut res);
                     } else {
-                        self.handle_unlock(path, req, &mut res)?;
+                        self.handle_unlock(real_path.path(), req, &mut res)?;
                     }
                 }
                 _ => {
@@ -292,19 +427,14 @@ impl WebdavServer {
 
     async fn handle_upload(
         &self,
-        path: &Path,
+        real_path: &RealPath,
         req: Request,
         res: &mut Response,
         key: Option<[u8; 32]>,
     ) -> BoxResult<()> {
-        if self.locks.contains_key(path) {
-            *res.status_mut() = StatusCode::LOCKED;
-            *res.body_mut() = Body::from("Resource is locked");
-            return Ok(());
-        }
-        ensure_path_parent(path).await?;
+        ensure_path_parent(real_path.path()).await?;
 
-        let mut file = if let Ok(v) = DavFile::create(path, key).await {
+        let mut file = if let Ok(v) = DavFile::create(real_path.path(), key).await {
             v
         } else {
             {
@@ -333,8 +463,12 @@ impl WebdavServer {
                 parts.uri,
                 e
             );
-            if let Err(e) = fs::remove_file(path).await {
-                error!("Failed to remove partial file {:?}: {}", path, e);
+            if let Err(e) = fs::remove_file(real_path.path()).await {
+                error!(
+                    "Failed to remove partial file {:?}: {}",
+                    real_path.path(),
+                    e
+                );
             }
             return Ok(());
         };
@@ -346,7 +480,7 @@ impl WebdavServer {
             && let Ok(t) = h.parse::<i64>()
             && t >= 0 // Reject negative timestamps (before Unix epoch)
             && t <= Utc::now().timestamp() + 86400 // Reject timestamps more than 1 day in the future
-            && filetime::set_file_mtime(path, filetime::FileTime::from_unix_time(t, 0)).is_ok()
+            && filetime::set_file_mtime(real_path.path(), filetime::FileTime::from_unix_time(t, 0)).is_ok()
         {
             // Respond with the appropriate header on success
             res.headers_mut().insert("X-OC-Mtime", ACCEPTED.clone());
@@ -356,12 +490,19 @@ impl WebdavServer {
         Ok(())
     }
 
-    async fn handle_delete(&self, path: &Path, is_dir: bool, res: &mut Response) -> BoxResult<()> {
-        match is_dir {
-            true => fs::remove_dir_all(path).await?,
-            false => fs::remove_file(path).await?,
+    async fn handle_delete(
+        &self,
+        real_path: &RealPath,
+        res: &mut Response,
+    ) -> BoxResult<()> {
+        let path = real_path.path();
+        if real_path.is_dir() {
+            fs::remove_dir_all(path).await?;
+            self.locks.retain(|p, _| !p.starts_with(path));
+        } else {
+            fs::remove_file(path).await?;
+            self.locks.remove(path);
         }
-        self.locks.remove(path);
 
         status_no_content(res);
         Ok(())
@@ -369,16 +510,18 @@ impl WebdavServer {
 
     async fn handle_query_dir(
         &self,
-        path: &Path,
+        real_path: &RealPath,
         query: &str,
         res: &mut Response,
-        directory: &str,
-        allow_symlinks: bool,
         key: Option<[u8; 32]>,
     ) -> BoxResult<()> {
         let mut paths: Vec<PathItem> = vec![];
-        let mut walkdir = WalkDir::new(path);
+        let mut walkdir = WalkDir::new(real_path.path());
+        const MAX_ENTRIES: usize = 10000;
         while let Some(entry) = walkdir.next().await {
+            if paths.len() >= MAX_ENTRIES {
+                break;
+            }
             if let Ok(entry) = entry {
                 if !entry
                     .file_name()
@@ -388,18 +531,13 @@ impl WebdavServer {
                 {
                     continue;
                 }
-                if fs::symlink_metadata(entry.path()).await.is_err() {
-                    continue;
-                }
-                if let Ok(Some(item)) = self
-                    .to_pathitem(
-                        entry.path(),
-                        path.to_path_buf(),
-                        directory,
-                        allow_symlinks,
-                        &key,
-                    )
-                    .await
+                if let Ok(child_real_path) = RealPath::new_from_path(
+                    entry.path(),
+                    real_path.base_path().to_path_buf(),
+                    real_path.allow_symlinks(),
+                )
+                .await
+                    && let Ok(Some(item)) = self.to_pathitem(&child_real_path, &key).await
                 {
                     paths.push(item);
                 }
@@ -532,27 +670,39 @@ impl WebdavServer {
 
         if let Some(range) = range {
             debug!("Requesting range: {:?}", range);
-            if range.start < size {
-                let end = range.end.unwrap_or(size - 1).min(size - 1);
-                let part_size = end.saturating_sub(range.start) + 1;
-                *res.status_mut() = StatusCode::PARTIAL_CONTENT;
-                let content_range = format!("bytes {}-{}/{}", range.start, end, size);
-                res.headers_mut()
-                    .insert(CONTENT_RANGE, content_range.parse()?);
-                res.headers_mut()
-                    .insert(CONTENT_LENGTH, format!("{part_size}").parse()?);
-                if head_only {
-                    return Ok(());
+            let (start, end) = match range {
+                RangeValue::Range(start, end) => (
+                    start,
+                    end.unwrap_or(size.saturating_sub(1))
+                        .min(size.saturating_sub(1)),
+                ),
+                RangeValue::Suffix(suffix) => {
+                    let suffix = suffix.min(size);
+                    (size.saturating_sub(suffix), size.saturating_sub(1))
                 }
+            };
 
-                file.seek(SeekFrom::Start(range.start)).await?;
-                let reader = file.take(part_size);
-                *res.body_mut() = Body::from_stream(ReaderStream::new(reader));
-            } else {
+            if start > end || start >= size {
                 *res.status_mut() = StatusCode::RANGE_NOT_SATISFIABLE;
                 res.headers_mut()
                     .insert(CONTENT_RANGE, format!("bytes */{size}").parse()?);
+                return Ok(());
             }
+
+            let part_size = end - start + 1;
+            *res.status_mut() = StatusCode::PARTIAL_CONTENT;
+            let content_range = format!("bytes {}-{}/{}", start, end, size);
+            res.headers_mut()
+                .insert(CONTENT_RANGE, content_range.parse()?);
+            res.headers_mut()
+                .insert(CONTENT_LENGTH, format!("{part_size}").parse()?);
+            if head_only {
+                return Ok(());
+            }
+
+            file.seek(SeekFrom::Start(start)).await?;
+            let reader = file.take(part_size);
+            *res.body_mut() = Body::from_stream(ReaderStream::new(reader));
         } else {
             res.headers_mut()
                 .insert(CONTENT_LENGTH, format!("{size}").parse()?);
@@ -568,17 +718,17 @@ impl WebdavServer {
 
     async fn handle_propfind_dir(
         &self,
-        path: &Path,
+        real_path: &RealPath,
         headers: &HeaderMap<HeaderValue>,
         res: &mut Response,
-        directory: &str,
-        allow_symlinks: bool,
         key: Option<[u8; 32]>,
     ) -> BoxResult<()> {
-        let base_path = Path::new(directory);
         let depth: u32 = match headers.get("depth") {
             Some(v) => {
-                if let Some(v) = v.to_str().ok().and_then(|v| v.parse().ok()) {
+                let v_str = v.to_str().unwrap_or_default();
+                if v_str == "infinity" {
+                    u32::MAX
+                } else if let Ok(v) = v_str.parse::<u32>() {
                     v
                 } else {
                     *res.status_mut() = StatusCode::BAD_REQUEST;
@@ -588,13 +738,18 @@ impl WebdavServer {
             None => 1,
         };
         let mut paths = vec![
-            self.to_pathitem(path, base_path, directory, allow_symlinks, &key)
+            self.to_pathitem(real_path, &key)
                 .await?
                 .ok_or(Error::other("no paths"))?,
         ];
         if depth != 0 {
             if let Ok(child) = self
-                .list_dir(path, base_path, directory, allow_symlinks, &key)
+                .list_dir_recursive(
+                    real_path,
+                    &key,
+                    depth,
+                    MAX_PROP_FIND_ENTRIES.saturating_sub(paths.len()),
+                )
                 .await
             {
                 paths.extend(child);
@@ -616,18 +771,12 @@ impl WebdavServer {
 
     async fn handle_propfind_file(
         &self,
-        path: &Path,
+        real_path: &RealPath,
         res: &mut Response,
-        directory: &str,
-        allow_symlinks: bool,
         key: Option<[u8; 32]>,
     ) -> BoxResult<()> {
-        let base_path = Path::new(directory);
         let self_uri_prefix = "/";
-        if let Some(pathitem) = self
-            .to_pathitem(path, base_path, directory, allow_symlinks, &key)
-            .await?
-        {
+        if let Some(pathitem) = self.to_pathitem(real_path, &key).await? {
             res_multistatus(res, &pathitem.to_dav_xml(self_uri_prefix));
         } else {
             status_not_found(res);
@@ -645,32 +794,78 @@ impl WebdavServer {
         }
     }
 
-    fn handle_lock(
-        &self,
-        path: &Path,
-        req: Request,
-        is_miss: bool,
-        res: &mut Response,
-    ) -> BoxResult<()> {
+    fn check_lock(&self, path: &Path, headers: &HeaderMap) -> Result<(), StatusCode> {
+        clean_expired_locks(&self.locks);
+
+        // Extract all submitted lock tokens from the If header
+        let tokens = Self::extract_if_lock_tokens(headers);
+
+        // Check if the path itself or any of its parent directories are locked
+        let mut current = Some(path);
+        while let Some(p) = current {
+            if let Some(lock) = self.locks.get(p) {
+                // If a lock is found on the path or any parent directory,
+                // the lock's token MUST be present in the If header
+                if !tokens.contains(&lock.token) {
+                    return Err(StatusCode::LOCKED);
+                }
+            }
+            current = p.parent();
+        }
+
+        Ok(())
+    }
+
+    fn extract_if_lock_tokens(headers: &HeaderMap) -> Vec<String> {
+        let mut tokens = Vec::new();
+        let Some(value) = headers.get("If").and_then(|v| v.to_str().ok()) else {
+            return tokens;
+        };
+
+        let mut in_parenthesis = false;
+        let mut chars = value.chars().peekable();
+        while let Some(c) = chars.next() {
+            match c {
+                '(' => in_parenthesis = true,
+                ')' => in_parenthesis = false,
+                '<' if in_parenthesis => {
+                    // Extract token until '>'
+                    let mut token = String::new();
+                    for next_c in chars.by_ref() {
+                        if next_c == '>' {
+                            break;
+                        }
+                        token.push(next_c);
+                    }
+                    tokens.push(token);
+                }
+                _ => {}
+            }
+        }
+        tokens
+    }
+
+    fn handle_lock(&self, real_path: &RealPath, req: Request, res: &mut Response) -> BoxResult<()> {
+        let path = real_path.path();
         debug!("LockMap on lock: {:?}", self.locks);
         clean_expired_locks(&self.locks);
 
-        if self.locks.contains_key(path) {
-            *res.status_mut() = StatusCode::LOCKED;
-            *res.body_mut() = Body::from("Resource is already locked");
-            return Ok(());
-        }
-
         let timeout_secs = parse_timeout_header(req.headers());
-
         let token = format!("opaquelocktoken:{}", Uuid::new_v4());
-        self.locks.insert(
-            path.to_path_buf(),
-            LockInfo {
-                token: token.clone(),
-                expires_at: Utc::now() + Duration::seconds(timeout_secs),
-            },
-        );
+
+        match self.locks.entry(path.to_path_buf()) {
+            Entry::Occupied(_) => {
+                *res.status_mut() = StatusCode::LOCKED;
+                *res.body_mut() = Body::from("Resource is already locked");
+                return Ok(());
+            }
+            Entry::Vacant(v) => {
+                v.insert(LockInfo {
+                    token: token.clone(),
+                    expires_at: Utc::now() + Duration::seconds(timeout_secs),
+                });
+            }
+        }
 
         // Timeout header in response
         let timeout_resp = if timeout_secs == i64::MAX {
@@ -698,7 +893,7 @@ impl WebdavServer {
             req.uri().path(),
             timeout_resp
         ));
-        if is_miss {
+        if real_path.is_miss() {
             *res.status_mut() = StatusCode::CREATED;
         }
         Ok(())
@@ -723,18 +918,17 @@ impl WebdavServer {
         };
 
         // Check if lock exists and token matches
-        match self.locks.get(path) {
-            Some(lock_info) if lock_info.token == token_header => {
-                // avoid deadlock
-                drop(lock_info);
-                self.locks.remove(path);
-                *res.status_mut() = StatusCode::NO_CONTENT;
+        match self.locks.entry(path.to_path_buf()) {
+            Entry::Occupied(entry) => {
+                if entry.get().token == token_header {
+                    entry.remove();
+                    *res.status_mut() = StatusCode::NO_CONTENT;
+                } else {
+                    *res.status_mut() = StatusCode::FORBIDDEN;
+                    *res.body_mut() = Body::from("Lock-Token does not match");
+                }
             }
-            Some(_) => {
-                *res.status_mut() = StatusCode::FORBIDDEN;
-                *res.body_mut() = Body::from("Lock-Token does not match");
-            }
-            None => {
+            Entry::Vacant(_) => {
                 *res.status_mut() = StatusCode::NOT_FOUND;
                 *res.body_mut() = Body::from("No lock found on resource");
             }
@@ -817,15 +1011,6 @@ impl WebdavServer {
         Ok(lastmodified_value.parse::<i64>()?)
     }
 
-    async fn is_root_contained(&self, path: &Path, directory: &Path) -> bool {
-        let (path, dir) = tokio::join!(fs::canonicalize(path), fs::canonicalize(directory));
-        let dir = match dir {
-            Ok(dir) => dir,
-            Err(_err) => return false,
-        };
-        path.ok().map(|v| v.starts_with(dir)).unwrap_or_default()
-    }
-
     async fn extract_dest(
         &self,
         headers: &HeaderMap<HeaderValue>,
@@ -833,78 +1018,75 @@ impl WebdavServer {
     ) -> Option<Destination> {
         let dest = headers.get("Destination")?.to_str().ok()?;
         let uri: Uri = dest.parse().ok()?;
-        match Self::extract_path(uri.path(), dav_path) {
+        match RealPath::extract_path(uri.path(), dav_path) {
             Some(dest) => Some(Destination::new(dest, uri.to_string().ends_with('/')).await),
             None => None,
         }
     }
 
-    fn extract_path(wanted_path: &str, dav_path: &str) -> Option<PathBuf> {
-        let mut decoded_path = decode_uri(&wanted_path.get(1..)?)?.into_owned();
-        // Prevent double-encoding attacks: decode until stable
-        loop {
-            let next = decode_uri(&decoded_path).map(|s| s.into_owned());
-            match next {
-                Some(n) if n != decoded_path => decoded_path = n,
-                _ => break,
+    fn list_dir_recursive<'a>(
+        &'a self,
+        real_path: &'a RealPath,
+        key: &'a Option<[u8; 32]>,
+        depth: u32,
+        max_entries: usize,
+    ) -> BoxFuture<'a, BoxResult<Vec<PathItem>>> {
+        async move {
+            let mut paths: Vec<PathItem> = vec![];
+            if max_entries == 0 {
+                return Ok(paths);
             }
-        }
-        let stripped_path = Path::new(&decoded_path).components().collect::<PathBuf>();
-        // Reject any '..' components explicitly
-        if stripped_path
-            .components()
-            .any(|c| c == std::path::Component::ParentDir)
-        {
-            return None;
-        }
-        let self_path = Path::new(dav_path);
-        Some(self_path.join(stripped_path))
-    }
-
-    async fn list_dir(
-        &self,
-        entry_path: &Path,
-        base_path: &Path,
-        directory: &str,
-        allow_symlinks: bool,
-        key: &Option<[u8; 32]>,
-    ) -> BoxResult<Vec<PathItem>> {
-        let mut paths: Vec<PathItem> = vec![];
-        let mut rd = fs::read_dir(entry_path).await?;
-        while let Ok(Some(entry)) = rd.next_entry().await {
-            let entry_path = entry.path();
-            if let Ok(Some(item)) = self
-                .to_pathitem(
-                    entry_path.as_path(),
-                    base_path,
-                    directory,
-                    allow_symlinks,
-                    key,
+            let mut rd = fs::read_dir(real_path.path()).await?;
+            while let Ok(Some(entry)) = rd.next_entry().await {
+                if paths.len() >= max_entries {
+                    break;
+                }
+                let entry_path = entry.path();
+                if let Ok(child_real_path) = RealPath::new_from_path(
+                    entry_path,
+                    real_path.base_path().to_path_buf(),
+                    real_path.allow_symlinks(),
                 )
                 .await
-            {
-                paths.push(item);
+                    && let Ok(Some(item)) = self.to_pathitem(&child_real_path, key).await
+                {
+                    let is_dir = item.is_dir();
+                    paths.push(item);
+                    if is_dir
+                        && depth > 1
+                        && let Ok(child) = self
+                            .list_dir_recursive(
+                                &child_real_path,
+                                key,
+                                depth - 1,
+                                max_entries.saturating_sub(paths.len()),
+                            )
+                            .await
+                    {
+                        paths.extend(child);
+                    }
+                }
             }
+            Ok(paths)
         }
-        Ok(paths)
+        .boxed()
     }
 
-    async fn to_pathitem<P: AsRef<Path>>(
+    async fn to_pathitem(
         &self,
-        path: P,
-        base_path: P,
-        directory: &str,
-        allow_symlinks: bool,
+        real_path: &RealPath,
         key: &Option<[u8; 32]>,
     ) -> BoxResult<Option<PathItem>> {
-        let path = path.as_ref();
-        let rel_path = path.strip_prefix(&base_path)?;
-        let (meta, meta2) = tokio::join!(fs::metadata(&path), fs::symlink_metadata(&path));
+        let rel_path = real_path.path().strip_prefix(real_path.base_path())?;
+        let (meta, meta2) = tokio::join!(
+            fs::metadata(real_path.path()),
+            fs::symlink_metadata(real_path.path())
+        );
         let (meta, meta2) = (meta?, meta2?);
         let is_symlink = meta2.is_symlink();
-        if !allow_symlinks
+        if !real_path.allow_symlinks()
             && is_symlink
-            && !self.is_root_contained(path, Path::new(directory)).await
+            && !is_root_contained(real_path.path(), real_path.base_path()).await
         {
             return Ok(None);
         }
@@ -919,7 +1101,7 @@ impl WebdavServer {
         let size = match path_type {
             PathType::Dir | PathType::SymlinkDir => None,
             PathType::File | PathType::SymlinkFile => Some(if key.is_some() {
-                decrypted_size_from_file(path, meta.len()).await
+                decrypted_size_from_file(real_path.path(), meta.len()).await
             } else {
                 meta.len()
             }),
@@ -935,11 +1117,12 @@ impl WebdavServer {
 
     async fn handle_copymove(
         &self,
-        path: &Path,
+        real_path: &RealPath,
         req: Request,
         res: &mut Response,
         dav_path: &str,
     ) -> BoxResult<()> {
+        let path = real_path.path();
         // get and check headers.
         let overwrite = req.headers().typed_get::<Overwrite>().is_none_or(|o| o.0);
         let depth = match req.headers().typed_get::<Depth>() {
@@ -960,7 +1143,7 @@ impl WebdavServer {
         };
 
         // Fails if we try to move a folder in place of the root directory itself
-        if path.is_dir() && dest.path() == &PathBuf::from(dav_path) {
+        if real_path.is_dir() && dest.path() == &PathBuf::from(dav_path) {
             *res.status_mut() = StatusCode::FORBIDDEN;
             return Ok(());
         }
@@ -990,7 +1173,7 @@ impl WebdavServer {
         }
 
         // see if we need to delete the destination first
-        if path.is_dir()
+        if real_path.is_dir()
             && dest.exists()
             && dest.is_dir()
             && overwrite
@@ -1011,13 +1194,24 @@ impl WebdavServer {
             }
         } else {
             // if the source is a file but the destination is a directory, alter the destination
-            if path.is_file() && dest.is_dir() {
-                dest.push(path.file_name().ok_or(Error::other("no path"))?.into());
+            if real_path.is_file() && dest.is_dir() {
+                dest.push(
+                    real_path
+                        .path()
+                        .file_name()
+                        .ok_or(Error::other("no path"))?
+                        .into(),
+                );
             }
-            if path.is_dir() && dest.is_file() && dest.exists() {
+            if real_path.is_dir() && dest.is_file() && dest.exists() {
                 *res.status_mut() = StatusCode::NO_CONTENT;
             } else {
                 fs::rename(path, dest.path()).await?;
+                if real_path.is_dir() {
+                    self.locks.retain(|p, _| !p.starts_with(path));
+                } else {
+                    self.locks.remove(path);
+                }
                 if dest.exists() {
                     *res.status_mut() = StatusCode::NO_CONTENT;
                 } else {
@@ -1092,7 +1286,6 @@ impl WebdavServer {
                 }
             };
 
-            let mut retval = Ok(());
             while let Some(dirent) = entries.next_entry().await? {
                 // NOTE: dirent.metadata() behaves like symlink_metadata()
                 let meta = match dirent.metadata().await {
@@ -1104,12 +1297,10 @@ impl WebdavServer {
                 let ndest = dest.join(&name);
 
                 // recurse
-                if let Err(e) = Self::do_copy(&nsrc, topdest, &ndest, meta.is_dir(), depth).await {
-                    retval = Err(e);
-                }
+                Self::do_copy(&nsrc, topdest, &ndest, meta.is_dir(), depth).await?;
             }
 
-            retval
+            Ok(())
         }
         .boxed()
     }
@@ -1129,16 +1320,22 @@ impl PathItem {
     }
 
     pub fn to_dav_xml(&self, prefix: &str) -> String {
-        let mut mtime = Utc
-            .timestamp_millis_opt(self.mtime as i64)
-            .unwrap()
-            .to_rfc2822();
-        mtime.truncate(mtime.len() - 6);
-        let mtime = format!("{mtime} GMT");
-        let mut href = encode_uri(&format!("{}{}", prefix, &self.name));
+        let mtime_str = match i64::try_from(self.mtime)
+            .ok()
+            .and_then(|t| Utc.timestamp_millis_opt(t).single())
+        {
+            Some(dt) => {
+                let mut s = dt.to_rfc2822();
+                s.truncate(s.len() - 6);
+                format!("{s} GMT")
+            }
+            None => "Thu, 01 Jan 1970 00:00:00 GMT".to_string(),
+        };
+        let mut href = encode_uri(&format!("{}{}", prefix, self.name));
         if self.is_dir() && !href.ends_with('/') {
             href.push('/');
         }
+        let href = escape(&href);
         let displayname = escape(self.base_name());
         match self.path_type {
             PathType::Dir | PathType::SymlinkDir => format!(
@@ -1147,7 +1344,7 @@ impl PathItem {
 <D:propstat>
 <D:prop>
 <D:displayname>{displayname}</D:displayname>
-<D:getlastmodified>{mtime}</D:getlastmodified>
+<D:getlastmodified>{mtime_str}</D:getlastmodified>
 <D:resourcetype><D:collection/></D:resourcetype>
 </D:prop>
 <D:status>HTTP/1.1 200 OK</D:status>
@@ -1170,7 +1367,7 @@ impl PathItem {
                 href,
                 displayname,
                 self.size.unwrap_or_default(),
-                mtime
+                mtime_str
             ),
         }
     }
@@ -1275,9 +1472,9 @@ async fn zip_dir<W: tokio::io::AsyncWrite + Unpin>(
 }
 
 #[derive(Debug)]
-struct RangeValue {
-    start: u64,
-    end: Option<u64>,
+enum RangeValue {
+    Range(u64, Option<u64>),
+    Suffix(u64),
 }
 
 fn parse_range(headers: &HeaderMap<HeaderValue>) -> Option<RangeValue> {
@@ -1288,17 +1485,22 @@ fn parse_range(headers: &HeaderMap<HeaderValue>) -> Option<RangeValue> {
     if units == "bytes" {
         let range = sp.next()?;
         let mut sp_range = range.splitn(2, '-');
-        let start: u64 = sp_range.next()?.parse().ok()?;
-        let end: Option<u64> = if let Some(end) = sp_range.next() {
-            if end.is_empty() {
+        let start_str = sp_range.next().unwrap_or("");
+        let end_str = sp_range.next().unwrap_or("");
+
+        if start_str.is_empty() {
+            // Suffix range: bytes=-N
+            let suffix: u64 = end_str.parse().ok()?;
+            Some(RangeValue::Suffix(suffix))
+        } else {
+            let start: u64 = start_str.parse().ok()?;
+            let end: Option<u64> = if end_str.is_empty() {
                 None
             } else {
-                Some(end.parse().ok()?)
-            }
-        } else {
-            None
-        };
-        Some(RangeValue { start, end })
+                Some(end_str.parse().ok()?)
+            };
+            Some(RangeValue::Range(start, end))
+        }
     } else {
         None
     }
@@ -1391,15 +1593,17 @@ enum Destination {
 impl Destination {
     async fn new(dest: PathBuf, is_new_dir: bool) -> Destination {
         if let Ok(meta) = fs::symlink_metadata(&dest).await {
-            if meta.is_symlink()
-                && let Ok(m) = fs::metadata(&dest).await
-            {
-                if m.is_file() {
-                    return Destination::ExistingFile(dest);
+            if meta.is_symlink() {
+                if let Ok(m) = fs::metadata(&dest).await {
+                    if m.is_file() {
+                        return Destination::ExistingFile(dest);
+                    }
+                    if m.is_dir() {
+                        return Destination::ExistingDir(dest);
+                    }
                 }
-                if m.is_dir() {
-                    return Destination::ExistingDir(dest);
-                }
+                // Broken symlink - treat as existing file entry
+                return Destination::ExistingFile(dest);
             }
 
             if meta.is_file() {

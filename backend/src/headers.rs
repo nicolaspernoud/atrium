@@ -16,6 +16,10 @@ impl Header for XSRFToken {
         let value = values.next().ok_or_else(headers::Error::invalid)?;
         let v = value.to_str().map_err(|_| headers::Error::invalid())?;
 
+        if v.len() > 4096 {
+            return Err(headers::Error::invalid());
+        }
+
         Ok(XSRFToken(v.to_owned()))
     }
 

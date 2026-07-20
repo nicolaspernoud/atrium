@@ -101,6 +101,15 @@ impl Server {
             .route("/api/admin/apps/{app_id}", delete(delete_app))
             .route("/api/admin/davs", get(get_davs).post(add_dav))
             .route("/api/admin/davs/{dav_id}", delete(delete_dav))
+            .route(
+                "/reload",
+                get(|| async move {
+                    match tx.send(()) {
+                        Ok(_) => Html("Apps reloaded !"),
+                        Err(_) => Html("Could not reload apps !"),
+                    }
+                }),
+            )
             .route_layer(
                 ServiceBuilder::new()
                     .layer(
@@ -115,15 +124,6 @@ impl Server {
             );
 
         let main_router = Router::new()
-            .route(
-                "/reload",
-                get(|| async move {
-                    match tx.send(()) {
-                        Ok(_) => Html("Apps reloaded !"),
-                        Err(_) => Html("Could not reload apps !"),
-                    }
-                }),
-            )
             .route("/auth/local", post(local_auth))
             .route("/auth/oauth2login", get(oauth2_login))
             .route("/auth/oauth2callback", get(oauth2_callback))

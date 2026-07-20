@@ -1,6 +1,6 @@
 [package]
 name = "atrium"
-version = "1.8.6"
+version = "1.8.7"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 default-run = "atrium"
@@ -13,16 +13,17 @@ path = "src/main.rs"
 name = "atrium"
 
 [dependencies]
+aead-stream = { version = "0.6.0", features = ["alloc"], default-features = false }
 argon2 = { features = ["alloc", "password-hash"], default-features = false, version = "0.5.3" }
 async_zip = { features = ["deflate", "tokio"], default-features = false, version = "0.0.18" }
 async-stream = "0.3.6"
 async-walkdir = "2.1.0"
-aws-lc-rs = { version = "1.17.0", default-features = false, features = ["bindgen"] }
+aws-lc-rs = { version = "1.17.1", default-features = false, features = ["bindgen"] }
 axum = { version = "0.8.9", features = ["http2", "json", "query", "tokio"], default-features = false }
 axum-extra = { version = "0.12.6", features = ["cookie-private", "typed-header"], default-features = false }
 axum-server = { version = "0.8.0", default-features = false, features = ["tls-rustls"] }
 base64ct = { version = "1.8.3", features = ["alloc"] }
-chacha20poly1305 = { version = "0.10.1", features = ["stream"], default-features = false }
+chacha20poly1305 = { version = "0.11.0", default-features = false }
 chrono = { default-features = false, version = "0.4.45" }
 dashmap = { version = "6.2.1", default-features = false }
 filetime = "0.2.29"
@@ -38,23 +39,23 @@ hyper-hickory = { git = "https://github.com/nicolaspernoud/hyper-hickory.git", b
 hyper-rustls = { version = "0.27.9", features = ["aws-lc-rs", "http1", "http2", "tls12", "webpki-tokio"], default-features = false }
 hyper-util = { version = "0.1.20", features = ["client-legacy", "http1", "tokio"], default-features = false }
 jsonwebtoken = { version = "10.4.0", features = ["aws_lc_rs"], default-features = false }
-maxminddb = "0.28.1"
+maxminddb = "0.29.0"
 mime_guess = { default-features = false, version = "2.0.5" }
 oauth2 = { version = "5.0.0", default-features = false }
 percent-encoding = { default-features = false, version = "2.3.2" }
-quick-xml = "0.40.1"
-rand = { default-features = false, version = "0.10.1", features = ["thread_rng"] }
+quick-xml = "0.41.0"
+rand = { default-features = false, version = "0.10.2", features = ["thread_rng"] }
 rcgen = { version = "0.14.8", default-features = false, optional = true, features = ["aws_lc_rs", "crypto", "pem"] }
 rust-embed = { version = "8.11.0", features = ["axum"] }
 rustls = { default-features = false, version = "0.23.41", features = ["aws_lc_rs"] }
 rustls-acme = { version = "0.15.3", features = ["aws-lc-rs", "axum", "webpki-roots"], default-features = false }
-rustls-pki-types = { version = "1.14.1" }
+rustls-pki-types = { version = "1.15.0" }
 serde = { version = "1.0.228", default-features = false }
 serde_json = { default-features = false, version = "1.0.150" }
 serde_yaml_ng = "0.10.0"
 sha2 = { default-features = false, version = "0.11.0" }
 sysinfo = { default-features = false, version = "0.39.5", features = ["disk", "system"] }
-time = { default-features = false, version = "0.3.51" }
+time = { default-features = false, version = "0.3.53" }
 tokio = { version = "1.52.3", features = ["full"], default-features = false }
 tokio-stream = { version = "0.1.18", default-features = false }
 tokio-util = { version = "0.7.18", default-features = false, features = ["rt"] }

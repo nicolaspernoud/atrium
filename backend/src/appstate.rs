@@ -13,13 +13,20 @@ use maxminddb::Reader;
 use rustls::ClientConfig;
 use std::{
     collections::HashMap,
-    sync::{Arc, OnceLock},
+    sync::{Arc, OnceLock, LazyLock},
 };
+use tracing::warn;
 
-pub type OptionalMaxMindReader = Option<&'static Reader<Vec<u8>>>;
-pub type ConfigMap = Arc<HashMap<String, HostType>>;
-pub type ConfigFile = Arc<String>;
-pub type ConfigState = Arc<Config>;
+pub(crate) type OptionalMaxMindReader = Option<&'static Reader<Vec<u8>>>;
+pub(crate) type ConfigMap = Arc<HashMap<String, HostType>>;
+pub(crate) type ConfigFile = Arc<String>;
+pub(crate) type ConfigState = Arc<Config>;
+pub(crate) type ConfigLock = Arc<tokio::sync::Mutex<()>>;
+pub(crate) type UpgradedConnectionsSemaphore = Arc<tokio::sync::Semaphore>;
+
+pub(crate) static CONFIG_FILE_LOCK: LazyLock<ConfigLock> =
+    LazyLock::new(|| Arc::new(tokio::sync::Mutex::new(())));
+    
 pub struct Client(
     pub hyper_util::client::legacy::Client<HttpsConnector<TokioHickoryHttpConnector>, Body>,
 );
@@ -46,11 +53,12 @@ pub struct AppState {
     key: Key,
     config: ConfigState,
     config_map: ConfigMap,
-    config_file: ConfigFile,
     client: Client,
     insecure_skip_verify_client: InsecureSkipVerifyClient,
+    upgraded_connections_semaphore: UpgradedConnectionsSemaphore,
+    config_file: ConfigFile,
     #[cfg(target_os = "linux")]
-    pub jail: Option<Arc<Jail>>,
+    jail: Option<Arc<Jail>>,
 }
 
 impl AppState {
@@ -61,8 +69,13 @@ impl AppState {
         config_file: String,
         #[cfg(target_os = "linux")] jail: Option<Arc<Jail>>,
     ) -> Self {
-        if let Ok(r) = maxminddb::Reader::open_readfile("GeoLite2-City.mmdb") {
-            MAXMIND_READER.get_or_init(|| r);
+        match maxminddb::Reader::open_readfile("GeoLite2-City.mmdb") {
+            Ok(r) => {
+                MAXMIND_READER.get_or_init(|| r);
+            }
+            Err(e) => {
+                warn!("Could not open GeoLite2-City.mmdb: {}, GeoIP lookups will be disabled", e);
+            }
         }
 
         // Create a secure HTTPS Client that use Hickory as DNS resolver, and get the configuration from system conf
@@ -97,6 +110,7 @@ impl AppState {
             config_file: Arc::new(config_file),
             client: Client(client),
             insecure_skip_verify_client: InsecureSkipVerifyClient(unsecure_client),
+            upgraded_connections_semaphore: Arc::new(tokio::sync::Semaphore::new(100)),
             #[cfg(target_os = "linux")]
             jail,
         }
@@ -136,6 +150,18 @@ impl FromRef<AppState> for Client {
 impl FromRef<AppState> for InsecureSkipVerifyClient {
     fn from_ref(state: &AppState) -> Self {
         state.insecure_skip_verify_client.clone()
+    }
+}
+
+impl FromRef<AppState> for ConfigLock {
+    fn from_ref(_state: &AppState) -> Self {
+        Arc::clone(&CONFIG_FILE_LOCK)
+    }
+}
+
+impl FromRef<AppState> for UpgradedConnectionsSemaphore {
+    fn from_ref(state: &AppState) -> Self {
+        Arc::clone(&state.upgraded_connections_semaphore)
     }
 }
 

@@ -1,5 +1,5 @@
 use crate::{
-    appstate::{ConfigFile, ConfigState},
+    appstate::{ConfigFile, ConfigLock},
     auth::AdminToken,
     configuration::config_or_error,
     utils::{is_default, option_string_trim, string_trim, vec_trim_remove_empties},
@@ -60,8 +60,10 @@ impl Dav {
 
 pub async fn get_davs(
     State(config_file): State<ConfigFile>,
+    State(config_lock): State<ConfigLock>,
     _admin: AdminToken,
 ) -> Result<Json<Vec<Dav>>, (StatusCode, &'static str)> {
+    let _lock = config_lock.lock().await;
     let config = config_or_error(&config_file).await?;
     // Return all the davs as Json
     Ok(Json(config.davs))
@@ -69,9 +71,11 @@ pub async fn get_davs(
 
 pub async fn delete_dav(
     State(config_file): State<ConfigFile>,
+    State(config_lock): State<ConfigLock>,
     _admin: AdminToken,
     Path(dav_id): Path<usize>,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
+    let _lock = config_lock.lock().await;
     let mut config = config_or_error(&config_file).await?;
     // Find the dav
     if let Some(pos) = config.davs.iter().position(|d| d.id == dav_id) {
@@ -79,7 +83,7 @@ pub async fn delete_dav(
         config.davs.remove(pos);
     } else {
         // If the dav doesn't exist, respond with an error
-        return Err((StatusCode::BAD_REQUEST, "dav doesn't exist"));
+        return Err((StatusCode::NOT_FOUND, "dav doesn't exist"));
     }
 
     config
@@ -91,12 +95,13 @@ pub async fn delete_dav(
 
 pub async fn add_dav(
     State(config_file): State<ConfigFile>,
-    State(config): State<ConfigState>,
+    State(config_lock): State<ConfigLock>,
     _admin: AdminToken,
     Json(payload): Json<Dav>,
 ) -> Result<(StatusCode, &'static str), (StatusCode, &'static str)> {
+    let _lock = config_lock.lock().await;
     // Clone the config
-    let mut config = (*config).clone();
+    let mut config = config_or_error(&config_file).await?;
     // Find the dav
     let is_update;
     if let Some(dav) = config.davs.iter_mut().find(|d| d.id == payload.id) {
