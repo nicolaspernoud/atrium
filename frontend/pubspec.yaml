@@ -44,7 +44,7 @@ dependencies:
   provider: ^6.1.5+1
   shared_preferences: ^2.5.5
   url_launcher: 6.3.2
-  video_player: 2.11.1
+  video_player: ^2.13.0
   webdav_client: 1.2.2
   webview_flutter: ^4.14.0
   webview_flutter_android: ^4.13.0

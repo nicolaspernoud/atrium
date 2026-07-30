@@ -108,6 +108,7 @@ impl Jail {
         if ip.is_loopback()
             || self.config.whitelist.contains(&ip)
             || matches!(ip, IpAddr::V4(v4) if v4.is_private())
+            || self.banned_ips.contains(&ip)
         {
             return;
         }
@@ -154,7 +155,8 @@ impl Jail {
     }
 
     async fn ban_ip(&self, ip: IpAddr) {
-        if self.banned_ips.contains(&ip) {
+        // Atomically insert into banned_ips first to prevent concurrent tasks from attempting to ban the same IP simultaneously
+        if !self.banned_ips.insert(ip) {
             return;
         }
 
@@ -177,12 +179,18 @@ impl Jail {
         .await;
 
         match res {
-            Ok(Err(e)) => warn!("Failed to ban IP {}: {}", ip, e),
-            Ok(Ok(_)) => {
-                self.banned_ips.insert(ip);
+            Ok(Ok(())) => {
                 info!("BANNED IP: {}", ip);
             }
-            Err(e) => warn!("Task join error during ban IP {}: {}", ip, e),
+            // Remove IP from banned_ips if insertion into iptables failed, so that we can try again if another failure is reported
+            Ok(Err(e)) => {
+                self.banned_ips.remove(&ip);
+                warn!("Failed to ban IP {}: {}", ip, e);
+            }
+            Err(e) => {
+                self.banned_ips.remove(&ip);
+                warn!("Task join error during ban IP {}: {}", ip, e);
+            }
         }
     }
 
