@@ -29,24 +29,25 @@ class AppWebViewState extends State<AppWebView> {
     super.initState();
     controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setNavigationDelegate(NavigationDelegate(
-        onNavigationRequest: (NavigationRequest request) {
-          var urlWithoutQuery = request.url.split('?').first;
-          var fileName = Uri.decodeFull(urlWithoutQuery.split('/').last);
-          if (fileTypeFromExt(fileName.split(".").last) != FileType.other) {
-            webDownload(request.url, fileName);
-            return NavigationDecision.prevent;
-          }
-          return NavigationDecision.navigate;
-        },
-      ));
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onNavigationRequest: (NavigationRequest request) {
+            var urlWithoutQuery = request.url.split('?').first;
+            var fileName = Uri.decodeFull(urlWithoutQuery.split('/').last);
+            if (fileTypeFromExt(fileName.split(".").last) != FileType.other) {
+              webDownload(request.url, fileName);
+              return NavigationDecision.prevent;
+            }
+            return NavigationDecision.navigate;
+          },
+        ),
+      );
     if (Platform.isAndroid) {
       final androidController = controller.platform as AndroidWebViewController;
       androidController.setOnShowFileSelector((params) async {
-        file_picker.FilePickerResult? result =
-            await file_picker.FilePicker.pickFiles();
-        if (result != null && result.files.single.path != null) {
-          File file = File(result.files.single.path!);
+        var result = await file_picker.FilePicker.pickFiles();
+        if (result.length == 1 && result.single.path != null) {
+          File file = File(result.single.path!);
           return [file.uri.toString()];
         }
         return [];
@@ -57,10 +58,13 @@ class AppWebViewState extends State<AppWebView> {
 
   Future<void> initWebView() async {
     await cookieManager.clearCookies();
-    await cookieManager.setCookie(WebViewCookie(
+    await cookieManager.setCookie(
+      WebViewCookie(
         name: authCookieName,
         value: Uri.decodeComponent(App().cookie.split(";")[0].split("=")[1]),
-        domain: Uri.parse(widget.initialUrl).host));
+        domain: Uri.parse(widget.initialUrl).host,
+      ),
+    );
     controller.loadRequest(Uri.parse(widget.initialUrl));
   }
 
@@ -68,8 +72,9 @@ class AppWebViewState extends State<AppWebView> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: WebViewWidget(
-          controller: controller,
-          gestureRecognizers: {Factory(() => EagerGestureRecognizer())}),
+        controller: controller,
+        gestureRecognizers: {Factory(() => EagerGestureRecognizer())},
+      ),
     );
   }
 }

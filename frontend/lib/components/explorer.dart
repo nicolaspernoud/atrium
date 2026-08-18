@@ -180,14 +180,11 @@ class ExplorerState extends State<Explorer> {
                       IconButton(
                         icon: const Icon(Icons.upload),
                         onPressed: () async {
-                          file_picker.FilePickerResult? result =
-                              await file_picker.FilePicker.pickFiles();
-                          if (result != null) {
-                            for (var file in result.files) {
-                              app.pushUpload(client, file, dirPath);
-                            }
-                            uploadStream = app.uploadAll();
+                          var result = await file_picker.FilePicker.pickFiles();
+                          for (var file in result) {
+                            app.pushUpload(client, file, dirPath);
                           }
+                          uploadStream = app.uploadAll();
                         },
                       ),
                       if (app.hasUploads)

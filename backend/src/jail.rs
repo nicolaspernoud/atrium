@@ -106,7 +106,7 @@ impl Jail {
         let ip = Self::normalize_ip(ip);
 
         if ip.is_loopback()
-            || self.config.whitelist.contains(&ip)
+            || self.config.whitelist.iter().any(|net| net.contains(&ip))
             || matches!(ip, IpAddr::V4(v4) if v4.is_private())
             || self.banned_ips.contains(&ip)
         {
@@ -382,21 +382,6 @@ mod tests {
         assert!(config.whitelist.is_empty());
     }
 
-    #[test]
-    fn test_jail_config_whitelist() {
-        let ip_v4: IpAddr = "1.2.3.4".parse().unwrap();
-        let ip_v6: IpAddr = "2001:db8::1".parse().unwrap();
-        let config = JailConfig {
-            enabled: true,
-            whitelist: vec![ip_v4, ip_v6],
-            ..Default::default()
-        };
-
-        assert!(config.whitelist.contains(&ip_v4));
-        assert!(config.whitelist.contains(&ip_v6));
-        assert!(!config.whitelist.contains(&"8.8.8.8".parse().unwrap()));
-    }
-
     #[tokio::test]
     async fn test_jail_disabled() {
         let config = JailConfig {
@@ -405,5 +390,40 @@ mod tests {
         };
         let jail = Jail::new_from_config(&config).await;
         assert!(jail.is_none());
+    }
+
+    #[test]
+    fn test_whitelist_deserialization() {
+        let yaml_data = 
+r#"
+enabled: true
+whitelist:
+  - "1.2.3.4"
+  - "2001:abcd:1234:5680::9"
+  - "192.168.1.0/24"
+  - "2001:abcd:1234:5678::/64"
+"#;
+        let config: JailConfig = serde_yaml_ng::from_str(yaml_data).unwrap();
+        assert_eq!(config.whitelist.len(), 4);
+        
+        // Match 1.2.3.4 (single IP)
+        let ip_single: IpAddr = "1.2.3.4".parse().unwrap();
+        assert!(config.whitelist.iter().any(|net| net.contains(&ip_single)));
+
+        // Match IPv6 (single IP)
+        let ip_in_cidr_v6: IpAddr = "2001:abcd:1234:5680::9".parse().unwrap();
+        assert!(config.whitelist.iter().any(|net| net.contains(&ip_in_cidr_v6)));
+        
+        // Match 192.168.1.50 (in CIDR 192.168.1.0/24)
+        let ip_in_cidr: IpAddr = "192.168.1.50".parse().unwrap();
+        assert!(config.whitelist.iter().any(|net| net.contains(&ip_in_cidr)));
+
+        // Do not match 192.168.2.50 (outside CIDR)
+        let ip_out_cidr: IpAddr = "192.168.2.50".parse().unwrap();
+        assert!(!config.whitelist.iter().any(|net| net.contains(&ip_out_cidr)));
+
+        // Match IPv6 in CIDR
+        let ip_in_cidr_v6: IpAddr = "2001:abcd:1234:5678::9".parse().unwrap();
+        assert!(config.whitelist.iter().any(|net| net.contains(&ip_in_cidr_v6)));
     }
 }

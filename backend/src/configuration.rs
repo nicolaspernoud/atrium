@@ -83,8 +83,12 @@ pub struct JailConfig {
     pub find_time: u64, // seconds
     #[serde(default = "default_ban_time")]
     pub ban_time: u64, // days
-    #[serde(default, skip_serializing_if = "is_default")]
-    pub whitelist: Vec<IpAddr>,
+    #[serde(
+        default,
+        skip_serializing_if = "is_default",
+        deserialize_with = "deserialize_whitelist"
+    )]
+    pub whitelist: Vec<ipnet::IpNet>,
 }
 
 fn default_max_retry() -> u32 {
@@ -567,4 +571,28 @@ mod tests {
         // Tidy
         fs::remove_file(filepath).unwrap();
     }
+}
+
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(untagged)]
+enum IpOrNet {
+    Net(ipnet::IpNet),
+    Ip(IpAddr),
+}
+
+impl From<IpOrNet> for ipnet::IpNet {
+    fn from(val: IpOrNet) -> Self {
+        match val {
+            IpOrNet::Net(net) => net,
+            IpOrNet::Ip(ip) => ipnet::IpNet::from(ip),
+        }
+    }
+}
+
+fn deserialize_whitelist<'de, D>(deserializer: D) -> Result<Vec<ipnet::IpNet>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let vec = Vec::<IpOrNet>::deserialize(deserializer)?;
+    Ok(vec.into_iter().map(ipnet::IpNet::from).collect())
 }
