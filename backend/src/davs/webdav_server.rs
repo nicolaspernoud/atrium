@@ -44,7 +44,7 @@ use hyper::{
         CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, HeaderValue, RANGE,
     },
 };
-use quick_xml::{Reader, escape::escape, events::Event};
+use quick_xml::{Reader, escape::escape, events::{BytesText, Event}};
 use serde::Serialize;
 use std::{
     borrow::Cow,
@@ -988,7 +988,7 @@ impl WebdavServer {
         let xml_body = String::from_utf8(body.to_vec())?;
 
         let mut in_lastmodified_tag = false;
-        let mut lastmodified_value = String::new();
+        let mut lastmodified_value = BytesText::new("");
 
         let mut reader = Reader::from_str(&xml_body);
         loop {
@@ -996,13 +996,13 @@ impl WebdavServer {
                 Err(e) => return Err(Box::new(e)),
                 Ok(Event::Eof) => break,
                 Ok(Event::Start(e)) => {
-                    in_lastmodified_tag = e.name().as_ref() == b"lastmodified";
+                    in_lastmodified_tag = e.name().as_ref() == "lastmodified";
                 }
                 Ok(Event::End(_)) => {
                     in_lastmodified_tag = false;
                 }
                 Ok(Event::Text(e)) if in_lastmodified_tag => {
-                    lastmodified_value = e.decode()?.into_owned();
+                    lastmodified_value = e;
                     break;
                 }
                 _ => (),

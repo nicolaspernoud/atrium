@@ -84,35 +84,30 @@ pub async fn inject_security_headers(
 fn inject_security_headers_internal(resp: &mut Response, source: &str) -> Result<(), StatusCode> {
     let headers = resp.headers_mut();
     match headers
-        .get("Content-Security-Policy")
+        .remove(http::header::CONTENT_SECURITY_POLICY)
+        .as_ref()
         .and_then(|h| h.to_str().ok())
-        .map(|h| h.to_owned())
     {
         // If it exists, alter it to inject the atrium main hostname in authorized frame ancestors
         Some(csp) => {
-            if csp.contains("frame-ancestors") {
-                headers.insert(
-                    "Content-Security-Policy",
-                    HeaderValue::from_str(&csp.replacen(
-                        "frame-ancestors",
-                        &format!("frame-ancestors {source}"),
-                        1,
-                    ))
-                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
-                );
+            let new_csp = if csp.contains("frame-ancestors") {
+                csp.replacen("frame-ancestors", &format!("frame-ancestors {source}"), 1)
             } else {
-                headers.insert(
-                    "Content-Security-Policy",
-                    HeaderValue::from_str(&format!("{csp}; frame-ancestors {source}"))
-                        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
-                );
-            }
+                format!("{csp}; frame-ancestors {source}")
+            };
+            headers.insert(
+                http::header::CONTENT_SECURITY_POLICY,
+                HeaderValue::from_str(&new_csp)
+                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+            );
         }
         // If not, forge a default CSP Header
         None => {
-            headers.insert("Content-Security-Policy", 
-            HeaderValue::from_str(&format!("default-src 'self' {source} https://unpkg.com https://*.gstatic.com blob:; script-src 'self' {source} 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://*.gstatic.com; style-src 'self' {source} 'unsafe-inline'; frame-src {source}; frame-ancestors {source}"))
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,);
+            headers.insert(
+                http::header::CONTENT_SECURITY_POLICY,
+                HeaderValue::from_str(&format!("default-src 'self' {source} https://unpkg.com https://*.gstatic.com blob:; script-src 'self' {source} 'wasm-unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://*.gstatic.com; style-src 'self' {source} 'unsafe-inline'; frame-src {source}; frame-ancestors {source}"))
+                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
+            );
         }
     }
     headers.insert("Referrer-Policy", HeaderValue::from_static("strict-origin"));
@@ -125,4 +120,70 @@ fn inject_security_headers_internal(resp: &mut Response, source: &str) -> Result
         HeaderValue::from_static("max-age=63072000; includeSubDomains"),
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_inject_security_headers_internal_none() {
+        let mut resp = Response::builder().body(axum::body::Body::empty()).unwrap();
+        let source = "http://example.com:* http://*.example.com:*";
+
+        inject_security_headers_internal(&mut resp, source).unwrap();
+
+        let csp = resp
+            .headers()
+            .get(http::header::CONTENT_SECURITY_POLICY)
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(csp.contains(source));
+        assert!(csp.contains("frame-ancestors"));
+    }
+
+    #[test]
+    fn test_inject_security_headers_internal_existing_with_frame_ancestors() {
+        let mut resp = Response::builder()
+            .header(
+                "Content-Security-Policy",
+                "default-src 'self'; frame-ancestors 'self'",
+            )
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let source = "http://example.com:* http://*.example.com:*";
+
+        inject_security_headers_internal(&mut resp, source).unwrap();
+
+        let csp = resp
+            .headers()
+            .get(http::header::CONTENT_SECURITY_POLICY)
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert_eq!(
+            csp,
+            format!("default-src 'self'; frame-ancestors {source} 'self'")
+        );
+    }
+
+    #[test]
+    fn test_inject_security_headers_internal_existing_without_frame_ancestors() {
+        let mut resp = Response::builder()
+            .header("content-security-policy", "default-src 'self'")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let source = "http://example.com:* http://*.example.com:*";
+
+        inject_security_headers_internal(&mut resp, source).unwrap();
+
+        let csp = resp
+            .headers()
+            .get(http::header::CONTENT_SECURITY_POLICY)
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert_eq!(csp, format!("default-src 'self'; frame-ancestors {source}"));
+    }
 }
