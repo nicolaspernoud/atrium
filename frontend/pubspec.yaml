@@ -47,7 +47,7 @@ dependencies:
   video_player: ^2.14.0
   webdav_client: 1.2.2
   webview_flutter: ^4.14.1
-  webview_flutter_android: ^4.14.0
+  webview_flutter_android: ^4.14.1
   webview_cookie_manager_plus: 2.0.17
   path: 1.9.1
   scrollable_positioned_list: 0.3.8
