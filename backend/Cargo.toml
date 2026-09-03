@@ -1,6 +1,6 @@
 [package]
 name = "atrium"
-version = "1.8.11-beta.1"
+version = "1.8.11-beta.2"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 default-run = "atrium"
@@ -18,7 +18,7 @@ argon2 = { features = ["alloc", "getrandom", "password-hash"], default-features 
 async_zip = { features = ["deflate", "tokio"], default-features = false, version = "0.0.19" }
 async-stream = "0.3.6"
 async-walkdir = "2.1.0"
-aws-lc-rs = { version = "1.18.0", default-features = false, features = ["bindgen"] }
+aws-lc-rs = { version = "1.18.1", default-features = false, features = ["bindgen"] }
 axum = { version = "0.8.9", features = ["http2", "json", "query", "tokio"], default-features = false }
 axum-extra = { version = "0.12.6", features = ["cookie-private", "typed-header"], default-features = false }
 axum-server = { version = "0.8.0", default-features = false, features = ["tls-rustls"] }
@@ -61,7 +61,7 @@ tokio = { version = "1.53.1", features = ["full"], default-features = false }
 tokio-stream = { version = "0.1.19", default-features = false }
 tokio-util = { version = "0.7.19", default-features = false, features = ["rt"] }
 tower = { default-features = false, version = "0.5.3", features = ["util"] }
-tower-http = { version = "0.7.0", features = ["fs"], default-features = false }
+tower-http = { version = "0.7.1", features = ["fs"], default-features = false }
 tower-service = "0.3.3"
 tracing = { default-features = false, version = "0.1.44", features = ["attributes"] }
 tracing-appender = "0.2.5"
