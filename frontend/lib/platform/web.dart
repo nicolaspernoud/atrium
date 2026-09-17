@@ -75,7 +75,7 @@ Future<void> upload(
     client,
     path,
     file.readAsByteStream(),
-    await file.length(),
+    await file.length() ?? 0,
     onProgress: onProgress,
     cancelToken: cancelToken,
   );

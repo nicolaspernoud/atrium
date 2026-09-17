@@ -10,7 +10,8 @@ use crate::{
         is_default, query_pairs_or_error, random_string, string_trim, vec_trim_remove_empties,
     },
 };
-use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier, password_hash::{SaltString, rand_core::OsRng}};
+use argon2::{
+    Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use axum::{
     Extension, Json, RequestPartsExt,
     extract::{
@@ -318,13 +319,7 @@ pub async fn local_auth(
                 return Err(e);
             }
         };
-    let cookie = create_user_cookie(
-        &user_token,
-        &config,
-        addr,
-        MAXMIND_READER.get(),
-        user,
-    )?;
+    let cookie = create_user_cookie(&user_token, &config, addr, MAXMIND_READER.get(), user)?;
 
     Ok((
         jar.add(cookie),
@@ -510,10 +505,9 @@ pub async fn add_user(
 }
 
 pub(crate) fn hash_password(payload: &mut User) -> Result<(), argon2::password_hash::Error> {
-    let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
     payload.password = argon2
-        .hash_password(payload.password.trim().as_bytes(), &salt)?
+        .hash_password(payload.password.trim().as_bytes())?
         .to_string();
     Ok(())
 }

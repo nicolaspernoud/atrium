@@ -17,7 +17,6 @@ pub struct Jail {
 
 impl Jail {
     pub async fn new_from_config(jail_config: &JailConfig) -> OptionalJail {
-        let mut jail = None;
         if jail_config.enabled {
             let ipt = iptables::new(false).ok();
             let ipt6 = iptables::new(true).ok();
@@ -35,11 +34,11 @@ impl Jail {
                         ipt6,
                     };
                     jail_obj.load_banned_ips().await;
-                    jail = Some(std::sync::Arc::new(jail_obj));
+                    return Some(std::sync::Arc::new(jail_obj));
                 }
             }
         }
-        jail
+        None
     }
 
     pub async fn init_iptables(ipt: Arc<IPTables>) -> Result<(), String> {
@@ -405,7 +404,7 @@ whitelist:
 "#;
         let config: JailConfig = serde_yaml_ng::from_str(yaml_data).unwrap();
         assert_eq!(config.whitelist.len(), 4);
-        
+
         // Match 1.2.3.4 (single IP)
         let ip_single: IpAddr = "1.2.3.4".parse().unwrap();
         assert!(config.whitelist.iter().any(|net| net.contains(&ip_single)));
@@ -413,7 +412,7 @@ whitelist:
         // Match IPv6 (single IP)
         let ip_in_cidr_v6: IpAddr = "2001:abcd:1234:5680::9".parse().unwrap();
         assert!(config.whitelist.iter().any(|net| net.contains(&ip_in_cidr_v6)));
-        
+
         // Match 192.168.1.50 (in CIDR 192.168.1.0/24)
         let ip_in_cidr: IpAddr = "192.168.1.50".parse().unwrap();
         assert!(config.whitelist.iter().any(|net| net.contains(&ip_in_cidr)));
