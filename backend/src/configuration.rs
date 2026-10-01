@@ -207,24 +207,26 @@ impl Config {
     }
 
     pub fn domains(&self) -> Vec<String> {
-        let mut domains = filter_services(&self.apps, &self.hostname, &self.domain)
-            .map(|app| format!("{}.{}", trim_host(&app.host), self.hostname))
-            .chain(
+        let mut domains = vec![self.hostname.clone()];
+        if !self.single_proxy {
+            domains.extend(
+                filter_services(&self.apps, &self.hostname, &self.domain).flat_map(|app| {
+                    let host = trim_host(&app.host);
+                    std::iter::once(format!("{}.{}", host, self.hostname)).chain(
+                        app.subdomains
+                            .as_deref()
+                            .unwrap_or(&[])
+                            .iter()
+                            .map(move |subdomain| {
+                                format!("{}.{}.{}", subdomain, host, self.hostname)
+                            }),
+                    )
+                }),
+            );
+            domains.extend(
                 filter_services(&self.davs, &self.hostname, &self.domain)
                     .map(|dav| format!("{}.{}", trim_host(&dav.host), self.hostname)),
-            )
-            .collect::<Vec<String>>();
-        domains.insert(0, self.hostname.clone());
-        // Insert apps subdomains
-        for app in filter_services(&self.apps, &self.hostname, &self.domain) {
-            for domain in app.subdomains.as_ref().unwrap_or(&Vec::new()) {
-                domains.push(format!(
-                    "{}.{}.{}",
-                    domain,
-                    trim_host(&app.host),
-                    self.hostname
-                ));
-            }
+            );
         }
         domains
     }
@@ -396,7 +398,9 @@ impl HostType {
 
     pub fn inject_security_headers(&self) -> bool {
         match self {
-            HostType::SkipVerifyReverseApp(app) | HostType::ReverseApp(app) => app.inner.inject_security_headers,
+            HostType::SkipVerifyReverseApp(app) | HostType::ReverseApp(app) => {
+                app.inner.inject_security_headers
+            }
             HostType::Dav(_dav) => true,
             HostType::StaticApp(app) => app.inject_security_headers,
         }

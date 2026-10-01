@@ -1,6 +1,6 @@
 [package]
 name = "atrium"
-version = "1.8.11"
+version = "1.8.12-beta1"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 default-run = "atrium"
@@ -17,7 +17,7 @@ aead-stream = { version = "0.6.0", features = ["alloc"], default-features = fals
 argon2 = { features = ["alloc", "getrandom", "password-hash"], default-features = false, version = "0.6.0" }
 async_zip = { features = ["deflate", "tokio"], default-features = false, version = "0.0.19" }
 async-stream = "0.3.6"
-async-walkdir = "2.1.0"
+async-walkdir = "2.2.0"
 aws-lc-rs = { version = "1.18.1", default-features = false, features = ["bindgen"] }
 axum = { version = "0.8.9", features = ["http2", "json", "query", "tokio"], default-features = false }
 axum-extra = { version = "0.12.6", features = ["cookie-private", "typed-header"], default-features = false }
@@ -29,15 +29,15 @@ dashmap = { version = "6.2.1", default-features = false }
 filetime = "0.2.29"
 futures = { default-features = false, version = "0.3.34" }
 futures-util = { default-features = false, version = "0.3.34" }
-headers = "0.4.1"
+headers = "0.4.2"
 http = "1.5.0"
 http-body-util = "0.1.5"
 hyper = { version = "1.11.1", default-features = false }
 # TEMPORARY
 hyper-hickory = { git = "https://github.com/nicolaspernoud/hyper-hickory.git", branch = "hickory-resolver-0.26", default-features = false, features = ["system-config", "tokio"] }
 # hyper-hickory = { version = "0.9.0", default-features = false, features = ["system-config", "tokio"] }
-hyper-rustls = { version = "0.27.9", features = ["aws-lc-rs", "http1", "http2", "tls12", "webpki-tokio"], default-features = false }
-hyper-util = { version = "0.1.20", features = ["client-legacy", "http1", "tokio"], default-features = false }
+hyper-rustls = { version = "0.27.10", features = ["aws-lc-rs", "http1", "http2", "tls12", "webpki-tokio"], default-features = false }
+hyper-util = { version = "0.1.21", features = ["client-legacy", "http1", "tokio"], default-features = false }
 ipnet = {version = "2.12.2", features = ["std", "serde"], default-features = false }
 jsonwebtoken = { version = "11.1.0", features = ["aws_lc_rs"], default-features = false }
 maxminddb = "0.32.0"
@@ -45,7 +45,7 @@ mime_guess = { default-features = false, version = "2.0.5" }
 oauth2 = { version = "5.0.0", default-features = false }
 percent-encoding = { default-features = false, version = "2.3.2" }
 quick-xml = "0.42.0"
-rand = { default-features = false, version = "0.10.2", features = ["thread_rng"] }
+rand = { default-features = false, version = "0.10.3", features = ["thread_rng"] }
 rcgen = { version = "0.14.10", default-features = false, optional = true, features = ["aws_lc_rs", "crypto", "pem"] }
 rust-embed = { version = "8.12.0", features = ["axum"] }
 rustls = { default-features = false, version = "0.23.45", features = ["aws_lc_rs"] }
