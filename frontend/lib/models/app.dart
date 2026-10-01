@@ -15,7 +15,7 @@ class AppModel implements Model {
     this.isProxy = true,
     this.insecureSkipVerify = false,
     this.host = "",
-    this.subdomains = const [],
+    this.alias = const [],
     this.target = "",
     this.secured = true,
     this.login = "",
@@ -36,7 +36,7 @@ class AppModel implements Model {
   late bool insecureSkipVerify;
   @override
   late String host;
-  late List<String> subdomains;
+  late List<String> alias;
   late String target;
   late bool secured;
   late String login;
@@ -55,9 +55,9 @@ class AppModel implements Model {
     isProxy = json['is_proxy'] ?? false;
     insecureSkipVerify = json['insecure_skip_verify'] ?? false;
     host = json['host'];
-    subdomains = json['subdomains'] != null
-        ? List.castFrom<dynamic, String>(json['subdomains'])
-        : [];
+    alias = json['alias'] != null
+            ? List.castFrom<dynamic, String>(json['alias'])
+            : [];
     target = json['target'];
     secured = json['secured'] ?? false;
     login = json['login'] ?? "";
@@ -79,8 +79,8 @@ class AppModel implements Model {
     data['is_proxy'] = isProxy;
     data['insecure_skip_verify'] = insecureSkipVerify;
     data['host'] = host;
-    data['subdomains'] =
-        subdomains.isNotEmpty && subdomains[0].isNotEmpty ? subdomains : null;
+    data['alias'] =
+        alias.isNotEmpty && alias[0].isNotEmpty ? alias : null;
     data['target'] = target;
     data['secured'] = secured;
     data['login'] = login;

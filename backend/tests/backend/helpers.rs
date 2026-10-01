@@ -126,8 +126,9 @@ impl TestApp {
             .resolve("fwdtoredirect.atrium.io", main_addr)
             .resolve("relativeredirect.atrium.io", main_addr)
             .resolve("absoluteredirect.atrium.io", main_addr)
+            .resolve("app1-alias1.atrium.io", main_addr)
             .resolve("app1-subdomain1.app1.atrium.io", main_addr)
-            .resolve("app1.subdomain2.app1.atrium.io", main_addr)
+            .resolve("subdomain1.app1.atrium.io", main_addr)
             .cookie_store(true)
             .build()
             .unwrap();
@@ -180,9 +181,10 @@ pub fn create_default_config(
             password: "ff54fds6f".to_owned(),
             openpath: "".to_owned(),
             roles: vec!["ADMINS".to_owned(), "USERS".to_owned()],
-            subdomains: Some(vec![
-                "app1-subdomain1".to_owned(),
-                "app1.subdomain2".to_owned(),
+            alias: Some(vec![
+                "app1-alias1".to_owned(),
+                "app1-subdomain1.".to_owned(),
+                "subdomain1.app1".to_owned(),
             ]),
             ..Default::default()
         },

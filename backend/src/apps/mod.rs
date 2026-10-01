@@ -79,7 +79,7 @@ pub struct App {
         skip_serializing_if = "is_default",
         deserialize_with = "option_vec_trim_remove_empties"
     )]
-    pub subdomains: Option<Vec<String>>,
+    pub alias: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "is_default")]
     pub forward_user_mail: bool,
 }

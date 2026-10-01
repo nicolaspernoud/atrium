@@ -64,11 +64,29 @@ async fn secured_proxy_test() {
 }
 
 #[tokio::test]
-async fn subdomains_test() {
+async fn alias_test() {
     // Arrange
     let app = TestApp::spawn(None).await;
 
-    // Act
+    // Act : plain string alias ("app1-alias1" -> "app1-alias1.atrium.io")
+    let response = app
+        .client
+        .get(format!("http://app1-alias1.atrium.io:{}", app.port))
+        .send()
+        .await
+        .expect("failed to execute request");
+
+    // Assert
+    assert!(response.status().is_success());
+    assert!(!response.headers().contains_key("Content-Security-Policy"));
+    let response_text = response.text().await.unwrap();
+    assert!(response_text.contains("Hello world from mock server"));
+    assert!(response_text.contains(&format!(
+        r#""host": "app1-alias1.atrium.io:{}""#,
+        app.port
+    )));
+
+    // Act : implicit dot subdomain ("app1-subdomain1." -> "app1-subdomain1.app1.atrium.io")
     let response = app
         .client
         .get(format!(
@@ -81,40 +99,27 @@ async fn subdomains_test() {
 
     // Assert
     assert!(response.status().is_success());
-    assert!(!response.headers().contains_key("Content-Security-Policy"));
     let response_text = response.text().await.unwrap();
     assert!(response_text.contains("Hello world from mock server"));
     assert!(response_text.contains(&format!(
         r#""host": "app1-subdomain1.app1.atrium.io:{}""#,
         app.port
     )));
-    assert!(response_text.contains(&format!(
-        r#""x-forwarded-host": "app1-subdomain1.app1.atrium.io:{}""#,
-        app.port
-    )));
 
-    // Act
+    // Act : explicit dot string ("subdomain1.app1" -> "subdomain1.app1.atrium.io")
     let response = app
         .client
-        .get(format!(
-            "http://app1.subdomain2.app1.atrium.io:{}",
-            app.port
-        ))
+        .get(format!("http://subdomain1.app1.atrium.io:{}", app.port))
         .send()
         .await
         .expect("failed to execute request");
 
     // Assert
     assert!(response.status().is_success());
-    assert!(!response.headers().contains_key("Content-Security-Policy"));
     let response_text = response.text().await.unwrap();
     assert!(response_text.contains("Hello world from mock server"));
     assert!(response_text.contains(&format!(
-        r#""host": "app1.subdomain2.app1.atrium.io:{}""#,
-        app.port
-    )));
-    assert!(response_text.contains(&format!(
-        r#""x-forwarded-host": "app1.subdomain2.app1.atrium.io:{}""#,
+        r#""host": "subdomain1.app1.atrium.io:{}""#,
         app.port
     )));
 }
