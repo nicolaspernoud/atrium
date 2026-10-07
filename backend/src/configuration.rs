@@ -207,24 +207,24 @@ impl Config {
     }
 
     pub fn domains(&self) -> Vec<String> {
-        let mut domains = filter_services(&self.apps, &self.hostname, &self.domain)
-            .map(|app| format!("{}.{}", trim_host(&app.host), self.hostname))
-            .chain(
+        let mut domains = vec![self.hostname.clone()];
+        if !self.single_proxy {
+            domains.extend(
+                filter_services(&self.apps, &self.hostname, &self.domain).flat_map(|app| {
+                    let host = trim_host(&app.host);
+                    std::iter::once(format!("{}.{}", host, self.hostname)).chain(
+                        app.alias
+                            .as_deref()
+                            .unwrap_or(&[])
+                            .iter()
+                            .map(move |alias| resolve_alias(alias, &host, &self.hostname)),
+                    )
+                }),
+            );
+            domains.extend(
                 filter_services(&self.davs, &self.hostname, &self.domain)
                     .map(|dav| format!("{}.{}", trim_host(&dav.host), self.hostname)),
-            )
-            .collect::<Vec<String>>();
-        domains.insert(0, self.hostname.clone());
-        // Insert apps subdomains
-        for app in filter_services(&self.apps, &self.hostname, &self.domain) {
-            for domain in app.subdomains.as_ref().unwrap_or(&Vec::new()) {
-                domains.push(format!(
-                    "{}.{}.{}",
-                    domain,
-                    trim_host(&app.host),
-                    self.hostname
-                ));
-            }
+            );
         }
         domains
     }
@@ -284,11 +284,12 @@ pub async fn load_config(config_file: &str) -> Result<(ConfigState, ConfigMap), 
             ),
         );
     }
-    // Insert apps subdomains
+    // Insert apps aliases
     for app in filter_services(&config.apps, &config.hostname, &config.domain) {
-        for domain in app.subdomains.as_ref().unwrap_or(&Vec::new()) {
+        let host = trim_host(&app.host);
+        for alias in app.alias.as_ref().unwrap_or(&Vec::new()) {
             hashmap.insert(
-                format!("{}.{}.{}", domain, trim_host(&app.host), config.hostname),
+                resolve_alias(alias, &host, &config.hostname),
                 app_to_host_type(app, port),
             );
         }
@@ -298,6 +299,14 @@ pub async fn load_config(config_file: &str) -> Result<(ConfigState, ConfigMap), 
 
 pub(crate) fn trim_host(host: &str) -> String {
     host.split_once('.').unwrap_or((host, "")).0.to_owned()
+}
+
+pub(crate) fn resolve_alias(alias: &str, host: &str, hostname: &str) -> String {
+    if let Some(prefix) = alias.strip_suffix('.') {
+        format!("{}.{}.{}", prefix, host, hostname)
+    } else {
+        format!("{}.{}", alias, hostname)
+    }
 }
 
 fn app_to_host_type(app: &App, port: Option<u16>) -> HostType {
@@ -396,7 +405,9 @@ impl HostType {
 
     pub fn inject_security_headers(&self) -> bool {
         match self {
-            HostType::SkipVerifyReverseApp(app) | HostType::ReverseApp(app) => app.inner.inject_security_headers,
+            HostType::SkipVerifyReverseApp(app) | HostType::ReverseApp(app) => {
+                app.inner.inject_security_headers
+            }
             HostType::Dav(_dav) => true,
             HostType::StaticApp(app) => app.inject_security_headers,
         }
@@ -570,6 +581,84 @@ mod tests {
 
         // Tidy
         fs::remove_file(filepath).unwrap();
+    }
+
+    #[test]
+    fn test_resolve_alias() {
+        use super::resolve_alias;
+
+        // Plain string alias
+        assert_eq!(
+            resolve_alias("alias", "app1", "atrium.io"),
+            "alias.atrium.io"
+        );
+
+        // Explicit dot (subdomain.host)
+        assert_eq!(
+            resolve_alias("subdomain.host", "app1", "atrium.io"),
+            "subdomain.host.atrium.io"
+        );
+
+        // Implicit dot (subdomain.)
+        assert_eq!(
+            resolve_alias("subdomain.", "app1", "atrium.io"),
+            "subdomain.app1.atrium.io"
+        );
+    }
+
+    #[test]
+    fn test_config_domains() {
+        let apps = vec![
+            App {
+                id: 1,
+                name: "App 1".to_owned(),
+                host: "app1".to_owned(),
+                alias: Some(vec![
+                    "alias1".to_owned(),
+                    "subdomain.host".to_owned(),
+                    "subdomain2.".to_owned(),
+                ]),
+                ..Default::default()
+            },
+        ];
+
+        let davs = vec![
+            Dav {
+                id: 1,
+                host: "files1".to_owned(),
+                directory: "/data/file1".to_owned(),
+                writable: true,
+                name: "Files 1".to_owned(),
+                icon: "folder".to_owned(),
+                color: 4292030255,
+                secured: true,
+                allow_symlinks: false,
+                roles: vec![],
+                passphrase: None,
+                key: None,
+            },
+        ];
+
+        let config = Config {
+            hostname: "atrium.io".to_owned(),
+            domain: "atrium.io".to_owned(),
+            apps,
+            davs,
+            ..Default::default()
+        };
+
+        let domains = config.domains();
+        assert_eq!(
+            domains,
+            vec![
+                "atrium.io",
+                "app1.atrium.io",
+                "alias1.atrium.io",
+                "subdomain.host.atrium.io",
+                "subdomain2.app1.atrium.io",
+                "files1.atrium.io"
+            ]
+        );
     }
 }
 

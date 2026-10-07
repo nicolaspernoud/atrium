@@ -5,11 +5,16 @@ It comes with a multiplatform client application.
 
 Rust/Flutter version of Vestibule.
 
-## ⚠️ Breaking change ⚠️
+## ⚠️ Breaking changes ⚠️
 
-From version 1.8.0 atrium encrypted file format changed to ensure future crypto agility.
-To migrate from 1.7.x to 1.8+ use the `backend/src/bin/convert_encryption.rs` binary to convert encrypted files to the new format.
-The encryption key is not needed since it is only an encryption type prefix added to every files.
+- From version 1.9.0 the subdomains for apps are now called aliases and are more powerfull.
+  An alias can be a string like "app1-alias1" (aliases host as app1-alias1.atrium.127.0.0.1.nip.io), a string with explicit dot like "subdomain1.app1" (resolves to subdomain1.app1.atrium.127.0.0.1.nip.io) or an implicit dot like "app1-subdomain1." (resolves to app1-subdomain1.app1.atrium.127.0.0.1.nip.io).
+  To migrate from 1.8.x, rename the subdomains keys to alias in your configuration, and add a dot after the entries.
+  For example `subdomains: [app1-subdomain1, app1.subdomain2]` becomes `alias: [app1-subdomain1., app1.subdomain2.]`.
+
+- From version 1.8.0 atrium encrypted file format changed to ensure future crypto agility.
+  To migrate from 1.7.x to 1.8+ use the `backend/src/bin/convert_encryption.rs` binary to convert encrypted files to the new format.
+  The encryption key is not needed since it is only an encryption type prefix added to every files.
 
 ## Installation
 

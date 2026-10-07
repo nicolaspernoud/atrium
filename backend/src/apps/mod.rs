@@ -79,7 +79,7 @@ pub struct App {
         skip_serializing_if = "is_default",
         deserialize_with = "option_vec_trim_remove_empties"
     )]
-    pub subdomains: Option<Vec<String>>,
+    pub alias: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "is_default")]
     pub forward_user_mail: bool,
 }
@@ -104,10 +104,7 @@ impl AppWithUri {
         } else {
             Scheme::HTTP
         };
-        let forward_base_uri: Uri = inner
-            .target
-            .parse()
-            .map_err(ProxyError::InvalidUri)?;
+        let forward_base_uri: Uri = inner.target.parse().map_err(ProxyError::InvalidUri)?;
         let forward_parts = forward_base_uri.into_parts();
         let forward_authority = forward_parts
             .authority
@@ -129,7 +126,7 @@ pub async fn proxy_handler<S>(
     State(semaphore): State<UpgradedConnectionsSemaphore>,
     State(client): State<S>,
     mut req: Request<Body>,
-) -> Result<Response<Incoming>, impl IntoResponse>
+) -> Result<Response<Incoming>, ProxyError>
 where
     S: tower_service::Service<Request<Body>, Response = http::Response<hyper::body::Incoming>>,
     <S as tower_service::Service<Request<Body>>>::Error: std::fmt::Debug,
@@ -200,9 +197,7 @@ where
                             "proxy redirect location header parsing for {:?} gave error: {:?}",
                             location, e
                         );
-                        return Err(<ProxyError as Into<axum::response::Response>>::into(
-                            ProxyError::BadRedirectResponseError,
-                        ));
+                        return Err(ProxyError::BadRedirectResponseError);
                     }
                 }
             }

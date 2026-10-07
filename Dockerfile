@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Default versions (can be overridden with --build-arg)
-ARG RUST_VERSION=1.98
+ARG RUST_VERSION=1.99
 ARG FLUTTER_VERSION=3.47.4
 
 # --- Frontend Builder ---
