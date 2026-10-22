@@ -30,6 +30,8 @@
       html,
       body {
         height: 100%;
+        margin: 0;
+        padding: 0;
       }
 
       body {
@@ -39,46 +41,60 @@
         background-color: #121318;
       }
 
-      .spinner {
-        animation: rotator 1.4s linear infinite;
+      #loading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
       }
 
-      @keyframes rotator {
-        0% {
-          transform: rotate(0deg);
-        }
+      .spinner {
+        animation: rotate 2.2s linear infinite;
+        width: 44px;
+        height: 44px;
+      }
 
+      @keyframes rotate {
         100% {
-          transform: rotate(270deg);
+          transform: rotate(360deg);
         }
       }
 
       .path {
-        stroke-dasharray: 187;
+        stroke-dasharray: 1px, 113px;
         stroke-dashoffset: 0;
         transform-origin: center;
-        animation: dash 1.4s ease-in-out infinite;
-        stroke: #3f51b5;
+        animation: dash 1.333s cubic-bezier(0.4, 0.0, 0.2, 1) infinite;
+        stroke: #4355b9;
+        stroke-linecap: square;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        .path {
+          stroke: #bac3ff;
+        }
       }
 
       @keyframes dash {
         0% {
-          stroke-dashoffset: 187;
+          stroke-dasharray: 1px, 113px;
+          stroke-dashoffset: 0;
         }
 
         50% {
-          stroke-dashoffset: 46.75;
-          transform: rotate(135deg);
+          stroke-dasharray: 84.8px, 113px;
+          stroke-dashoffset: 0;
         }
 
         100% {
-          stroke-dashoffset: 187;
-          transform: rotate(450deg);
+          stroke-dasharray: 1px, 113px;
+          stroke-dashoffset: -112px;
         }
       }
     </style>
-    <svg class="spinner" width="40px" height="40px" viewBox="0 0 68 68" xmlns="http://www.w3.org/2000/svg">
-      <circle class="path" fill="none" stroke-width="8" stroke-linecap="round" cx="34" cy="34" r="30"></circle>
+    <svg class="spinner" width="44px" height="44px" viewBox="0 0 44 44" xmlns="http://www.w3.org/2000/svg">
+      <circle class="path" fill="none" stroke-width="4" cx="22" cy="22" r="18"></circle>
     </svg>
   </div>
 </body>
