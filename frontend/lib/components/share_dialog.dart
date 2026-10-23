@@ -1,5 +1,5 @@
 import 'package:atrium/components/async_button.dart';
-import 'package:atrium/components/explorer.dart';
+import 'package:atrium/components/file_utils.dart';
 import 'package:atrium/i18n.dart';
 import 'package:atrium/models/api_provider.dart';
 import 'package:flutter/material.dart';

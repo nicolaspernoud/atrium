@@ -1,6 +1,6 @@
 [package]
 name = "atrium"
-version = "1.9.1-beta2"
+version = "1.9.1-beta5"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 default-run = "atrium"
