@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:atrium/platform/mobile.dart'
     if (dart.library.html) 'package:atrium/platform/web.dart';
+import 'package:flutter/services.dart';
 
 Future<void> showLoginDialog(BuildContext context, bool mounted) async {
   final formKey = GlobalKey<FormState>();
@@ -18,11 +19,7 @@ Future<void> showLoginDialog(BuildContext context, bool mounted) async {
 }
 
 class LoginDialog extends StatefulWidget {
-  const LoginDialog({
-    super.key,
-    required this.formKey,
-    required this.mounted,
-  });
+  const LoginDialog({super.key, required this.formKey, required this.mounted});
 
   final GlobalKey<FormState> formKey;
 
@@ -55,8 +52,9 @@ class _LoginDialogState extends State<LoginDialog> {
               if (!kIsWeb || kDebugMode)
                 TextFormField(
                   initialValue: App().prefs.hostname,
-                  decoration:
-                      InputDecoration(labelText: tr(context, "hostname")),
+                  decoration: InputDecoration(
+                    labelText: tr(context, "hostname"),
+                  ),
                   onChanged: (text) {
                     setState(() {
                       App().prefs.hostname = text;
@@ -70,56 +68,69 @@ class _LoginDialogState extends State<LoginDialog> {
                   },
                   key: const Key("hostnameField"),
                 ),
-              TextFormField(
-                initialValue: login,
-                autofillHints: const [AutofillHints.username],
-                decoration: InputDecoration(labelText: tr(context, "login")),
-                key: const Key("loginField"),
-                onChanged: (text) {
-                  login = text;
-                },
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return tr(context, "please_enter_some_text");
-                  }
-                  return null;
-                },
+              AutofillGroup(
+                child: Column(
+                  children: [
+                    TextFormField(
+                      initialValue: login,
+                      autofillHints: const [AutofillHints.username],
+                      decoration: InputDecoration(
+                        labelText: tr(context, "login"),
+                      ),
+                      key: const Key("loginField"),
+                      onChanged: (text) {
+                        login = text;
+                      },
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return tr(context, "please_enter_some_text");
+                        }
+                        return null;
+                      },
+                    ),
+                    TextFormField(
+                      obscureText: _isObscure,
+                      initialValue: password,
+                      autofillHints: const [AutofillHints.password],
+                      decoration: InputDecoration(
+                        labelText: tr(context, "password"),
+                        // this button is used to toggle the password visibility
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _isObscure
+                                ? Icons.visibility
+                                : Icons.visibility_off,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _isObscure = !_isObscure;
+                            });
+                          },
+                        ),
+                      ),
+                      key: const Key("userPasswordField"),
+                      onChanged: (text) {
+                        password = text;
+                      },
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return tr(context, "please_enter_some_text");
+                        }
+                        return null;
+                      },
+                      onFieldSubmitted: (value) => submitForm(),
+                    ),
+                  ],
+                ),
               ),
-              TextFormField(
-                obscureText: _isObscure,
-                initialValue: password,
-                autofillHints: const [AutofillHints.password],
-                decoration: InputDecoration(
-                    labelText: tr(context, "password"),
-                    // this button is used to toggle the password visibility
-                    suffixIcon: IconButton(
-                        icon: Icon(_isObscure
-                            ? Icons.visibility
-                            : Icons.visibility_off),
-                        onPressed: () {
-                          setState(() {
-                            _isObscure = !_isObscure;
-                          });
-                        })),
-                key: const Key("userPasswordField"),
-                onChanged: (text) {
-                  password = text;
-                },
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return tr(context, "please_enter_some_text");
-                  }
-                  return null;
-                },
-                onFieldSubmitted: (value) => submitForm(),
-              ),
-              Expanded(
-                child: Container(),
-              ),
+              Expanded(child: Container()),
               Text(
-                  style: const TextStyle(
-                      fontWeight: FontWeight.bold, color: Colors.red),
-                  errorMessage)
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red,
+                ),
+                errorMessage,
+              ),
             ],
           ),
         ),
@@ -157,12 +168,13 @@ class _LoginDialogState extends State<LoginDialog> {
               },
             ),
             TextButton.icon(
-                icon: const Icon(Icons.check_rounded), // Your icon here
-                label: const Padding(
-                  padding: EdgeInsets.all(12.0),
-                  child: Text("OK"),
-                ), // Your text here
-                onPressed: submitForm)
+              icon: const Icon(Icons.check_rounded), // Your icon here
+              label: const Padding(
+                padding: EdgeInsets.all(12.0),
+                child: Text("OK"),
+              ), // Your text here
+              onPressed: submitForm,
+            ),
           ],
         ),
       ],
@@ -171,6 +183,7 @@ class _LoginDialogState extends State<LoginDialog> {
 
   Future<void> submitForm() async {
     if (widget.formKey.currentState!.validate()) {
+      TextInput.finishAutofillContext();
       try {
         await ApiProvider().login(login, password);
         if (!mounted) return;
