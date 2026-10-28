@@ -49,10 +49,17 @@ impl From<std::io::Error> for Error {
     }
 }
 
-impl From<serde_yaml_ng::Error> for Error {
-    fn from(value: serde_yaml_ng::Error) -> Self {
+impl From<serde_saphyr::Error> for Error {
+    fn from(value: serde_saphyr::Error) -> Self {
         error!("serde yaml error: {value}");
         Error("serde yaml error")
+    }
+}
+
+impl From<serde_saphyr::SerializeError> for Error {
+    fn from(value: serde_saphyr::SerializeError) -> Self {
+        error!("serde yaml serialize error: {value}");
+        Error("serde yaml serialize error")
     }
 }
 

@@ -77,7 +77,7 @@ jail:
 ```bash
 git checkout main
 git merge development --squash
-# Alter the version number in Cargo.toml
+# /!\ Alter the version number in Cargo.toml
 # Alter commit message and commit
 git checkout development
 git reset --hard main

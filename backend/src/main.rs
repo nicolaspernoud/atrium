@@ -34,7 +34,7 @@ fn main() -> Result<(), Error> {
     // println!("MiMalloc version: {}", mimalloc::MiMalloc.version()); // mimalloc = { version = "0.1", features = ["extended"] } in Cargo.toml to use this
     // We need to work out the local time offset before entering multi-threaded context
     let cfg: Config = if let Ok(file) = File::open(CONFIG_FILE) {
-        serde_yaml_ng::from_reader(file).expect("failed to parse configuration file")
+        serde_saphyr::from_reader(file).expect("failed to parse configuration file")
     } else {
         println!("Configuration file not found, trying to create default configuration file.");
         File::create(CONFIG_FILE).expect("could not create default configuration file");

@@ -160,12 +160,12 @@ pub struct Config {
 impl Config {
     pub async fn from_file(filepath: &str) -> Result<Self, Error> {
         let data = tokio::fs::read_to_string(filepath).await?;
-        let config = serde_yaml_ng::from_str::<Config>(&data)?;
+        let config = serde_saphyr::from_str::<Config>(&data)?;
         Ok(config)
     }
 
     pub async fn to_file(&self, filepath: &str) -> Result<(), Error> {
-        let contents = serde_yaml_ng::to_string::<Config>(self)?;
+        let contents = serde_saphyr::to_string::<Config>(self)?;
         tokio::fs::write(filepath, contents).await?;
         Ok(())
     }
@@ -608,36 +608,32 @@ mod tests {
 
     #[test]
     fn test_config_domains() {
-        let apps = vec![
-            App {
-                id: 1,
-                name: "App 1".to_owned(),
-                host: "app1".to_owned(),
-                alias: Some(vec![
-                    "alias1".to_owned(),
-                    "subdomain.host".to_owned(),
-                    "subdomain2.".to_owned(),
-                ]),
-                ..Default::default()
-            },
-        ];
+        let apps = vec![App {
+            id: 1,
+            name: "App 1".to_owned(),
+            host: "app1".to_owned(),
+            alias: Some(vec![
+                "alias1".to_owned(),
+                "subdomain.host".to_owned(),
+                "subdomain2.".to_owned(),
+            ]),
+            ..Default::default()
+        }];
 
-        let davs = vec![
-            Dav {
-                id: 1,
-                host: "files1".to_owned(),
-                directory: "/data/file1".to_owned(),
-                writable: true,
-                name: "Files 1".to_owned(),
-                icon: "folder".to_owned(),
-                color: 4292030255,
-                secured: true,
-                allow_symlinks: false,
-                roles: vec![],
-                passphrase: None,
-                key: None,
-            },
-        ];
+        let davs = vec![Dav {
+            id: 1,
+            host: "files1".to_owned(),
+            directory: "/data/file1".to_owned(),
+            writable: true,
+            name: "Files 1".to_owned(),
+            icon: "folder".to_owned(),
+            color: 4292030255,
+            secured: true,
+            allow_symlinks: false,
+            roles: vec![],
+            passphrase: None,
+            key: None,
+        }];
 
         let config = Config {
             hostname: "atrium.io".to_owned(),

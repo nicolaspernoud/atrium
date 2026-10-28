@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:ui';
-import 'package:atrium/components/explorer.dart';
+import 'package:atrium/components/file_utils.dart';
 import 'package:atrium/utils.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';

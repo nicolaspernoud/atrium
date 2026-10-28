@@ -402,7 +402,7 @@ whitelist:
   - "192.168.1.0/24"
   - "2001:abcd:1234:5678::/64"
 "#;
-        let config: JailConfig = serde_yaml_ng::from_str(yaml_data).unwrap();
+        let config: JailConfig = serde_saphyr::from_str(yaml_data).unwrap();
         assert_eq!(config.whitelist.len(), 4);
 
         // Match 1.2.3.4 (single IP)
