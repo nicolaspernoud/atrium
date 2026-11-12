@@ -45,5 +45,19 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW_DOWNLOADS"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:mimeType="resource/folder"/>
+        </intent>
+        <package android:name="com.google.android.apps.nbu.files"/>
+        <package android:name="com.sec.android.app.myfiles"/>
+        <package android:name="com.google.android.documentsui"/>
+        <package android:name="com.android.documentsui"/>
+        <package android:name="com.mi.android.globalFileexplorer"/>
+        <package android:name="com.huawei.hidisk"/>
+        <package android:name="com.coloros.filemanager"/>
     </queries>
 </manifest>

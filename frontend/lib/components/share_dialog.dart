@@ -8,6 +8,19 @@ import 'package:webdav_client/webdav_client.dart';
 
 enum ShareFolderMode { zip, explorer, html }
 
+Future<void> showShareDialog(
+  BuildContext context,
+  String url,
+  File file,
+  Client client,
+  bool writable,
+) {
+  return showDialog(
+    context: context,
+    builder: (BuildContext context) => ShareDialog(url, file, client, writable),
+  );
+}
+
 class ShareDialog extends StatefulWidget {
   final String url;
   final File file;
@@ -41,128 +54,144 @@ class _ShareDialogState extends State<ShareDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Column(
-        children: [
-          TextFormField(
-            initialValue: _shareWith,
-            autofocus: true,
-            decoration: InputDecoration(labelText: tr(context, "share_with")),
-            onChanged: (value) {
-              _shareWith = value;
-            },
-          ),
-          Row(
+      content: SizedBox(
+        width: 350,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                '${tr(context, "days")}: $_shareForDays',
-                style: const TextStyle(fontSize: 12),
-              ),
-              Slider(
-                value: _shareForDays,
-                max: 100,
-                min: 0,
-                divisions: 10,
-                label: _shareForDays.round().toString(),
-                onChanged: (double value) {
-                  setState(() {
-                    _shareForDays = value;
-                  });
+              TextFormField(
+                initialValue: _shareWith,
+                decoration: InputDecoration(
+                  labelText: tr(context, "share_with"),
+                ),
+                onChanged: (value) {
+                  _shareWith = value;
                 },
               ),
-            ],
-          ),
-          if (_isDir)
-            RadioGroup<ShareFolderMode>(
-              groupValue: shareFolderMode,
-              onChanged: (ShareFolderMode? value) {
-                setState(() {
-                  shareFolderMode = value!;
-                });
-              },
-              child: Column(
-                children: <Widget>[
-                  ListTile(
-                    title: Text(tr(context, "download_folder_as_zip")),
-                    leading: const Radio<ShareFolderMode>(
-                      value: ShareFolderMode.zip,
-                    ),
+              Row(
+                children: [
+                  Text(
+                    '${tr(context, "days")}: $_shareForDays',
+                    style: const TextStyle(fontSize: 12),
                   ),
-                  ListTile(
-                    title: Text(tr(context, "share_folder_view")),
-                    leading: const Radio<ShareFolderMode>(
-                      value: ShareFolderMode.explorer,
-                    ),
-                  ),
-                  if (shareFolderMode == ShareFolderMode.explorer)
-                    if (widget.writable)
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Checkbox(
-                            value: _writable,
-                            onChanged: (bool? newValue) {
-                              setState(() {
-                                _writable = newValue!;
-                              });
-                            },
-                          ),
-                          Flexible(
-                            child: Text(
-                              tr(context, "write_access"),
-                              style: const TextStyle(fontSize: 12.0),
-                            ),
-                          ),
-                        ],
-                      ),
-                  ListTile(
-                    title: Text(tr(context, "download_folder_as_html")),
-                    leading: const Radio<ShareFolderMode>(
-                      value: ShareFolderMode.html,
-                    ),
+                  Slider(
+                    value: _shareForDays,
+                    max: 100,
+                    min: 0,
+                    divisions: 10,
+                    label: _shareForDays.round().toString(),
+                    onChanged: (double value) {
+                      setState(() {
+                        _shareForDays = value;
+                      });
+                    },
                   ),
                 ],
               ),
-            ),
-          const SizedBox(height: 15),
-          AsyncButton(
-            buttonText: "OK",
-            onPressed: (_shareForDays == 0)
-                ? null
-                : () async {
-                    try {
-                      var text = "";
-                      switch (shareFolderMode) {
-                        case ShareFolderMode.zip:
-                          text = await downloadSingleFile(widget.file.path!);
-                          break;
-                        case ShareFolderMode.explorer:
-                          text = await exploreFolder(widget.file, _writable);
-                          break;
-                        case ShareFolderMode.html:
-                          text = await downloadFolderAsHTMLList(widget.file);
-                          break;
-                      }
-                      await Clipboard.setData(ClipboardData(text: text));
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(tr(context, "share_url_copied")),
-                        ),
-                      );
-                    } on Exception {
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(tr(context, "failed_share_token")),
-                        ),
-                      );
-                    }
-                    if (!mounted) return;
-                    Navigator.pop(context);
+              if (_isDir)
+                RadioGroup<ShareFolderMode>(
+                  groupValue: shareFolderMode,
+                  onChanged: (ShareFolderMode? value) {
+                    setState(() {
+                      shareFolderMode = value!;
+                    });
                   },
+                  child: Column(
+                    children: <Widget>[
+                      ListTile(
+                        title: Text(tr(context, "download_folder_as_zip")),
+                        dense: true,
+                        leading: const Radio<ShareFolderMode>(
+                          value: ShareFolderMode.zip,
+                        ),
+                      ),
+                      ListTile(
+                        title: Text(tr(context, "share_folder_view")),
+                        dense: true,
+                        leading: const Radio<ShareFolderMode>(
+                          value: ShareFolderMode.explorer,
+                        ),
+                      ),
+                      if (shareFolderMode == ShareFolderMode.explorer)
+                        if (widget.writable)
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Checkbox(
+                                value: _writable,
+                                onChanged: (bool? newValue) {
+                                  setState(() {
+                                    _writable = newValue!;
+                                  });
+                                },
+                              ),
+                              Flexible(
+                                child: Text(
+                                  tr(context, "write_access"),
+                                  style: const TextStyle(fontSize: 12.0),
+                                ),
+                              ),
+                            ],
+                          ),
+                      ListTile(
+                        title: Text(tr(context, "download_folder_as_html")),
+                        dense: true,
+                        leading: const Radio<ShareFolderMode>(
+                          value: ShareFolderMode.html,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
           ),
-        ],
+        ),
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Text(tr(context, "cancel")),
+          ),
+        ),
+        AsyncButton(
+          buttonText: "OK",
+          onPressed: (_shareForDays == 0)
+              ? null
+              : () async {
+                  try {
+                    var text = "";
+                    switch (shareFolderMode) {
+                      case ShareFolderMode.zip:
+                        text = await downloadSingleFile(widget.file.path!);
+                        break;
+                      case ShareFolderMode.explorer:
+                        text = await exploreFolder(widget.file, _writable);
+                        break;
+                      case ShareFolderMode.html:
+                        text = await downloadFolderAsHTMLList(widget.file);
+                        break;
+                    }
+                    await Clipboard.setData(ClipboardData(text: text));
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(tr(context, "share_url_copied"))),
+                    );
+                  } on Exception {
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(tr(context, "failed_share_token")),
+                      ),
+                    );
+                  }
+                  if (!mounted) return;
+                  Navigator.pop(context);
+                },
+        ),
+      ],
     );
   }
 

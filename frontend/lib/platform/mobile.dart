@@ -6,12 +6,39 @@ import 'package:dio/dio.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:webdav_client/webdav_client.dart' as webdav;
 import 'package:webview_cookie_manager_plus/webview_cookie_manager_plus.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+
+const MethodChannel _fileExplorerChannel =
+    MethodChannel('fr.ninico.atrium/file_explorer');
+
+Future<void> openFileInExplorer(String filePath) async {
+  if (Platform.isAndroid) {
+    try {
+      final success = await _fileExplorerChannel.invokeMethod<bool>(
+        'openFileExplorer',
+        {'path': filePath},
+      );
+      if (success == true) return;
+    } catch (e) {
+      debugPrint('Failed to open file explorer via native channel: $e');
+    }
+  }
+}
+
+Future<void> scanDownloadedFile(String filePath) async {
+  if (Platform.isAndroid) {
+    try {
+      await _fileExplorerChannel.invokeMethod('scanFile', {'path': filePath});
+    } catch (e) {
+      debugPrint('Failed to scan file via native channel: $e');
+    }
+  }
+}
 
 class NotificationsPlugin {
   late FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin;
@@ -41,7 +68,9 @@ class NotificationsPlugin {
     NotificationResponse notificationResponse,
   ) async {
     var payload = notificationResponse.payload;
-    if (payload != null) OpenFile.open(payload);
+    if (payload != null) {
+      await openFileInExplorer(payload);
+    }
   }
 
   Future showSimpleNotification(String title, String message) async {
@@ -148,6 +177,7 @@ Future<void> download(
       );
     },
   );
+  await scanDownloadedFile(savePath);
   NotificationsPlugin().showProgressNotification(
     successTitle,
     file.name!,
@@ -169,6 +199,9 @@ Future webDownload(String url, String fileName) async {
       url,
       savePath,
       onReceiveProgress: (c, t) {
+        if (c == t) {
+          scanDownloadedFile(savePath);
+        }
         NotificationsPlugin().showProgressNotification(
           fileName,
           "atrium",

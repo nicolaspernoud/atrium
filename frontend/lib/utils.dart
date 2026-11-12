@@ -65,3 +65,9 @@ FileType fileTypeFromExt(String ext) {
   }
   return FileType.other;
 }
+
+bool isSmallVertical(BuildContext context) {
+  final mq = MediaQuery.of(context);
+  return mq.orientation == Orientation.landscape && mq.size.height < 850;
+}
+

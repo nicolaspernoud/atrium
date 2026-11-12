@@ -10,7 +10,7 @@ FileType fileType(File? file) {
   return fileTypeFromExt(ext);
 }
 
-// Sort : folders first and then alphabetically
+// Sort : folders first and then alphabetically regardless of case
 int foldersFirstThenAlphabetically(File a, File b) {
   if (a.isDir! && !(b.isDir!)) {
     return -1;
@@ -19,6 +19,8 @@ int foldersFirstThenAlphabetically(File a, File b) {
     return 1;
   }
   if (a.name != null && b.name != null) {
+    final cmp = a.name!.toLowerCase().compareTo(b.name!.toLowerCase());
+    if (cmp != 0) return cmp;
     return a.name!.compareTo(b.name!);
   }
   return 0;

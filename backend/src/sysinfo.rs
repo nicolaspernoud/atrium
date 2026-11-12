@@ -1,4 +1,4 @@
-use crate::{errors::ErrResponse, auth::UserToken};
+use crate::{auth::UserToken, errors::ErrResponse};
 use axum::Json;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -8,11 +8,13 @@ use std::{
 use sysinfo::{CpuRefreshKind, DiskRefreshKind, Disks, MemoryRefreshKind, RefreshKind, System};
 use tokio::task;
 
-static SYSTEM_INFO: LazyLock<Mutex<System>> = LazyLock::new(|| Mutex::new(System::new_all()));
+static SYSTEM_INFO: LazyLock<Mutex<System>> =
+    LazyLock::new(|| Mutex::new(System::new_all().expect("error initializing system info")));
 static DISKS_INFO: LazyLock<Mutex<Disks>> = LazyLock::new(|| {
-    Mutex::new(Disks::new_with_refreshed_list_specifics(
-        DiskRefreshKind::nothing().with_storage(),
-    ))
+    Mutex::new(
+        Disks::new_with_refreshed_list_specifics(DiskRefreshKind::nothing().with_storage())
+            .expect("error initializing disks info"),
+    )
 });
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -38,7 +40,7 @@ pub async fn disk_info(path: PathBuf) -> Result<DiskInfo, &'static str> {
         let mut disks = DISKS_INFO.lock().unwrap_or_else(|e| e.into_inner());
 
         disks.refresh_specifics(true, DiskRefreshKind::nothing().with_storage());
-        
+
         disks
             .iter()
             .map(|disk| DiskInfo {
@@ -86,13 +88,13 @@ pub async fn system_info(_user: UserToken) -> Result<Json<SystemInfo>, ErrRespon
         sys.refresh_specifics(
             RefreshKind::nothing()
                 .with_memory(MemoryRefreshKind::nothing().with_ram())
-                .with_cpu(CpuRefreshKind::nothing().with_cpu_usage()),
+                .with_cpu(CpuRefreshKind::nothing().with_usage()),
         );
         SystemInfo {
             total_memory: sys.total_memory(),
             used_memory: sys.used_memory(),
             cpu_usage: sys.global_cpu_usage(),
-            uptime: System::uptime(),
+            uptime: System::uptime().unwrap_or_default(),
             atrium_version: env!("CARGO_PKG_VERSION"),
         }
     })

@@ -35,7 +35,7 @@ dependencies:
     sdk: flutter
 
   dio: ^5.11.1
-  file_picker: ^13.1.0
+  file_picker: ^13.3.3
   filesize: 2.0.1
   flutter_colorpicker: 1.1.0
   flutter_local_notifications: ^23.0.0-dev.3
@@ -48,12 +48,11 @@ dependencies:
   webdav_client: 1.2.2
   webview_flutter: ^4.14.1
   webview_flutter_android: ^4.14.1
-  webview_cookie_manager_plus: 2.0.17
+  webview_cookie_manager_plus: ^2.0.18
   path: 1.9.1
   scrollable_positioned_list: 0.3.8
-  open_file: ^4.0.0
   photo_view: 0.15.0
-  web: 1.1.1
+  web: ^1.1.2
 
 dev_dependencies:
   flutter_test:

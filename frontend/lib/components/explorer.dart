@@ -387,6 +387,7 @@ class ExplorerState extends State<Explorer> with TickerProviderStateMixin {
                     );
                     if (readWrite && file.isDir!) {
                       item = DragTarget<List<String>>(
+                        key: ValueKey('drop_${file.path!}'),
                         onWillAcceptWithDetails: (details) =>
                             _isDropOnFolderValid(file.path!, details.data),
                         onAcceptWithDetails: (details) =>
@@ -408,6 +409,7 @@ class ExplorerState extends State<Explorer> with TickerProviderStateMixin {
                           ? _selected.toList()
                           : <String>[file.path!];
                       item = AdaptiveDraggable<List<String>>(
+                        key: ValueKey('drag_${file.path!}'),
                         data: dragData,
                         onDragStarted: () {
                           _autoScrollTicker.start();
@@ -510,14 +512,12 @@ class ExplorerState extends State<Explorer> with TickerProviderStateMixin {
                   ),
                 );
               } else {
-                await showDialog(
-                  context: context,
-                  builder: (context) => ShareDialog(
-                    widget.url,
-                    file,
-                    client,
-                    widget.dav.writable,
-                  ),
+                await showShareDialog(
+                  context,
+                  widget.url,
+                  file,
+                  client,
+                  widget.dav.writable,
                 );
               }
             });
@@ -538,9 +538,9 @@ class ExplorerState extends State<Explorer> with TickerProviderStateMixin {
               WidgetsBinding.instance.addPostFrameCallback((
                 _,
               ) async {
-                String? val = await showDialog<String>(
-                  context: context,
-                  builder: (context) => RenameDialog(file.name!),
+                String? val = await showRenameDialog(
+                  context,
+                  file.name!,
                 );
                 if (val != null && file.path != null) {
                   var newPath = file.path!;
@@ -648,6 +648,7 @@ class ExplorerState extends State<Explorer> with TickerProviderStateMixin {
     );
 
     return ListTile(
+      key: ValueKey(file.path!),
       leading: _selecting
           ? Checkbox(
               value: isSelected,
