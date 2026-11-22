@@ -6,6 +6,7 @@ use hyper::{Method, header::RANGE};
 use quick_xml::escape::escape;
 use sha2::{Digest, Sha512};
 use std::{
+    collections::BTreeMap,
     fs,
     io::{self, BufWriter, Read},
     time::{Duration, Instant},
@@ -654,6 +655,15 @@ async fn get_dir_404() -> BoxResult<()> {
 #[tokio::test]
 async fn get_dir_zip() -> BoxResult<()> {
     let app = TestApp::spawn(None).await;
+
+    // Arrange: fill the directory with known content
+    let files = ["file1", "file2", "subdira/file1", "subdira/file2"];
+    for file in files {
+        let path = format!("./data/{}/dir1/dira/{file}", app.id);
+        fs::write(path, format!("content of {file}"))?;
+    }
+
+    // Act
     let resp = app
         .client
         .get(format!("http://files1.atrium.io:{}/dira", app.port))
@@ -664,7 +674,30 @@ async fn get_dir_zip() -> BoxResult<()> {
         resp.headers().get("content-type").unwrap(),
         "application/zip"
     );
-    assert!(resp.headers().contains_key("content-disposition"));
+    assert_eq!(
+        resp.headers().get("content-disposition").unwrap(),
+        "attachment; filename=\"dira.zip\""
+    );
+
+    // Assert: the response is a valid zip file whose entries match the files in the directory
+    let zip_bytes = resp.bytes().await?;
+    #[allow(deprecated, reason = "async_zip 0.0.19 in-memory reader; the `read1` replacement requires a futures-lite cursor")]
+    let reader = async_zip::base::read::mem::ZipFileReader::new(zip_bytes.to_vec()).await?;
+    let mut zipped_files: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+    for (i, entry) in reader.file().entries().iter().enumerate() {
+        let name = entry.filename().as_str()?.to_string();
+        let mut content = Vec::new();
+        let mut entry_reader = reader.reader_with_entry(i).await?;
+        // read_to_end_checked also verifies the entry's CRC32
+        entry_reader.read_to_end_checked(&mut content).await?;
+        zipped_files.insert(name, content);
+    }
+    let mut expected_files: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+    for file in files {
+        let path = format!("./data/{}/dir1/dira/{file}", app.id);
+        expected_files.insert(file.to_string(), fs::read(path)?);
+    }
+    assert_eq!(zipped_files, expected_files);
     Ok(())
 }
 

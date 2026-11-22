@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1
 
 # Default versions (can be overridden with --build-arg)
-ARG RUST_VERSION=1.99
-ARG FLUTTER_VERSION=3.47.9
+ARG RUST_VERSION=1.100
+ARG FLUTTER_VERSION=3.50.1
 
 # --- Frontend Builder ---
 # Use the Flutter image to build the web assets

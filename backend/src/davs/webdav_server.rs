@@ -480,7 +480,13 @@ impl WebdavServer {
             && let Ok(t) = h.parse::<i64>()
             && t >= 0 // Reject negative timestamps (before Unix epoch)
             && t <= Utc::now().timestamp() + 86400 // Reject timestamps more than 1 day in the future
-            && filetime::set_file_mtime(real_path.path(), filetime::FileTime::from_unix_time(t, 0)).is_ok()
+            && std::fs::set_times(
+                real_path.path(),
+                std::fs::FileTimes::new().set_modified(
+                    SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(t as u64),
+                ),
+            )
+            .is_ok()
         {
             // Respond with the appropriate header on success
             res.headers_mut().insert("X-OC-Mtime", ACCEPTED.clone());
@@ -951,7 +957,12 @@ impl WebdavServer {
                 status_forbid(res);
                 return Ok(());
             }
-            filetime::set_file_mtime(path, filetime::FileTime::from_unix_time(modtime, 0))?;
+            std::fs::set_times(
+                path,
+                std::fs::FileTimes::new().set_modified(
+                    SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(modtime as u64),
+                ),
+            )?;
             output = format!(
                 r#"
                     <D:response>

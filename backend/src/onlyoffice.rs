@@ -135,7 +135,13 @@ pub async fn onlyoffice_page(
                     .ok_or(ErrResponse::S500("could not get onlyoffice configuration"))?
                     .jwt_secret
                     .as_ref(),
-            ),
+            )
+            .map_err(|_| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "couldn't get encoding key from secret",
+                )
+            })?,
         )
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "couldn't sign JWT"))?;
 

@@ -1,6 +1,5 @@
-use filetime::{FileTime, set_file_times};
 use std::env;
-use std::fs::{self, File};
+use std::fs::{self, File, FileTimes};
 use std::io::Write;
 use std::path::Path;
 
@@ -56,8 +55,8 @@ fn convert_file(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // Capture metadata
-    let atime = FileTime::from_last_access_time(&metadata);
-    let mtime = FileTime::from_last_modification_time(&metadata);
+    let atime = metadata.accessed()?;
+    let mtime = metadata.modified()?;
 
     println!("Converting: {:?}", path);
 
@@ -78,7 +77,10 @@ fn convert_file(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     fs::rename(&new_path, path)?;
 
     // Restore metadata
-    set_file_times(path, atime, mtime)?;
+    fs::set_times(
+        path,
+        FileTimes::new().set_accessed(atime).set_modified(mtime),
+    )?;
 
     Ok(())
 }
