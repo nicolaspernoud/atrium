@@ -48,6 +48,9 @@ Widget fileTypeWidget(
   if (file.isDir != null && file.isDir!) {
     return const Icon(Icons.folder, size: 30);
   }
+  if (file.name != null && file.name!.toLowerCase().endsWith('.zip')) {
+    return const Icon(Icons.folder_zip, size: 30);
+  }
   switch (type) {
     case FileType.document:
       return const Icon(Icons.article, size: 30);

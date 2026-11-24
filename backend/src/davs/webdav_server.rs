@@ -22,13 +22,12 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
-use super::{dav_file::decrypted_size_from_file, headers::Depth, model::Dav};
+use super::{dav_file::decrypted_size_from_file, headers::Depth, model::Dav, zip};
 use crate::{
     davs::{dav_file::DavFile, headers::Overwrite},
     utils::extract_query_pairs,
 };
 use async_walkdir::WalkDir;
-use async_zip::{Compression, ZipEntryBuilder, tokio::write::ZipFileWriter};
 use axum::body::Body;
 use chrono::{DateTime, Duration, TimeZone, Utc};
 use dashmap::{DashMap, Entry};
@@ -44,11 +43,16 @@ use hyper::{
         CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE, HeaderValue, RANGE,
     },
 };
-use quick_xml::{Reader, escape::escape, events::{BytesText, Event}};
+use quick_xml::{
+    Reader,
+    escape::escape,
+    events::{BytesText, Event},
+};
 use serde::Serialize;
 use std::{
     borrow::Cow,
     io::{Error, SeekFrom},
+    marker::PhantomData,
     net::SocketAddr,
     path::{Path, PathBuf},
     sync::Arc,
@@ -59,11 +63,8 @@ use tokio::{
     fs,
     io::{AsyncReadExt, AsyncSeekExt},
 };
+use tokio_util::io::{ReaderStream, StreamReader};
 use tokio_util::sync::CancellationToken;
-use tokio_util::{
-    compat::FuturesAsyncWriteCompatExt,
-    io::{ReaderStream, StreamReader},
-};
 use tracing::{debug, error};
 use uuid::Uuid;
 
@@ -97,6 +98,88 @@ enum PathKind {
     File,
     Other,
     Miss,
+}
+
+/// A method's requirement on the dav and on the resource, evaluated by
+/// [`gate`].
+///
+/// Implemented by zero-sized marker types, one per distinct requirement:
+/// the dav-side permission check (403) and the resource-state check (404)
+/// live together, so each method gates with a single type. Today every
+/// permission relies on the same `writable` flag; when the dav model splits
+/// it, only these impls change.
+pub trait Gate {
+    /// Whether the dav grants the permission the method needs.
+    fn permission_granted(dav: &Dav, real_path: &RealPath) -> bool;
+    /// Whether the resource is in the state the method requires.
+    fn state_holds(real_path: &RealPath) -> bool;
+}
+
+/// PUT and MKCOL: the dav must accept uploads; overwriting a non-empty file
+/// additionally requires the delete permission. No state requirement.
+pub struct Upload;
+impl Gate for Upload {
+    fn permission_granted(dav: &Dav, real_path: &RealPath) -> bool {
+        // Both permissions currently derive from the same `writable` flag.
+        let can_upload = dav.writable;
+        let can_delete = dav.writable;
+        if real_path.is_file() && real_path.size() > 0 {
+            // Overwriting a non-empty file also requires the delete
+            // permission.
+            can_upload && can_delete
+        } else {
+            can_upload
+        }
+    }
+    fn state_holds(_real_path: &RealPath) -> bool {
+        true
+    }
+}
+
+/// DELETE: the dav must accept deletions, and the resource must exist.
+pub struct Delete;
+impl Gate for Delete {
+    fn permission_granted(dav: &Dav, _real_path: &RealPath) -> bool {
+        dav.writable
+    }
+    fn state_holds(real_path: &RealPath) -> bool {
+        !real_path.is_miss()
+    }
+}
+
+/// POST `?extract`: the dav must accept uploads, and the resource must be an
+/// existing regular file.
+pub struct Extract;
+impl Gate for Extract {
+    fn permission_granted(dav: &Dav, _real_path: &RealPath) -> bool {
+        dav.writable
+    }
+    fn state_holds(real_path: &RealPath) -> bool {
+        real_path.is_file()
+    }
+}
+
+/// COPY: the dav must accept uploads, and the resource must exist.
+pub struct Copy;
+impl Gate for Copy {
+    fn permission_granted(dav: &Dav, _real_path: &RealPath) -> bool {
+        dav.writable
+    }
+    fn state_holds(real_path: &RealPath) -> bool {
+        !real_path.is_miss()
+    }
+}
+
+/// MOVE: the dav must accept both uploads and deletions, and the resource
+/// must exist.
+pub struct Move;
+impl Gate for Move {
+    fn permission_granted(dav: &Dav, _real_path: &RealPath) -> bool {
+        dav.writable
+    }
+    fn state_holds(real_path: &RealPath) -> bool {
+        !real_path.is_miss()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -269,20 +352,16 @@ impl WebdavServer {
 
         let query = extract_query_pairs(req.uri().query().unwrap_or_default());
 
-        let allow_upload = dav.writable;
-        let allow_delete = dav.writable;
         let allow_search = true;
         let key = dav.key;
 
         // Perform WebDAV lock checking before dispatching
         let lock_check_result = match req.method() {
-            &Method::PUT | &Method::DELETE => {
+            &Method::PUT | &Method::DELETE | &Method::POST => {
                 self.check_lock(real_path.path(), req.headers())
             }
             m => match m.as_str() {
-                "PROPPATCH" | "MKCOL" => {
-                    self.check_lock(real_path.path(), req.headers())
-                }
+                "PROPPATCH" | "MKCOL" => self.check_lock(real_path.path(), req.headers()),
                 "COPY" => {
                     if let Some(dest) = self.extract_dest(req.headers(), &dav.directory).await {
                         self.check_lock(dest.path(), req.headers())
@@ -293,14 +372,16 @@ impl WebdavServer {
                 "MOVE" => {
                     if let Err(status) = self.check_lock(real_path.path(), req.headers()) {
                         Err(status)
-                    } else if let Some(dest) = self.extract_dest(req.headers(), &dav.directory).await {
+                    } else if let Some(dest) =
+                        self.extract_dest(req.headers(), &dav.directory).await
+                    {
                         self.check_lock(dest.path(), req.headers())
                     } else {
                         Ok(())
                     }
                 }
                 _ => Ok(()),
-            }
+            },
         };
 
         if let Err(status) = lock_check_result {
@@ -341,19 +422,26 @@ impl WebdavServer {
                 set_webdav_headers(&mut res);
             }
             &Method::PUT => {
-                if !allow_upload || (!allow_delete && real_path.is_file() && real_path.size() > 0) {
-                    status_forbid(&mut res);
-                } else {
-                    self.handle_upload(&real_path, req, &mut res, key).await?;
-                }
+                let Some(ctx) = gate::<Upload>(&real_path, dav, &mut res) else {
+                    return Ok(res);
+                };
+                self.handle_upload(&ctx, req, &mut res).await?;
             }
             &Method::DELETE => {
-                if !allow_delete {
-                    status_forbid(&mut res);
-                } else if !real_path.is_miss() {
-                    self.handle_delete(&real_path, &mut res).await?;
+                let Some(ctx) = gate::<Delete>(&real_path, dav, &mut res) else {
+                    return Ok(res);
+                };
+                self.handle_delete(&ctx, &mut res).await?;
+            }
+            &Method::POST => {
+                if query.contains_key("extract") {
+                    let Some(ctx) = gate::<Extract>(&real_path, dav, &mut res) else {
+                        return Ok(res);
+                    };
+                    self.handle_extract_zip(&ctx, req.headers(), &mut res)
+                        .await?;
                 } else {
-                    status_not_found(&mut res);
+                    status_method_not_allowed(&mut res);
                 }
             }
             method => match method.as_str() {
@@ -376,36 +464,31 @@ impl WebdavServer {
                     }
                 }
                 "MKCOL" => {
-                    if !allow_upload {
-                        status_forbid(&mut res);
-                    } else if !real_path.is_miss() {
+                    let Some(ctx) = gate::<Upload>(&real_path, dav, &mut res) else {
+                        return Ok(res);
+                    };
+                    // An existing resource is a 405 for MKCOL, not a 404, so
+                    // the state check stays out of the gate.
+                    if !ctx.real_path.is_miss() {
                         status_method_not_allowed(&mut res);
                     } else if !req.into_body().collect().await?.to_bytes().is_empty() {
                         *res.status_mut() = StatusCode::UNSUPPORTED_MEDIA_TYPE;
                         *res.body_mut() = Body::from("Unsupported Media Type");
                     } else {
-                        self.handle_mkcol(real_path.path(), &mut res).await?;
+                        self.handle_mkcol(&ctx, &mut res).await?;
                     }
                 }
                 "COPY" => {
-                    if !allow_upload {
-                        status_forbid(&mut res);
-                    } else if real_path.is_miss() {
-                        status_not_found(&mut res);
-                    } else {
-                        self.handle_copymove(&real_path, req, &mut res, &dav.directory)
-                            .await?;
-                    }
+                    let Some(ctx) = gate::<Copy>(&real_path, dav, &mut res) else {
+                        return Ok(res);
+                    };
+                    self.handle_copymove(&ctx, req, &mut res).await?;
                 }
                 "MOVE" => {
-                    if !allow_upload || !allow_delete {
-                        status_forbid(&mut res);
-                    } else if real_path.is_miss() {
-                        status_not_found(&mut res);
-                    } else {
-                        self.handle_copymove(&real_path, req, &mut res, &dav.directory)
-                            .await?;
-                    }
+                    let Some(ctx) = gate::<Move>(&real_path, dav, &mut res) else {
+                        return Ok(res);
+                    };
+                    self.handle_copymove(&ctx, req, &mut res).await?;
                 }
                 "LOCK" => {
                     self.handle_lock(&real_path, req, &mut res)?;
@@ -427,11 +510,12 @@ impl WebdavServer {
 
     async fn handle_upload(
         &self,
-        real_path: &RealPath,
+        ctx: &Gated<'_, Upload>,
         req: Request,
         res: &mut Response,
-        key: Option<[u8; 32]>,
     ) -> BoxResult<()> {
+        let real_path = ctx.real_path;
+        let key = ctx.dav.key;
         ensure_path_parent(real_path.path()).await?;
 
         let mut file = if let Ok(v) = DavFile::create(real_path.path(), key).await {
@@ -496,11 +580,8 @@ impl WebdavServer {
         Ok(())
     }
 
-    async fn handle_delete(
-        &self,
-        real_path: &RealPath,
-        res: &mut Response,
-    ) -> BoxResult<()> {
+    async fn handle_delete(&self, ctx: &Gated<'_, Delete>, res: &mut Response) -> BoxResult<()> {
+        let real_path = ctx.real_path;
         let path = real_path.path();
         if real_path.is_dir() {
             fs::remove_dir_all(path).await?;
@@ -594,7 +675,7 @@ impl WebdavServer {
         let path = path.to_owned();
         let token_clone = token.clone();
         tokio::spawn(async move {
-            if let Err(e) = zip_dir(writer, &path, key, token_clone).await {
+            if let Err(e) = zip::zip_dir(writer, &path, key, token_clone).await {
                 error!("Failed to zip {}, {}", path.display(), e);
             }
         });
@@ -790,7 +871,8 @@ impl WebdavServer {
         Ok(())
     }
 
-    async fn handle_mkcol(&self, path: &Path, res: &mut Response) -> BoxResult<()> {
+    async fn handle_mkcol(&self, ctx: &Gated<'_, Upload>, res: &mut Response) -> BoxResult<()> {
+        let path = ctx.real_path.path();
         if fs::create_dir(path).await.is_ok() {
             *res.status_mut() = StatusCode::CREATED;
             Ok(())
@@ -1126,13 +1208,16 @@ impl WebdavServer {
         }))
     }
 
-    async fn handle_copymove(
+    // `G` is left generic because COPY and MOVE share this handler but gate
+    // with different requirements.
+    async fn handle_copymove<G: Gate>(
         &self,
-        real_path: &RealPath,
+        ctx: &Gated<'_, G>,
         req: Request,
         res: &mut Response,
-        dav_path: &str,
     ) -> BoxResult<()> {
+        let real_path = ctx.real_path;
+        let dav_path = ctx.dav.directory.as_str();
         let path = real_path.path();
         // get and check headers.
         let overwrite = req.headers().typed_get::<Overwrite>().is_none_or(|o| o.0);
@@ -1315,6 +1400,160 @@ impl WebdavServer {
         }
         .boxed()
     }
+
+    /// `POST /path/to/archive.zip?extract`
+    ///
+    /// Extracts the archive into a sibling folder named after it.
+    async fn handle_extract_zip(
+        &self,
+        ctx: &Gated<'_, Extract>,
+        headers: &HeaderMap,
+        res: &mut Response,
+    ) -> BoxResult<()> {
+        let real_path = ctx.real_path;
+        let key = ctx.dav.key;
+        let path = real_path.path();
+
+        // The resource (already gated as an existing file) must be a .zip archive.
+        if path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_none_or(|name| !name.to_lowercase().ends_with(".zip"))
+        {
+            status_text(res, StatusCode::BAD_REQUEST, "File is not a zip archive");
+            return Ok(());
+        }
+
+        // The archive is extracted into a sibling folder named after its stem.
+        let (parent_dir, folder_name) =
+            match (path.parent(), path.file_stem().and_then(|s| s.to_str())) {
+                (Some(parent), Some(name)) if !name.is_empty() => (parent, name),
+                _ => {
+                    status_text(res, StatusCode::BAD_REQUEST, "Invalid archive name");
+                    return Ok(());
+                }
+            };
+        let target_dir = parent_dir.join(folder_name);
+
+        // The extraction target (and its ancestors) must not be locked.
+        if let Err(status) = self.check_lock(&target_dir, headers) {
+            status_text(res, status, "Target directory is locked");
+            return Ok(());
+        }
+
+        // Create the target directory and enforce the dav symlink policy on it.
+        if let Err(e) = prepare_extract_target(
+            &target_dir,
+            real_path.base_path(),
+            real_path.allow_symlinks(),
+        )
+        .await
+        {
+            match e {
+                TargetError::Conflicts => {
+                    status_text(
+                        res,
+                        StatusCode::CONFLICT,
+                        "A file with the target folder name already exists",
+                    );
+                }
+                TargetError::Unsafe | TargetError::PermissionDenied => {
+                    status_forbid(res);
+                }
+                TargetError::Io(msg) => {
+                    error!(
+                        "Failed to prepare extraction target {}: {msg}",
+                        target_dir.display()
+                    );
+                    status_text(
+                        res,
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "Failed to create directory",
+                    );
+                }
+            }
+            return Ok(());
+        }
+
+        match zip::extract(path, &target_dir, key).await {
+            Ok(()) => status_text(res, StatusCode::OK, "Extraction successful"),
+            Err(zip::ExtractError::BadArchive(msg)) => {
+                status_text(
+                    res,
+                    StatusCode::BAD_REQUEST,
+                    format!("Invalid zip archive: {msg}"),
+                );
+            }
+            Err(zip::ExtractError::PermissionDenied) => {
+                status_forbid(res);
+            }
+            Err(zip::ExtractError::Io(msg)) => {
+                error!(
+                    "Failed to extract {} into {}: {msg}",
+                    path.display(),
+                    target_dir.display()
+                );
+                status_text(res, StatusCode::INTERNAL_SERVER_ERROR, "Extraction failed");
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Error returned by [`prepare_extract_target`].
+enum TargetError {
+    /// A file already occupies the target path.
+    Conflicts,
+    /// The target escapes the dav base, violating the dav symlink policy.
+    Unsafe,
+    /// The process lacks the permission to write the target.
+    PermissionDenied,
+    /// A filesystem error occurred.
+    Io(String),
+}
+
+/// Creates the directory a zip archive is extracted into, if it does not
+/// exist yet.
+///
+/// A pre-existing target must be a directory that stays within the dav base
+/// (e.g. a symlinked directory pointing outside is rejected when the dav
+/// does not allow symlinks). A freshly created target is one level under the
+/// zip file's parent, which was already validated by [`RealPath`], so it can
+/// never escape the base.
+async fn prepare_extract_target(
+    target: &Path,
+    base: &Path,
+    allow_symlinks: bool,
+) -> Result<(), TargetError> {
+    // Classify the target, following symlinks like the rest of the server.
+    let existing = match fs::metadata(target).await {
+        Ok(meta) => Some(meta),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+            return Err(TargetError::PermissionDenied);
+        }
+        Err(e) => return Err(TargetError::Io(e.to_string())),
+    };
+
+    if let Some(meta) = existing {
+        // A file (or a symlink to a file) occupying the target path is a
+        // conflict.
+        if !meta.is_dir() {
+            return Err(TargetError::Conflicts);
+        }
+        if !allow_symlinks && !is_root_contained(target, base).await {
+            return Err(TargetError::Unsafe);
+        }
+        return Ok(());
+    }
+
+    fs::create_dir_all(target).await.map_err(|e| {
+        if e.kind() == std::io::ErrorKind::PermissionDenied {
+            TargetError::PermissionDenied
+        } else {
+            TargetError::Io(e.to_string())
+        }
+    })
 }
 
 #[derive(Debug, Serialize, Eq, PartialEq, Ord, PartialOrd)]
@@ -1436,52 +1675,6 @@ fn res_multistatus(res: &mut Response, content: &str) {
     ));
 }
 
-async fn zip_dir<W: tokio::io::AsyncWrite + Unpin>(
-    writer: W,
-    dir: &Path,
-    key: Option<[u8; 32]>,
-    token: CancellationToken,
-) -> BoxResult<()> {
-    let mut zip_writer = ZipFileWriter::with_tokio(writer);
-    let mut walkdir = WalkDir::new(dir);
-    while let Some(entry) = walkdir.next().await {
-        if token.is_cancelled() {
-            return Ok(());
-        }
-        if let Ok(entry) = entry {
-            let entry_path = entry.path();
-            let meta = match fs::symlink_metadata(entry.path()).await {
-                Ok(meta) => meta,
-                Err(_) => continue,
-            };
-            if !meta.is_file() {
-                continue;
-            }
-            let filename = match entry_path.strip_prefix(dir).ok().and_then(|v| v.to_str()) {
-                Some(v) => v,
-                None => continue,
-            };
-
-            let mut file = DavFile::open(&entry_path, key).await?;
-
-            let builder = ZipEntryBuilder::new(filename.into(), Compression::Deflate);
-            let entry_writer = zip_writer.write_entry_stream(builder).await?;
-            let mut entry_writer_compat = entry_writer.compat_write();
-
-            tokio::select! {
-                _ = token.cancelled() => return Ok(()),
-                res = tokio::io::copy(&mut file, &mut entry_writer_compat) => {
-                    res?;
-                }
-            }
-
-            entry_writer_compat.into_inner().close().await?;
-        }
-    }
-    zip_writer.close().await?;
-    Ok(())
-}
-
 #[derive(Debug)]
 enum RangeValue {
     Range(u64, Option<u64>),
@@ -1517,14 +1710,61 @@ fn parse_range(headers: &HeaderMap<HeaderValue>) -> Option<RangeValue> {
     }
 }
 
+/// Sets `status` and a plain-text `body` on the response.
+fn status_text(res: &mut Response, status: StatusCode, body: impl Into<Body>) {
+    *res.status_mut() = status;
+    *res.body_mut() = body.into();
+}
+
 fn status_forbid(res: &mut Response) {
-    *res.status_mut() = StatusCode::FORBIDDEN;
-    *res.body_mut() = Body::from("Forbidden");
+    status_text(res, StatusCode::FORBIDDEN, "Forbidden");
 }
 
 fn status_not_found(res: &mut Response) {
-    *res.status_mut() = StatusCode::NOT_FOUND;
-    *res.body_mut() = Body::from("Not Found");
+    status_text(res, StatusCode::NOT_FOUND, "Not Found");
+}
+
+/// The request context of a method that has passed the [`Gate`] of its
+/// requirement type `G`.
+///
+/// Typestate: the type parameter records the requirement the context was
+/// gated for. The token can only be produced by [`gate`], and handlers
+/// declare their own requirement in their signature, so the compiler
+/// rejects a context gated for a different requirement.
+struct Gated<'a, G: Gate> {
+    _gate: PhantomData<G>,
+    /// The request resource, validated against the dav base.
+    real_path: &'a RealPath,
+    /// The dav the request is served from.
+    dav: &'a Dav,
+}
+
+/// Evaluates the [`Gate`] requirement `G` for a method.
+///
+/// When a check fails, the rejection (403 or 404) is written to `res` and
+/// `None` is returned; when both pass, the returned [`Gated`] token may only
+/// be passed to a handler declaring the same requirement.
+///
+/// The lock gate is a separate server-state concern and stays in
+/// [`WebdavServer::check_lock`], evaluated before dispatch.
+fn gate<'a, G: Gate>(
+    real_path: &'a RealPath,
+    dav: &'a Dav,
+    res: &mut Response,
+) -> Option<Gated<'a, G>> {
+    if !G::permission_granted(dav, real_path) {
+        status_forbid(res);
+        return None;
+    }
+    if !G::state_holds(real_path) {
+        status_not_found(res);
+        return None;
+    }
+    Some(Gated {
+        _gate: PhantomData,
+        real_path,
+        dav,
+    })
 }
 
 fn status_no_content(res: &mut Response) {

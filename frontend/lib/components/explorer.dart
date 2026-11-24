@@ -58,6 +58,7 @@ class ExplorerState extends State<Explorer> with TickerProviderStateMixin {
   var _copyMoveStatus = CopyMoveStatus.none;
   var _copyMovePaths = <String>[];
   final Set<String> _selected = {};
+  final Set<String> _extractingPaths = {};
   var _selecting = false;
   late bool readWrite;
   late Future<List<File>> files;
@@ -533,6 +534,24 @@ class ExplorerState extends State<Explorer> with TickerProviderStateMixin {
           ),
         ),
         if (readWrite) ...[
+          if (file.name != null &&
+              file.name!.toLowerCase().endsWith('.zip'))
+            PopupMenuItem(
+              onTap: () {
+                WidgetsBinding.instance.addPostFrameCallback((_) async {
+                  await _extractZip(file);
+                });
+              },
+              child: Row(
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: Icon(Icons.folder_zip),
+                  ),
+                  Text(tr(context, "extract")),
+                ],
+              ),
+            ),
           PopupMenuItem(
             onTap: () {
               WidgetsBinding.instance.addPostFrameCallback((
@@ -690,7 +709,12 @@ class ExplorerState extends State<Explorer> with TickerProviderStateMixin {
             _getData();
           });
         } else {
-          if (type == FileType.text) {
+          if (file.name != null &&
+              file.name!.toLowerCase().endsWith('.zip')) {
+            if (readWrite) {
+              await _extractZip(file);
+            }
+          } else if (type == FileType.text) {
             Navigator.push(
               context,
               MaterialPageRoute(
@@ -783,6 +807,75 @@ class ExplorerState extends State<Explorer> with TickerProviderStateMixin {
         }
       },
     );
+  }
+
+  Future<void> _extractZip(File file) async {
+    if (file.path == null) return;
+    if (_extractingPaths.contains(file.path!)) return;
+
+    setState(() {
+      _extractingPaths.add(file.path!);
+    });
+
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 12),
+            Text(tr(context, "extracting")),
+          ],
+        ),
+        duration: const Duration(minutes: 1),
+      ),
+    );
+
+    try {
+      final path = '${escapePath(file.path!)}?extract';
+      final resp = await client.c.req(client, 'POST', path);
+      if (!mounted) return;
+      messenger.hideCurrentSnackBar();
+      if (resp.statusCode != 200 &&
+          resp.statusCode != 201 &&
+          resp.statusCode != 204) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              resp.data?.toString() ??
+                  resp.statusMessage ??
+                  tr(context, "extract_failed"),
+            ),
+          ),
+        );
+      } else {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(tr(context, "extracted")),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        setState(() {
+          _getData();
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      messenger.hideCurrentSnackBar();
+      messenger.showSnackBar(
+        SnackBar(content: Text(e.toString())),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _extractingPaths.remove(file.path!);
+        });
+      }
+    }
   }
 
   void _startCopyMove(CopyMoveStatus status) {

@@ -681,7 +681,10 @@ async fn get_dir_zip() -> BoxResult<()> {
 
     // Assert: the response is a valid zip file whose entries match the files in the directory
     let zip_bytes = resp.bytes().await?;
-    #[allow(deprecated, reason = "async_zip 0.0.19 in-memory reader; the `read1` replacement requires a futures-lite cursor")]
+    #[allow(
+        deprecated,
+        reason = "async_zip 0.0.19 in-memory reader; the `read1` replacement requires a futures-lite cursor"
+    )]
     let reader = async_zip::base::read::mem::ZipFileReader::new(zip_bytes.to_vec()).await?;
     let mut zipped_files: BTreeMap<String, Vec<u8>> = BTreeMap::new();
     for (i, entry) in reader.file().entries().iter().enumerate() {
@@ -1674,4 +1677,188 @@ async fn secured_dav_basic_auth_and_token_test() {
         .await
         .expect("failed to execute request");
     assert!(response.status() == StatusCode::UNAUTHORIZED);
+}
+
+async fn create_test_zip() -> Vec<u8> {
+    use async_zip::{Compression, ZipEntryBuilder, tokio::write::ZipFileWriter};
+    let mut buf = Vec::new();
+    let mut writer = ZipFileWriter::with_tokio(&mut buf);
+
+    let entry1 = ZipEntryBuilder::new("hello.txt".into(), Compression::Deflate);
+    writer.write_entry_whole(entry1, b"world").await.unwrap();
+
+    let entry2 = ZipEntryBuilder::new("sub/test.txt".into(), Compression::Deflate);
+    writer
+        .write_entry_whole(entry2, b"nested content")
+        .await
+        .unwrap();
+
+    writer.close().await.unwrap();
+    buf
+}
+
+#[tokio::test]
+async fn extract_zip_plain_and_encrypted() -> BoxResult<()> {
+    let app = TestApp::spawn(None).await;
+    let zip_bytes = create_test_zip().await;
+
+    // Plain Dav (files1)
+    let url_plain = format!("http://files1.atrium.io:{}/archive.zip", app.port);
+    let resp = app
+        .client
+        .put(&url_plain)
+        .body(zip_bytes.clone())
+        .send()
+        .await?;
+    assert_eq!(resp.status(), 201);
+
+    let extract_url_plain = format!("http://files1.atrium.io:{}/archive.zip?extract", app.port);
+    let resp = app.client.post(&extract_url_plain).send().await?;
+    assert_eq!(resp.status(), 200);
+
+    let file1_url = format!("http://files1.atrium.io:{}/archive/hello.txt", app.port);
+    let resp = app.client.get(&file1_url).send().await?;
+    assert_eq!(resp.status(), 200);
+    assert_eq!(resp.text().await?, "world");
+
+    let file2_url = format!("http://files1.atrium.io:{}/archive/sub/test.txt", app.port);
+    let resp = app.client.get(&file2_url).send().await?;
+    assert_eq!(resp.status(), 200);
+    assert_eq!(resp.text().await?, "nested content");
+
+    // Encrypted Dav (files2)
+    let url_enc = format!("http://files2.atrium.io:{}/enc_archive.zip", app.port);
+    let resp = app.client.put(&url_enc).body(zip_bytes).send().await?;
+    assert_eq!(resp.status(), 201);
+
+    let extract_url_enc = format!(
+        "http://files2.atrium.io:{}/enc_archive.zip?extract",
+        app.port
+    );
+    let resp = app.client.post(&extract_url_enc).send().await?;
+    assert_eq!(resp.status(), 200);
+
+    let file1_enc_url = format!("http://files2.atrium.io:{}/enc_archive/hello.txt", app.port);
+    let resp = app.client.get(&file1_enc_url).send().await?;
+    assert_eq!(resp.status(), 200);
+    assert_eq!(resp.text().await?, "world");
+
+    let file2_enc_url = format!(
+        "http://files2.atrium.io:{}/enc_archive/sub/test.txt",
+        app.port
+    );
+    let resp = app.client.get(&file2_enc_url).send().await?;
+    assert_eq!(resp.status(), 200);
+    assert_eq!(resp.text().await?, "nested content");
+
+    // Nested directory zip extraction (files1/folder1/nested.zip)
+    let mkcol_url = format!("http://files1.atrium.io:{}/folder1/", app.port);
+    let resp = app
+        .client
+        .request(Method::from_bytes(b"MKCOL")?, &mkcol_url)
+        .send()
+        .await?;
+    assert_eq!(resp.status(), 201);
+
+    let nested_zip_url = format!("http://files1.atrium.io:{}/folder1/nested.zip", app.port);
+    let resp = app
+        .client
+        .put(&nested_zip_url)
+        .body(create_test_zip().await)
+        .send()
+        .await?;
+    assert_eq!(resp.status(), 201);
+
+    let extract_nested_url = format!(
+        "http://files1.atrium.io:{}/folder1/nested.zip?extract",
+        app.port
+    );
+    let resp = app.client.post(&extract_nested_url).send().await?;
+    assert_eq!(resp.status(), 200);
+
+    let nested_extracted_url = format!(
+        "http://files1.atrium.io:{}/folder1/nested/hello.txt",
+        app.port
+    );
+    let resp = app.client.get(&nested_extracted_url).send().await?;
+    assert_eq!(resp.status(), 200);
+    assert_eq!(resp.text().await?, "world");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn extract_zip_not_writable() -> BoxResult<()> {
+    let app = TestApp::spawn(None).await;
+    let extract_url = format!("http://files3.atrium.io:{}/archive.zip?extract", app.port);
+    let resp = app.client.post(&extract_url).send().await?;
+    assert_eq!(resp.status(), 403);
+    Ok(())
+}
+
+#[tokio::test]
+async fn extract_zip_not_found_or_invalid() -> BoxResult<()> {
+    let app = TestApp::spawn(None).await;
+
+    // File not found
+    let extract_url = format!(
+        "http://files1.atrium.io:{}/nonexistent.zip?extract",
+        app.port
+    );
+    let resp = app.client.post(&extract_url).send().await?;
+    assert_eq!(resp.status(), 404);
+
+    // Non-zip file
+    let put_url = format!("http://files1.atrium.io:{}/not_zip.txt", app.port);
+    let resp = app
+        .client
+        .put(&put_url)
+        .body(b"text file".to_vec())
+        .send()
+        .await?;
+    assert_eq!(resp.status(), 201);
+
+    let extract_url = format!("http://files1.atrium.io:{}/not_zip.txt?extract", app.port);
+    let resp = app.client.post(&extract_url).send().await?;
+    assert_eq!(resp.status(), 400);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn extract_zip_skips_unsafe_entries() -> BoxResult<()> {
+    use async_zip::{Compression, ZipEntryBuilder, tokio::write::ZipFileWriter};
+
+    // A zip containing an entry that tries to escape the extraction directory.
+    let mut buf = Vec::new();
+    {
+        let mut writer = ZipFileWriter::with_tokio(&mut buf);
+        let evil = ZipEntryBuilder::new("evil/../../evil.txt".into(), Compression::Deflate);
+        writer.write_entry_whole(evil, b"evil").await.unwrap();
+        let good = ZipEntryBuilder::new("good.txt".into(), Compression::Deflate);
+        writer.write_entry_whole(good, b"ok").await.unwrap();
+        writer.close().await.unwrap();
+    }
+
+    let app = TestApp::spawn(None).await;
+    let url = format!("http://files1.atrium.io:{}/sneaky.zip", app.port);
+    let resp = app.client.put(&url).body(buf).send().await?;
+    assert_eq!(resp.status(), 201);
+
+    let extract_url = format!("http://files1.atrium.io:{}/sneaky.zip?extract", app.port);
+    let resp = app.client.post(&extract_url).send().await?;
+    assert_eq!(resp.status(), 200);
+
+    // The safe entry is extracted.
+    let good_url = format!("http://files1.atrium.io:{}/sneaky/good.txt", app.port);
+    let resp = app.client.get(&good_url).send().await?;
+    assert_eq!(resp.status(), 200);
+    assert_eq!(resp.text().await?, "ok");
+
+    // The escaping entry was skipped.
+    let evil_url = format!("http://files1.atrium.io:{}/evil.txt", app.port);
+    let resp = app.client.get(&evil_url).send().await?;
+    assert_eq!(resp.status(), 404);
+
+    Ok(())
 }

@@ -1,6 +1,6 @@
 [package]
 name = "atrium"
-version = "1.9.3-beta2"
+version = "1.9.3-beta3"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 default-run = "atrium"
@@ -59,7 +59,7 @@ sysinfo = { default-features = false, version = "0.40.4", features = ["disk", "s
 time = { default-features = false, version = "0.3.55" }
 tokio = { version = "1.54.1", features = ["full"], default-features = false }
 tokio-stream = { version = "0.1.19", default-features = false }
-tokio-util = { version = "0.7.20", default-features = false, features = ["rt"] }
+tokio-util = { version = "0.7.20", default-features = false, features = ["rt", "compat"] }
 tower = { default-features = false, version = "0.5.3", features = ["util"] }
 tower-http = { version = "0.7.1", features = ["fs"], default-features = false }
 tower-service = "0.3.3"

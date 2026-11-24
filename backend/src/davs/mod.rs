@@ -4,6 +4,7 @@ pub mod errors;
 pub(crate) mod headers;
 pub mod model;
 pub(crate) mod webdav_server;
+mod zip;
 
 use crate::configuration::HostType;
 use axum::{
