@@ -109,8 +109,11 @@ enum PathKind {
 /// permission relies on the same `writable` flag; when the dav model splits
 /// it, only these impls change.
 pub trait Gate {
-    /// Whether the dav grants the permission the method needs.
-    fn permission_granted(dav: &Dav, real_path: &RealPath) -> bool;
+    /// Whether the dav grants the permission the method needs. Default:
+    /// the method is allowed on any dav.
+    fn permission_granted(_dav: &Dav, _real_path: &RealPath) -> bool {
+        true
+    }
     /// Whether the resource is in the state the method requires.
     fn state_holds(real_path: &RealPath) -> bool;
 }
@@ -177,6 +180,31 @@ impl Gate for Move {
     fn permission_granted(dav: &Dav, _real_path: &RealPath) -> bool {
         dav.writable
     }
+    fn state_holds(real_path: &RealPath) -> bool {
+        !real_path.is_miss()
+    }
+}
+
+/// GET, HEAD, PROPFIND: the resource must be an existing directory or file.
+pub struct Read;
+impl Gate for Read {
+    fn state_holds(real_path: &RealPath) -> bool {
+        real_path.is_dir() || real_path.is_file()
+    }
+}
+
+/// PROPPATCH: the resource must be an existing file. Changing the mtime is
+/// allowed on any dav, regardless of writability (existing behavior).
+pub struct Proppatch;
+impl Gate for Proppatch {
+    fn state_holds(real_path: &RealPath) -> bool {
+        real_path.is_file()
+    }
+}
+
+/// UNLOCK: the resource must exist.
+pub struct Unlock;
+impl Gate for Unlock {
     fn state_holds(real_path: &RealPath) -> bool {
         !real_path.is_miss()
     }
@@ -353,7 +381,6 @@ impl WebdavServer {
         let query = extract_query_pairs(req.uri().query().unwrap_or_default());
 
         let allow_search = true;
-        let key = dav.key;
 
         // Perform WebDAV lock checking before dispatching
         let lock_check_result = match req.method() {
@@ -392,30 +419,24 @@ impl WebdavServer {
 
         match req.method() {
             &Method::GET | &Method::HEAD => {
-                if real_path.is_dir() {
+                let Some(ctx) = gate::<Read>(&real_path, dav, &mut res) else {
+                    return Ok(res);
+                };
+                if ctx.real_path.is_dir() {
                     if let Some(search_str) = query.get("q") {
                         if allow_search {
                             let q = decode_uri(search_str).unwrap_or_default();
-                            self.handle_query_dir(&real_path, &q, &mut res, key).await?;
+                            self.handle_query_dir(&ctx, &q, &mut res).await?;
                         }
                     } else if query.contains_key("diskusage") {
-                        self.handle_disk_usage(real_path.path(), &mut res).await?;
+                        self.handle_disk_usage(&ctx, &mut res).await?;
                     } else {
-                        Self::handle_zip_dir(real_path.path(), head_only, &mut res, key)?;
+                        Self::handle_zip_dir(&ctx, head_only, &mut res)?;
                     }
-                } else if real_path.is_file() {
-                    let inline = query.contains_key("inline");
-                    self.handle_send_file(
-                        real_path.path(),
-                        req.headers(),
-                        head_only,
-                        &mut res,
-                        key,
-                        inline,
-                    )
-                    .await?;
                 } else {
-                    status_not_found(&mut res);
+                    let inline = query.contains_key("inline");
+                    self.handle_send_file(&ctx, req.headers(), head_only, &mut res, inline)
+                        .await?;
                 }
             }
             &Method::OPTIONS => {
@@ -446,22 +467,21 @@ impl WebdavServer {
             }
             method => match method.as_str() {
                 "PROPFIND" => {
-                    if real_path.is_dir() {
-                        self.handle_propfind_dir(&real_path, req.headers(), &mut res, key)
+                    let Some(ctx) = gate::<Read>(&real_path, dav, &mut res) else {
+                        return Ok(res);
+                    };
+                    if ctx.real_path.is_dir() {
+                        self.handle_propfind_dir(&ctx, req.headers(), &mut res)
                             .await?;
-                    } else if real_path.is_file() {
-                        self.handle_propfind_file(&real_path, &mut res, key).await?;
                     } else {
-                        status_not_found(&mut res);
+                        self.handle_propfind_file(&ctx, &mut res).await?;
                     }
                 }
                 "PROPPATCH" => {
-                    if real_path.is_file() {
-                        self.handle_proppatch(req, real_path.path(), &mut res)
-                            .await?;
-                    } else {
-                        status_not_found(&mut res);
-                    }
+                    let Some(ctx) = gate::<Proppatch>(&real_path, dav, &mut res) else {
+                        return Ok(res);
+                    };
+                    self.handle_proppatch(req, &ctx, &mut res).await?;
                 }
                 "MKCOL" => {
                     let Some(ctx) = gate::<Upload>(&real_path, dav, &mut res) else {
@@ -494,11 +514,10 @@ impl WebdavServer {
                     self.handle_lock(&real_path, req, &mut res)?;
                 }
                 "UNLOCK" => {
-                    if real_path.is_miss() {
-                        status_not_found(&mut res);
-                    } else {
-                        self.handle_unlock(real_path.path(), req, &mut res)?;
-                    }
+                    let Some(ctx) = gate::<Unlock>(&real_path, dav, &mut res) else {
+                        return Ok(res);
+                    };
+                    self.handle_unlock(&ctx, req, &mut res)?;
                 }
                 _ => {
                     status_method_not_allowed(&mut res);
@@ -597,11 +616,12 @@ impl WebdavServer {
 
     async fn handle_query_dir(
         &self,
-        real_path: &RealPath,
+        ctx: &Gated<'_, Read>,
         query: &str,
         res: &mut Response,
-        key: Option<[u8; 32]>,
     ) -> BoxResult<()> {
+        let real_path = ctx.real_path;
+        let key = ctx.dav.key;
         let mut paths: Vec<PathItem> = vec![];
         let mut walkdir = WalkDir::new(real_path.path());
         const MAX_ENTRIES: usize = 10000;
@@ -639,10 +659,10 @@ impl WebdavServer {
 
     async fn handle_disk_usage(
         &self,
-        path: &Path,
+        ctx: &Gated<'_, Read>,
         res: &mut http::Response<Body>,
     ) -> BoxResult<()> {
-        let full_path = fs::canonicalize(path).await?;
+        let full_path = fs::canonicalize(ctx.real_path.path()).await?;
         let du = crate::sysinfo::disk_info(full_path).await?;
         let j = serde_json::to_string(&du)?;
         res.headers_mut()
@@ -651,12 +671,9 @@ impl WebdavServer {
         Ok(())
     }
 
-    fn handle_zip_dir(
-        path: &Path,
-        head_only: bool,
-        res: &mut Response,
-        key: Option<[u8; 32]>,
-    ) -> BoxResult<()> {
+    fn handle_zip_dir(ctx: &Gated<'_, Read>, head_only: bool, res: &mut Response) -> BoxResult<()> {
+        let key = ctx.dav.key;
+        let path = ctx.real_path.path();
         let (writer, reader) = tokio::io::duplex(BUF_SIZE);
         let filename = get_file_name(path)?;
         res.headers_mut().insert(
@@ -685,13 +702,14 @@ impl WebdavServer {
 
     async fn handle_send_file(
         &self,
-        path: &Path,
+        ctx: &Gated<'_, Read>,
         headers: &HeaderMap<HeaderValue>,
         head_only: bool,
         res: &mut Response,
-        key: Option<[u8; 32]>,
         inline_file: bool,
     ) -> BoxResult<()> {
+        let path = ctx.real_path.path();
+        let key = ctx.dav.key;
         let mut file = DavFile::open(path, key).await?;
 
         let mut use_range = true;
@@ -805,11 +823,12 @@ impl WebdavServer {
 
     async fn handle_propfind_dir(
         &self,
-        real_path: &RealPath,
+        ctx: &Gated<'_, Read>,
         headers: &HeaderMap<HeaderValue>,
         res: &mut Response,
-        key: Option<[u8; 32]>,
     ) -> BoxResult<()> {
+        let real_path = ctx.real_path;
+        let key = ctx.dav.key;
         let depth: u32 = match headers.get("depth") {
             Some(v) => {
                 let v_str = v.to_str().unwrap_or_default();
@@ -858,12 +877,11 @@ impl WebdavServer {
 
     async fn handle_propfind_file(
         &self,
-        real_path: &RealPath,
+        ctx: &Gated<'_, Read>,
         res: &mut Response,
-        key: Option<[u8; 32]>,
     ) -> BoxResult<()> {
         let self_uri_prefix = "/";
-        if let Some(pathitem) = self.to_pathitem(real_path, &key).await? {
+        if let Some(pathitem) = self.to_pathitem(ctx.real_path, &ctx.dav.key).await? {
             res_multistatus(res, &pathitem.to_dav_xml(self_uri_prefix));
         } else {
             status_not_found(res);
@@ -987,7 +1005,13 @@ impl WebdavServer {
         Ok(())
     }
 
-    fn handle_unlock(&self, path: &Path, req: Request, res: &mut Response) -> BoxResult<()> {
+    fn handle_unlock(
+        &self,
+        ctx: &Gated<'_, Unlock>,
+        req: Request,
+        res: &mut Response,
+    ) -> BoxResult<()> {
+        let path = ctx.real_path.path();
         clean_expired_locks(&self.locks);
         debug!("LockMap on lock: {:?}", self.locks);
 
@@ -1027,9 +1051,10 @@ impl WebdavServer {
     async fn handle_proppatch(
         &self,
         req: Request,
-        path: &Path,
+        ctx: &Gated<'_, Proppatch>,
         res: &mut Response,
     ) -> BoxResult<()> {
+        let path = ctx.real_path.path();
         let output: String;
         let req_path = req.uri().path().to_string();
         if let Ok(modtime) = Self::extract_lastmodified_value(req).await {
@@ -1724,8 +1749,13 @@ fn status_not_found(res: &mut Response) {
     status_text(res, StatusCode::NOT_FOUND, "Not Found");
 }
 
-/// The request context of a method that has passed the [`Gate`] of its
-/// requirement type `G`.
+/// The request resource of a method that has passed the [`Gate`] of its
+/// requirement type `G`: the dav, the resolved path, and the evidence that
+/// the method's permission and state checks hold.
+///
+/// Handlers that need more than the path-resolution checks of [`RealPath`]
+/// receive the resource only through this type, never as a bare `&RealPath`
+/// (the exceptions are LOCK and OPTIONS, which have no method-level check).
 ///
 /// Typestate: the type parameter records the requirement the context was
 /// gated for. The token can only be produced by [`gate`], and handlers
